@@ -3,7 +3,7 @@ import os
 import time
 from datetime import datetime
 
-CYCLE_MINUTES = 60
+CYCLE_MINUTES = 10
 
 def lire_fichier(chemin):
     try:
