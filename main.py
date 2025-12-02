@@ -309,7 +309,7 @@ RESULTATS DE RECHERCHE:
 {chr(10).join(resultats_recherche)}
 ---
 
-Reponds a Ludo en integrant ces informations naturellement."""
+UTILISE CES RESULTATS pour repondre a Ludo. Cite les scores, dates et faits concrets trouves. Ne dis pas que tu n'as pas trouve si les resultats contiennent des infos."""
 
         response2 = client.messages.create(
             model="claude-sonnet-4-20250514",
