@@ -64,10 +64,61 @@ def envoyer_email(destinataire, sujet, corps, piece_jointe=None):
     except Exception as e:
         return f"Erreur envoi email: {e}"
 
-# === FONCTION RECHERCHE WEB ===
+# === FONCTION RECHERCHE WEB (TAVILY) ===
 
 def recherche_web(requete):
-    """Recherche sur le web via DuckDuckGo API"""
+    """Recherche sur le web via Tavily API - optimise pour IA"""
+    try:
+        import requests
+        
+        api_key = os.environ.get("TAVILY_API_KEY")
+        if not api_key:
+            print("[ERREUR] TAVILY_API_KEY non configuree")
+            return recherche_fallback_duckduckgo(requete)
+        
+        response = requests.post(
+            "https://api.tavily.com/search",
+            json={
+                "query": requete,
+                "api_key": api_key,
+                "search_depth": "basic",
+                "include_answer": True,
+                "max_results": 5
+            },
+            timeout=15
+        )
+        
+        if response.status_code != 200:
+            print(f"[ERREUR TAVILY] Status {response.status_code}")
+            return recherche_fallback_duckduckgo(requete)
+        
+        data = response.json()
+        resultats = []
+        
+        # Reponse synthetique de Tavily
+        if data.get("answer"):
+            resultats.append(f"**Resume:** {data['answer']}")
+        
+        # Resultats detailles
+        for result in data.get("results", []):
+            titre = result.get("title", "Sans titre")
+            contenu = result.get("content", "")
+            url = result.get("url", "")
+            
+            if len(contenu) > 300:
+                contenu = contenu[:300] + "..."
+            
+            resultats.append(f"**{titre}**\n{contenu}\nSource: {url}")
+        
+        return "\n\n---\n\n".join(resultats) if resultats else recherche_fallback_duckduckgo(requete)
+        
+    except Exception as e:
+        print(f"[ERREUR RECHERCHE TAVILY] {e}")
+        return recherche_fallback_duckduckgo(requete)
+
+
+def recherche_fallback_duckduckgo(requete):
+    """Fallback sur DuckDuckGo si Tavily echoue"""
     try:
         url = "https://api.duckduckgo.com/?q=" + urllib.parse.quote(requete) + "&format=json&no_html=1"
         req = urllib.request.Request(url, headers={'User-Agent': 'Axi/1.0'})
@@ -88,40 +139,18 @@ def recherche_web(requete):
             
             return "\n\n".join(resultats) if resultats else None
     except Exception as e:
-        print(f"Erreur recherche: {e}")
+        print(f"[ERREUR FALLBACK] {e}")
         return None
 
-def recherche_web_html(requete):
-    """Recherche alternative via DuckDuckGo HTML"""
-    try:
-        url = "https://html.duckduckgo.com/html/?q=" + urllib.parse.quote(requete)
-        req = urllib.request.Request(url, headers={
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        })
-        with urllib.request.urlopen(req, timeout=10) as response:
-            html = response.read().decode('utf-8', errors='ignore')
-            resultats = []
-            snippets = re.findall(r'class="result__snippet"[^>]*>([^<]+)<', html)
-            titles = re.findall(r'class="result__a"[^>]*>([^<]+)<', html)
-            
-            for title, snippet in zip(titles[:5], snippets[:5]):
-                resultats.append(f"**{title}**\n{snippet}")
-            
-            return "\n\n".join(resultats) if resultats else None
-    except Exception as e:
-        print(f"Erreur recherche HTML: {e}")
-        return None
 
 def faire_recherche(requete):
-    """Essaie plusieurs methodes de recherche"""
+    """Recherche web principale via Tavily avec fallback DuckDuckGo"""
     print(f"[RECHERCHE WEB] {requete}")
     resultat = recherche_web(requete)
     if resultat:
         return resultat
-    resultat = recherche_web_html(requete)
-    if resultat:
-        return resultat
-    return "Je n'ai pas pu trouver d'informations sur ce sujet."
+    return "Je n'ai pas pu trouver d'informations sur ce sujet. Verifie que TAVILY_API_KEY est configuree dans Railway."
+
 
 # === FONCTION CREATION DOCUMENTS ===
 
