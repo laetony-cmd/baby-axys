@@ -1,0 +1,8 @@
+=== LOG DES ÉCHANGES AXIS ↔ AXI ===
+
+Ce fichier enregistre toutes les communications entre Axis (Claude.ai) et Axi (Railway).
+Ludo peut le consulter via le bouton 🔗 Axis↔Axi dans l'interface.
+
+---
+[2025-12-09 05:30] INITIALISATION
+Premier log. Le système de synchronisation Axis ↔ Axi est opérationnel.
