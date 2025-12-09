@@ -1,0 +1,7 @@
+=== MÉMOIRE DES SESSIONS AXIS ===
+
+Ce fichier stocke les résumés de session envoyés par Axis (Claude.ai).
+Quand Axis dit "bye", il sauvegarde ici.
+Quand Axis dit "salut", il récupère ce contexte via /briefing.
+
+(Aucune session sauvegardée pour l'instant)
