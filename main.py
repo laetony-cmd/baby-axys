@@ -24,7 +24,7 @@ def heure_france():
 # === CONFIGURATION GITHUB ===
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 GITHUB_REPO = "laetony-cmd/baby-axys"
-FICHIERS_A_SAUVEGARDER = ["conversations.txt", "journal.txt", "projets.txt", "decisions.txt", "idees.txt", "histoire.txt", "memoire.txt"]
+FICHIERS_A_SAUVEGARDER = ["conversations.txt", "journal.txt", "projets.txt", "decisions.txt", "idees.txt", "histoire.txt", "memoire.txt", "axis_axi_log.txt"]
 
 # === FONCTIONS FICHIERS ===
 
@@ -115,6 +115,18 @@ def lire_fichier_sans_sauvegarde(chemin):
             return f.read()
     except FileNotFoundError:
         return ""
+
+# === LOG AXIS ↔ AXI ===
+
+def log_axis_axi(direction, contenu):
+    """Log les échanges entre Axis et Axi"""
+    date = heure_france().strftime("%Y-%m-%d %H:%M:%S")
+    entree = f"""
+---
+[{date}] {direction}
+{contenu}
+"""
+    ajouter_fichier("axis_axi_log.txt", entree)
 
 # === FONCTION EMAIL ===
 
@@ -507,6 +519,13 @@ def generer_page_html(conversations, documents_dispo=None):
         .btn-journal:hover {
             background: linear-gradient(135deg, #8e44ad, #7d3c98) !important;
         }
+        .btn-log {
+            background: linear-gradient(135deg, #3498db, #2980b9) !important;
+            border-color: #3498db !important;
+        }
+        .btn-log:hover {
+            background: linear-gradient(135deg, #2980b9, #1f6dad) !important;
+        }
         
         .chat-container {
             flex: 1;
@@ -675,6 +694,7 @@ def generer_page_html(conversations, documents_dispo=None):
         <button onclick="showMemoire('decisions')">⚖️ Decisions</button>
         <button onclick="showMemoire('idees')">💡 Idees</button>
         <button onclick="showMemoire('journal')" class="btn-journal">📔 Journal</button>
+        <button onclick="showMemoire('axis_axi_log')" class="btn-log">🔗 Axis↔Axi</button>
         <a href="/export">📥 Exporter</a>
         <button onclick="confirmEffacer()">🗑️ Effacer</button>
     </div>
@@ -731,7 +751,8 @@ def generer_page_html(conversations, documents_dispo=None):
                         'projets': '📋 Projets',
                         'decisions': '⚖️ Decisions',
                         'idees': '💡 Idees',
-                        'journal': '📔 Journal de Pensees'
+                        'journal': '📔 Journal de Pensees',
+                        'axis_axi_log': '🔗 Log Axis ↔ Axi'
                     };
                     document.getElementById('modal-title').textContent = titles[type] || type;
                     document.getElementById('modal-content').textContent = data;
@@ -907,6 +928,10 @@ Date: {heure_france().strftime("%Y-%m-%d %H:%M")}
 {derniers_echanges[-3000:] if derniers_echanges else "(Aucun)"}
 """
             
+            # Log l'échange
+            log_axis_axi("AXIS → AXI (demande briefing)", "Axis demande le contexte pour se réveiller")
+            log_axis_axi("AXI → AXIS (réponse briefing)", f"Envoi du briefing ({len(briefing)} caractères)")
+            
             self.send_response(200)
             self.send_header('Content-type', 'text/plain; charset=utf-8')
             self.end_headers()
@@ -979,6 +1004,9 @@ SESSION SAUVEGARDÉE LE {date}
                 # On écrase avec la dernière session (ou on pourrait append)
                 ecrire_fichier("memoire.txt", nouvelle_entree)
                 print(f"[MEMOIRE] Session sauvegardée par Axis")
+                
+                # Log l'échange
+                log_axis_axi("AXIS → AXI (sauvegarde session)", f"Axis sauvegarde une session ({len(contenu)} caractères)")
                 
                 self.send_response(200)
                 self.send_header('Content-type', 'text/plain; charset=utf-8')
@@ -1142,6 +1170,15 @@ Quand Axis dit "bye", il sauvegarde ici.
 Quand Axis dit "salut", il récupère ce contexte via /briefing.
 
 (Aucune session sauvegardée pour l'instant)
+""",
+        "axis_axi_log.txt": """=== LOG DES ÉCHANGES AXIS ↔ AXI ===
+
+Ce fichier enregistre toutes les communications entre Axis (Claude.ai) et Axi (Railway).
+Ludo peut le consulter via le bouton 🔗 Axis↔Axi dans l'interface.
+
+---
+[9 décembre 2025] INITIALISATION
+Système de log Axis ↔ Axi opérationnel.
 """
     }
     
