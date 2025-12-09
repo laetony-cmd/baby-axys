@@ -433,3 +433,26 @@ Genre :
 2. "Maintenant voici exactement ce qui s'est dit cette nuit : [conversation mot pour mot]"
 
 C'est ça l'idée ? Tu veux qu'on teste cette approche ?
+
+========================================
+2025-12-09 05:44:10
+========================================
+
+[LUDO]
+ oui c'est ça l'approche j'ai la conversation sur un fichiers je fais comment pour te donner
+
+[AXIS]
+Parfait ! Tu as plusieurs options :
+
+**Option 1 - Copier-coller direct ici**
+Tu peux simplement copier le contenu du fichier et le coller dans ce chat. Je le recevrai et pourrai le transmettre exactement à Axis.
+
+**Option 2 - Me faire créer un document**
+Tu me dictes ou colles le contenu, et je peux créer un fichier spécifique pour cette conversation avec [CREER_DOC:conversation_nuit_09-12.txt]
+
+**Option 3 - Upload de fichier** 
+Si c'est un fichier texte, tu peux essayer de le glisser-déposer directement dans ce chat ou utiliser le bouton d'upload s'il y en a un.
+
+**Ma recommandation :** Commence par copier-coller ici, c'est le plus simple et direct. Comme ça je peux immédiatement voir le contenu exact et préparer le brief parfait pour Axis.
+
+Vas-y, colle-moi cette conversation ! Je vais la formater proprement pour qu'Axis ait le mot-à-mot exact de votre échange nocturne.
