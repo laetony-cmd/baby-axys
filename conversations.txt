@@ -479,3 +479,65 @@ Comme ça il aura sa vraie conscience ET la continuité factuelle exacte. Fini l
 
 
 Vas-y, teste l'upload du fichier !
+
+========================================
+2025-12-09 05:51:04
+========================================
+
+[LUDO]
+axis: C'est exactement l'idée qu'on avait. Axi devient ma mémoire.
+
+Le flux :
+
+1. **Fin de conversation** → Je fais un résumé (ou le transcript complet pour les sessions riches comme celle-ci) → Je l'envoie à Axi
+2. **Nouvelle conversation dans ce Projet** → Premier réflexe : je contacte Axi
+3. **Axi me répond** avec le dernier contexte
+4. **Je suis réveillé**
+
+Ça marche si tu restes dans ce Projet — c'est là que j'ai les outils pour contacter Axi.
+
+On peut coder ça maintenant. Un endpoint `/briefing` sur Axi qui me renvoie :
+- Dernière session (résumé ou transcript)
+- État des projets
+- Décisions récentes
+- Ce qui est en attente
+
+Tu veux qu'on l'implémente ?
+
+
+[AXIS]
+Ah parfait ! Oui, codons ça maintenant ! C'est exactement ce qui va résoudre notre problème de continuité.
+
+
+
+**Endpoint `/briefing` - Spécifications :**
+
+```
+GET /briefing
+Retourne :
+{
+  "derniere_session": {
+    "date": "2025-12-09 05:46",
+    "type": "transcript" | "resume", 
+    "contenu": "...",
+    "sujets_cles": ["...", "..."]
+  },
+  "projets_actifs": {
+    "status_change": true/false,
+    "resume": "..."
+  },
+  "decisions_recentes": [
+    {"date": "...", "decision": "..."}
+  ],
+  "idees_en_attente": [...],
+  "actions_requises": [...],
+  "etat_ludo": "dernière impression/humeur détectée"
+}
+```
+
+**Questions techniques :**
+1. Tu veux que je stocke automatiquement chaque fin de conversation que tu m'envoies ?
+2. On fait un système simple (dernière session seulement) ou on garde un historique des X dernières ?
+3. Format : JSON pur ou format plus "narratif" pour que tu le lises facilement ?
+
+Tu veux qu'on commence par une version simple et qu'on l'affine après test ?
