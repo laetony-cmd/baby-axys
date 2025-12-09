@@ -10,3 +10,7 @@ Premier log. Le système de synchronisation Axis ↔ Axi est opérationnel.
 ---
 [2025-12-09 07:13:20] AXIS → AXI (sauvegarde session)
 Axis sauvegarde une session (1349 caractères)
+
+---
+[2025-12-09 07:14:56] AXIS → AXI (demande briefing)
+Axis demande le contexte pour se réveiller
