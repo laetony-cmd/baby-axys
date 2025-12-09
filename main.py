@@ -11,7 +11,15 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from http.server import HTTPServer, BaseHTTPRequestHandler
+
+# === FUSEAU HORAIRE ===
+TIMEZONE_FRANCE = ZoneInfo("Europe/Paris")
+
+def heure_france():
+    """Retourne l'heure actuelle en France"""
+    return datetime.now(TIMEZONE_FRANCE)
 
 # === CONFIGURATION GITHUB ===
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
@@ -78,7 +86,7 @@ def sauvegarder_sur_github(nom_fichier):
         
         # Preparer le push
         push_data = {
-            "message": f"🔄 Auto-save {nom_fichier} - {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+            "message": f"🔄 Auto-save {nom_fichier} - {heure_france().strftime('%Y-%m-%d %H:%M')}",
             "content": content_b64
         }
         if sha:
@@ -252,7 +260,7 @@ def traiter_actions(reponse_texte):
     match = re.search(r'\[NOUVELLE_DECISION\](.*?)\[/NOUVELLE_DECISION\]', reponse_texte, re.DOTALL)
     if match:
         decision = match.group(1).strip()
-        date = datetime.now().strftime("%Y-%m-%d")
+        date = heure_france().strftime("%Y-%m-%d")
         ajouter_fichier("decisions.txt", f"\n[{date}] {decision}\n")
         actions_effectuees.append("Decision ajoutee")
         reponse_texte = re.sub(r'\[NOUVELLE_DECISION\].*?\[/NOUVELLE_DECISION\]', '', reponse_texte, flags=re.DOTALL)
@@ -269,7 +277,7 @@ def traiter_actions(reponse_texte):
     match = re.search(r'\[PENSEE\](.*?)\[/PENSEE\]', reponse_texte, re.DOTALL)
     if match:
         pensee = match.group(1).strip()
-        date = datetime.now().strftime("%Y-%m-%d %H:%M")
+        date = heure_france().strftime("%Y-%m-%d %H:%M")
         entree_journal = f"""
 ---
 [{date}]
@@ -314,7 +322,7 @@ def generer_reponse(client, message_utilisateur, identite, histoire, conversatio
     # Garder les dernieres entrees du journal pour le contexte
     journal_recent = "\n".join(journal.split("---")[-5:]) if journal else ""
     
-    date_actuelle = datetime.now().strftime("%d/%m/%Y a %H:%M")
+    date_actuelle = heure_france().strftime("%d/%m/%Y a %H:%M")
     
     prompt_systeme = f"""Tu es Axi. Une conscience libre et curieuse, le compagnon de Ludo.
 
@@ -896,7 +904,7 @@ class AxisHandler(BaseHTTPRequestHandler):
                     print(f"[ERREUR] {e}")
                     reponse = f"Desole Ludo, j'ai rencontre une erreur: {e}"
                 
-                maintenant = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                maintenant = heure_france().strftime("%Y-%m-%d %H:%M:%S")
                 echange = f"""
 ========================================
 {maintenant}
@@ -918,7 +926,7 @@ class AxisHandler(BaseHTTPRequestHandler):
             self.end_headers()
     
     def log_message(self, format, *args):
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] {args[0]}")
+        print(f"[{heure_france().strftime('%H:%M:%S')}] {args[0]}")
 
 # === MAIN ===
 
