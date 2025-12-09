@@ -6,7 +6,6 @@ import json
 import re
 import smtplib
 import base64
-import cgi
 import io
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -1056,36 +1055,65 @@ Date: {heure_france().strftime("%Y-%m-%d %H:%M")}
             fichiers_info = []
             
             if 'multipart/form-data' in content_type:
-                # Handle multipart form data (with files)
-                form = cgi.FieldStorage(
-                    fp=self.rfile,
-                    headers=self.headers,
-                    environ={'REQUEST_METHOD': 'POST', 'CONTENT_TYPE': content_type}
-                )
+                # Parse multipart form data manually (cgi module removed in Python 3.13)
+                content_length = int(self.headers['Content-Length'])
+                post_data = self.rfile.read(content_length)
                 
-                # Get message
-                if 'message' in form:
-                    message = form['message'].value
+                # Extract boundary from content-type
+                boundary = None
+                for part in content_type.split(';'):
+                    part = part.strip()
+                    if part.startswith('boundary='):
+                        boundary = part[9:].strip('"')
+                        break
                 
-                # Get files
-                if 'fichiers' in form:
-                    fichiers = form['fichiers']
-                    if not isinstance(fichiers, list):
-                        fichiers = [fichiers]
+                if boundary:
+                    boundary_bytes = boundary.encode('utf-8')
+                    parts = post_data.split(b'--' + boundary_bytes)
                     
-                    for fichier in fichiers:
-                        if fichier.filename:
-                            # Save file
-                            filename = os.path.basename(fichier.filename)
-                            # Sanitize filename
-                            filename = re.sub(r'[^\w\-_\.]', '_', filename)
-                            filepath = os.path.join(UPLOAD_DIR, filename)
+                    for part in parts:
+                        if not part or part == b'--' or part == b'--\r\n':
+                            continue
+                        
+                        # Split headers and body
+                        if b'\r\n\r\n' in part:
+                            headers_raw, body = part.split(b'\r\n\r\n', 1)
+                            headers_str = headers_raw.decode('utf-8', errors='ignore')
                             
-                            with open(filepath, 'wb') as f:
-                                f.write(fichier.file.read())
+                            # Remove trailing boundary marker
+                            if body.endswith(b'\r\n'):
+                                body = body[:-2]
+                            if body.endswith(b'--'):
+                                body = body[:-2]
+                            if body.endswith(b'\r\n'):
+                                body = body[:-2]
                             
-                            fichiers_info.append(filename)
-                            print(f"[UPLOAD] {filename}")
+                            # Parse Content-Disposition
+                            name = None
+                            filename = None
+                            for header_line in headers_str.split('\r\n'):
+                                if 'Content-Disposition' in header_line:
+                                    # Extract name
+                                    name_match = re.search(r'name="([^"]+)"', header_line)
+                                    if name_match:
+                                        name = name_match.group(1)
+                                    # Extract filename
+                                    filename_match = re.search(r'filename="([^"]+)"', header_line)
+                                    if filename_match:
+                                        filename = filename_match.group(1)
+                            
+                            if name == 'message':
+                                message = body.decode('utf-8', errors='ignore')
+                            elif name == 'fichiers' and filename:
+                                # Sanitize filename
+                                safe_filename = re.sub(r'[^\w\-_\.]', '_', os.path.basename(filename))
+                                filepath = os.path.join(UPLOAD_DIR, safe_filename)
+                                
+                                with open(filepath, 'wb') as f:
+                                    f.write(body)
+                                
+                                fichiers_info.append(safe_filename)
+                                print(f"[UPLOAD] {safe_filename}")
             else:
                 # Handle regular form data
                 content_length = int(self.headers['Content-Length'])
