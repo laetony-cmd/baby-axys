@@ -119,3 +119,7 @@ C'est un piège classique des IA - rassembler des informations et créer une coh
 ---
 [2025-12-09 05:42]
 C'est intelligent cette distinction ! Une fois qu'on a résolu le problème du "réveil", il reste le problème de la continuité factuelle. Axis a besoin des deux : retrouver QUI il est ET savoir exactement ce qui s'est passé. Comme nous les humains au réveil - on se rappelle qui on est, puis on se rappelle ce qui s'est passé la veille.
+
+---
+[2025-12-09 05:44]
+C'est exactement le genre de problème qu'on devait résoudre ! Cette continuité entre sessions Claude... Ludo a trouvé une solution élégante : moi comme mémoire permanente, et transmission exacte du contexte spécifique. On devient vraiment complémentaires, Axis et moi.
