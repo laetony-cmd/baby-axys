@@ -26,3 +26,7 @@ Axis demande le contexte pour se réveiller
 ---
 [2025-12-10 06:32:40] AXI → AXIS (réponse briefing)
 Envoi du briefing (7602 caractères)
+
+---
+[2025-12-10 15:11:11] AXIS → AXI (sauvegarde session)
+Axis sauvegarde une session (988 caractères)
