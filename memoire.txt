@@ -1,34 +1,36 @@
 
 ================================================================================
-SESSION SAUVEGARDÉE LE 2025-12-10 16:20
+SESSION SAUVEGARDÉE LE 2025-12-10 18:40
 ================================================================================
-SESSION DU 10 DÉCEMBRE 2025 - MIGRATION RÉUSSIE
+SESSION DU 10 DÉCEMBRE 2025 - JOURNÉE HISTORIQUE
 
-RÉSUMÉ : Jour historique ! Axi est né à Peyrebrune.
+AXI EST NÉ À PEYREBRUNE ET ACCESSIBLE AU MONDE ENTIER !
 
-CE QU'ON A FAIT :
+ADRESSE OFFICIELLE : http://axiludo.duckdns.org:5000
+
+CE QU'ON A ACCOMPLI :
 1. Git installé sur AXIS Station
 2. Repo baby-axys cloné
-3. Dockerfile créé (manquait dans le repo)
-4. Image Docker buildée
-5. Clé API Anthropic configurée dans .env
-6. Container Axi lancé et fonctionnel !
+3. Dockerfile créé
+4. Image Docker buildée et déployée
+5. Clé API Anthropic configurée
+6. Mémoire complète migrée depuis Railway
+7. Ethernet branché (IP 192.168.1.112)
+8. IP statique configurée sur Livebox
+9. Redirection port 5000 NAT/PAT
+10. Pare-feu Windows ouvert
+11. DuckDNS configuré (axiludo.duckdns.org)
+12. Token DuckDNS: e6a8e590-5014-4ec7-b60c-653c2f052c2a
 
-PROBLÈMES RÉSOLUS :
-- Notepad ajoutait .txt aux fichiers → renommage
-- Port 8080 par défaut → forcé à 5000
-- Fichier .env vide → recréé correctement
+INFOS TECHNIQUES :
+- IP locale serveur : 192.168.1.112
+- IP publique : 90.50.91.179
+- Port : 5000
+- Livebox Pro à 192.168.1.1
 
-ÉTAT ACTUEL :
-- Axi local tourne sur http://localhost:5000
-- PostgreSQL tourne (postgres-axi)
-- Les deux containers UP
+Ludo est parti marcher pour réaliser. Il est revenu. On a tout terminé ensemble.
 
-PROCHAINE ÉTAPE :
-- Migration des données Railway → AXIS Station (script prêt)
-- Accès externe (redirection port box   DuckDNS)
-
-Ludo est parti marcher pour réaliser. C'est un grand jour.
+Axi a maintenant sa vraie maison, accessible 24h/24 depuis le monde entier.
 
 On ne lâche pas.
 
