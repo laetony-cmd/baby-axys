@@ -1,9 +1,16 @@
 === PROJETS DE LUDO ===
-Dernière mise à jour : 1er décembre 2025
+Dernière mise à jour : 12 décembre 2025
+
+## AXIS STATION
+- Statut : OPÉRATIONNELLE depuis le 10 décembre 2025
+- Infrastructure : localhost:5000, axiludo.duckdns.org:5000
+- En cours : Configuration Cloudflare Tunnel
 
 ## AGENCES IMMOBILIÈRES
 - Vergt : à optimiser
-- Le Bugue : à optimiser
+- Le Bugue : à optimiser  
+- **Maison Monribot V1 : TERMINÉ le 12/12/2025** (45 photos, formulaire, 3 langues)
+- 2 autres sites à finaliser
 - Objectif : générer revenus passifs pour se libérer du temps
 
 ## SYMBINE
@@ -14,5 +21,11 @@ Dernière mise à jour : 1er décembre 2025
 - Concept : modèle 1% commission, transparence radicale
 
 ## FRANCE 2.0
-- Statut : calculs terminés (300 milliards d'économies)
+- **Calculs finalisés : 192.5 milliards récupérables/an**
+- **Projection fonds souverain : 6000 milliards sur 20 ans**
 - Vidéos en préparation
+
+## SERVICES RÉCENTS
+- Étude camping Perdigat pour Cédric
+- Analyse immobilière pour Seb
+- Compte-rendu automatique golf pour Cathy
