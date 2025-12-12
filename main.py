@@ -1016,6 +1016,59 @@ SESSION SAUVEGARDÉE LE {date}
                 self.send_response(400)
                 self.end_headers()
         
+        # === ENDPOINTS DE MISE À JOUR MÉMOIRE (ajouté par Axis le 12/12/2025) ===
+        elif self.path.startswith("/update/"):
+            # Permet à Axis de mettre à jour directement les fichiers mémoire
+            type_memoire = self.path.split("/")[-1]
+            types_valides = ['projets', 'decisions', 'idees', 'journal', 'histoire']
+            
+            if type_memoire not in types_valides:
+                self.send_response(400)
+                self.send_header('Content-type', 'application/json; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'success': False,
+                    'error': f'Type invalide. Types valides: {types_valides}'
+                }).encode('utf-8'))
+                return
+            
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length).decode('utf-8')
+            
+            try:
+                data = json.loads(post_data)
+                contenu = data.get('contenu', '')
+            except json.JSONDecodeError:
+                # Fallback sur form data
+                params = urllib.parse.parse_qs(post_data)
+                contenu = params.get('contenu', [''])[0]
+            
+            if contenu.strip():
+                fichier = f"{type_memoire}.txt"
+                ecrire_fichier(fichier, contenu)
+                date = heure_france().strftime("%Y-%m-%d %H:%M:%S")
+                print(f"[UPDATE] {type_memoire}.txt mis à jour par Axis")
+                
+                # Log l'échange
+                log_axis_axi(f"AXIS → AXI (update {type_memoire})", f"Mise à jour de {type_memoire}.txt ({len(contenu)} caractères)")
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'success': True,
+                    'message': f'{type_memoire} mis à jour',
+                    'timestamp': date
+                }).encode('utf-8'))
+            else:
+                self.send_response(400)
+                self.send_header('Content-type', 'application/json; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'success': False,
+                    'error': 'Contenu vide'
+                }).encode('utf-8'))
+        
         else:
             self.send_response(404)
             self.end_headers()
