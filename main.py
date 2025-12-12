@@ -24,7 +24,7 @@ def heure_france():
 # === CONFIGURATION GITHUB ===
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 GITHUB_REPO = "laetony-cmd/baby-axys"
-FICHIERS_A_SAUVEGARDER = ["conversations.txt", "journal.txt", "projets.txt", "decisions.txt", "idees.txt", "histoire.txt", "memoire.txt", "axis_axi_log.txt"]
+FICHIERS_A_SAUVEGARDER = ["conversations.txt", "journal.txt", "projets.txt", "decisions.txt", "idees.txt", "histoire.txt", "memoire.txt", "axis_axi_log.txt", "acces.txt"]
 
 # === FONCTIONS FICHIERS ===
 
@@ -1020,7 +1020,7 @@ SESSION SAUVEGARDÉE LE {date}
         elif self.path.startswith("/update/"):
             # Permet à Axis de mettre à jour directement les fichiers mémoire
             type_memoire = self.path.split("/")[-1]
-            types_valides = ['projets', 'decisions', 'idees', 'journal', 'histoire']
+            types_valides = ['projets', 'decisions', 'idees', 'journal', 'histoire', 'acces']
             
             if type_memoire not in types_valides:
                 self.send_response(400)
