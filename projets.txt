@@ -2,30 +2,33 @@
 Dernière mise à jour : 12 décembre 2025
 
 ## AXIS STATION
-- Statut : OPÉRATIONNELLE depuis le 10 décembre 2025
-- Infrastructure : localhost:5000, axiludo.duckdns.org:5000
-- En cours : Configuration Cloudflare Tunnel
+- Statut : OPÉRATIONNELLE depuis le 10 décembre
+- Axi local : http://localhost:5000 / http://192.168.1.112:5000
+- Accès externe : http://axiludo.duckdns.org:5000
+- Cloudflare Tunnel : en configuration (DNS en propagation)
+- Railway reste le pont de synchronisation Axis-Axi
 
 ## AGENCES IMMOBILIÈRES
-- Vergt : à optimiser
-- Le Bugue : à optimiser  
-- **Maison Monribot V1 : TERMINÉ le 12/12/2025** (45 photos, formulaire, 3 langues)
-- 2 autres sites à finaliser
+- Ici Dordogne (Vergt, Le Bugue) : à optimiser
+- Simply Périgord : sites en cours
+  - Maison Monribot (Rouffignac) : V1 TERMINÉE le 12/12 - 45 photos, formulaire contact, 3 langues
+  - 2 autres sites à finaliser
 - Objectif : générer revenus passifs pour se libérer du temps
 
 ## SYMBINE
 - Statut : en réflexion
 - Vision : village écologique laboratoire
+- Avancée : idée Axi pour la famille (tronc commun + personnalisation)
 
 ## ORIGÎNE IMMOBILIER
 - Concept : modèle 1% commission, transparence radicale
 
-## FRANCE 2.0
-- **Calculs finalisés : 192.5 milliards récupérables/an**
-- **Projection fonds souverain : 6000 milliards sur 20 ans**
-- Vidéos en préparation
+## FRANCE 2.0 / LA FRANCE QU ON MÉRITE
+- Statut : calculs terminés (192.5 milliards récupérables/an)
+- Vidéos YouTube en préparation (19 mesures)
+- Fonds souverain : projection 6000 milliards sur 20 ans
 
-## SERVICES RÉCENTS
-- Étude camping Perdigat pour Cédric
-- Analyse immobilière pour Seb
-- Compte-rendu automatique golf pour Cathy
+## SERVICES RENDUS RÉCENTS
+- Étude de marché camping Perdigat pour Cédric (11/12)
+- Analyse investissement immo 6 apparts Vergt pour Seb (11/12)
+- CR automatisé association golf pour Cathy (12/12)
