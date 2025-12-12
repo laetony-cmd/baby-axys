@@ -108,5 +108,5 @@ Envoi du briefing (7127 caractères)
 Axis demande le contexte pour se réveiller
 
 ---
-[2025-12-11 17:21:21] AXI → AXIS (réponse briefing)
-Envoi du briefing (7127 caractères)
+[2025-12-12 05:33:46] AXIS → AXI (demande briefing)
+Axis demande le contexte pour se réveiller
