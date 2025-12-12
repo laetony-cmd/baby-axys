@@ -126,3 +126,7 @@ Envoi du briefing (7127 caractères)
 ---
 [2025-12-12 18:29:47] AXIS → AXI (update projets)
 Mise à jour de projets.txt (1283 caractères)
+
+---
+[2025-12-12 18:31:12] AXIS → AXI (update decisions)
+Mise à jour de decisions.txt (2106 caractères)
