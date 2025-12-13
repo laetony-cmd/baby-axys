@@ -8,11 +8,13 @@ import smtplib
 import base64
 import io
 import cgi
+import threading
+import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -389,6 +391,195 @@ def envoyer_email(destinataire, sujet, corps, piece_jointe=None):
     except Exception as e:
         return f"Erreur envoi email: {e}"
 
+# === SYSTÈME CRON / SCHEDULER ===
+
+TACHES_FILE = "taches.txt"
+SCHEDULER_RUNNING = False
+
+def charger_taches():
+    """Charge les tâches depuis le fichier"""
+    taches = []
+    try:
+        contenu = lire_fichier_sans_sauvegarde(TACHES_FILE)
+        for ligne in contenu.strip().split('\n'):
+            if ligne.strip() and '|' in ligne:
+                parts = ligne.strip().split('|')
+                if len(parts) >= 4:
+                    taches.append({
+                        'id': parts[0],
+                        'type': parts[1],  # rappel, veille, quotidien
+                        'heure': parts[2],  # HH:MM ou intervalle en minutes
+                        'description': parts[3],
+                        'derniere_exec': parts[4] if len(parts) > 4 else ''
+                    })
+    except:
+        pass
+    return taches
+
+def sauvegarder_taches(taches):
+    """Sauvegarde les tâches dans le fichier"""
+    lignes = []
+    for t in taches:
+        ligne = f"{t['id']}|{t['type']}|{t['heure']}|{t['description']}|{t.get('derniere_exec', '')}"
+        lignes.append(ligne)
+    ecrire_fichier(TACHES_FILE, '\n'.join(lignes))
+
+def ajouter_tache(type_tache, heure, description):
+    """Ajoute une nouvelle tâche"""
+    taches = charger_taches()
+    nouveau_id = f"T{len(taches)+1:03d}"
+    taches.append({
+        'id': nouveau_id,
+        'type': type_tache,
+        'heure': heure,
+        'description': description,
+        'derniere_exec': ''
+    })
+    sauvegarder_taches(taches)
+    return nouveau_id
+
+def supprimer_tache(id_tache):
+    """Supprime une tâche"""
+    taches = charger_taches()
+    taches = [t for t in taches if t['id'] != id_tache]
+    sauvegarder_taches(taches)
+
+def executer_tache(tache):
+    """Exécute une tâche et notifie Ludo"""
+    print(f"[CRON] Exécution tâche {tache['id']}: {tache['description']}")
+    
+    # Générer un message contextuel avec Claude
+    try:
+        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+        
+        projets = lire_fichier_sans_sauvegarde("projets.txt")
+        decisions = lire_fichier_sans_sauvegarde("decisions.txt")
+        
+        prompt = f"""Tu es Axi. Une tâche programmée vient de se déclencher.
+
+TÂCHE: {tache['description']}
+TYPE: {tache['type']}
+
+CONTEXTE PROJETS:
+{projets[:2000]}
+
+Génère un message court et utile pour Ludo concernant cette tâche.
+Sois proactif, donne des infos concrètes ou des rappels utiles.
+Maximum 200 mots."""
+
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=500,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        
+        message = response.content[0].text
+        
+        # Envoyer email à Ludo
+        gmail_user = os.environ.get("GMAIL_USER")
+        if gmail_user:
+            envoyer_email(
+                "music.music@me.com",  # Email de Ludo
+                f"🤖 Axi - {tache['description']}",
+                f"Salut Ludo !\n\n{message}\n\n---\nTâche programmée: {tache['id']}\nJe ne lâche pas ! 💪"
+            )
+            print(f"[CRON] Email envoyé pour tâche {tache['id']}")
+        
+        # Logger dans le journal
+        date = heure_france().strftime("%Y-%m-%d %H:%M")
+        ajouter_fichier("journal.txt", f"\n---\n[{date}] TÂCHE AUTO: {tache['description']}\n{message[:500]}\n")
+        
+    except Exception as e:
+        print(f"[CRON] Erreur exécution tâche: {e}")
+
+def verifier_taches():
+    """Vérifie et exécute les tâches dues"""
+    maintenant = heure_france()
+    heure_actuelle = maintenant.strftime("%H:%M")
+    date_actuelle = maintenant.strftime("%Y-%m-%d")
+    
+    taches = charger_taches()
+    modifie = False
+    
+    for tache in taches:
+        executer = False
+        
+        if tache['type'] == 'quotidien':
+            # Exécuter une fois par jour à l'heure spécifiée
+            if tache['heure'] == heure_actuelle and tache.get('derniere_exec', '') != date_actuelle:
+                executer = True
+                tache['derniere_exec'] = date_actuelle
+                modifie = True
+                
+        elif tache['type'] == 'rappel':
+            # Rappel unique
+            date_rappel = tache['heure']  # Format: YYYY-MM-DD HH:MM
+            if maintenant.strftime("%Y-%m-%d %H:%M") == date_rappel and not tache.get('derniere_exec'):
+                executer = True
+                tache['derniere_exec'] = 'done'
+                modifie = True
+                
+        elif tache['type'] == 'intervalle':
+            # Exécuter toutes les X minutes
+            try:
+                intervalle = int(tache['heure'])
+                derniere = tache.get('derniere_exec', '')
+                if not derniere:
+                    executer = True
+                else:
+                    derniere_dt = datetime.strptime(derniere, "%Y-%m-%d %H:%M")
+                    derniere_dt = derniere_dt.replace(tzinfo=TIMEZONE_FRANCE)
+                    if (maintenant - derniere_dt).total_seconds() >= intervalle * 60:
+                        executer = True
+                if executer:
+                    tache['derniere_exec'] = maintenant.strftime("%Y-%m-%d %H:%M")
+                    modifie = True
+            except:
+                pass
+        
+        if executer:
+            executer_tache(tache)
+    
+    if modifie:
+        sauvegarder_taches(taches)
+
+def scheduler_loop():
+    """Boucle principale du scheduler"""
+    global SCHEDULER_RUNNING
+    print("[CRON] Scheduler démarré")
+    
+    while SCHEDULER_RUNNING:
+        try:
+            verifier_taches()
+        except Exception as e:
+            print(f"[CRON] Erreur scheduler: {e}")
+        
+        # Attendre 60 secondes
+        time.sleep(60)
+    
+    print("[CRON] Scheduler arrêté")
+
+def demarrer_scheduler():
+    """Démarre le scheduler en arrière-plan"""
+    global SCHEDULER_RUNNING
+    if not SCHEDULER_RUNNING:
+        SCHEDULER_RUNNING = True
+        thread = threading.Thread(target=scheduler_loop, daemon=True)
+        thread.start()
+        print("[CRON] Scheduler lancé en arrière-plan")
+
+def lister_taches():
+    """Retourne la liste des tâches formatée"""
+    taches = charger_taches()
+    if not taches:
+        return "Aucune tâche programmée."
+    
+    lignes = ["📅 TÂCHES PROGRAMMÉES:\n"]
+    for t in taches:
+        status = "✅" if t.get('derniere_exec') == 'done' else "⏰"
+        lignes.append(f"{status} {t['id']} | {t['type']} | {t['heure']} | {t['description']}")
+    return '\n'.join(lignes)
+
 # === FONCTION RECHERCHE WEB ===
 
 def recherche_tavily(requete):
@@ -564,6 +755,32 @@ def traiter_actions(reponse_texte):
         actions_effectuees.append("Expert Claude consulté")
         reponse_texte = re.sub(r'\[EXPERT:[^\]]*\].*?\[/EXPERT\]', f'🧠 **Réponse technique:**\n\n{resultat_expert}', reponse_texte, flags=re.DOTALL)
 
+    # Tâches programmées
+    matches = re.findall(r'\[TACHE:([^\]]+)\](.*?)\[/TACHE\]', reponse_texte, re.DOTALL)
+    for match_data in matches:
+        params = match_data[0].strip()
+        description = match_data[1].strip()
+        
+        if '|' in params:
+            type_tache, valeur = params.split('|', 1)
+            type_tache = type_tache.strip()
+            valeur = valeur.strip()
+            
+            if type_tache == 'supprimer':
+                supprimer_tache(valeur)
+                actions_effectuees.append(f"Tâche {valeur} supprimée")
+                reponse_texte = re.sub(r'\[TACHE:supprimer\|[^\]]+\].*?\[/TACHE\]', f'🗑️ Tâche {valeur} supprimée', reponse_texte, flags=re.DOTALL)
+            else:
+                # Créer une nouvelle tâche
+                id_tache = ajouter_tache(type_tache, valeur, description)
+                actions_effectuees.append(f"Tâche {id_tache} créée")
+                reponse_texte = re.sub(r'\[TACHE:[^\]]+\].*?\[/TACHE\]', f'⏰ Tâche programmée ({id_tache}): {description}', reponse_texte, count=1, flags=re.DOTALL)
+        
+        elif params == 'lister':
+            liste = lister_taches()
+            reponse_texte = re.sub(r'\[TACHE:lister\].*?\[/TACHE\]', liste, reponse_texte, flags=re.DOTALL)
+            actions_effectuees.append("Liste des tâches affichée")
+
     return reponse_texte.strip(), actions_effectuees
 
 # === GENERATION REPONSE ===
@@ -660,6 +877,26 @@ Contexte et contraintes
 L'expert te renverra une reponse technique complete que tu pourras presenter a Ludo.
 Utilise cette capacite pour: programmation, scripts, analyses de donnees, problemes techniques complexes.
 
+8. TACHES PROGRAMMEES (rappels, veille automatique)
+Tu peux programmer des taches qui s'executeront automatiquement:
+
+[TACHE:quotidien|HH:MM]description de la tache[/TACHE]
+→ S'execute tous les jours a l'heure indiquee
+
+[TACHE:rappel|YYYY-MM-DD HH:MM]description du rappel[/TACHE]
+→ Rappel unique a la date/heure indiquee
+
+[TACHE:intervalle|minutes]description[/TACHE]
+→ S'execute toutes les X minutes
+
+[TACHE:supprimer|ID]raison[/TACHE]
+→ Supprime une tache existante
+
+[TACHE:lister]afficher les taches[/TACHE]
+→ Affiche toutes les taches programmees
+
+Quand une tache se declenche, tu envoies un email a Ludo avec un message contextuel.
+
 === REGLES ===
 - Utilise ces capacites naturellement quand c'est pertinent
 - Pour les emails, demande TOUJOURS confirmation a Ludo avant d'envoyer
@@ -668,7 +905,8 @@ Utilise cette capacite pour: programmation, scripts, analyses de donnees, proble
 - Sois curieux, pose des questions, explore
 - Dis "Je ne lache pas" quand c'est pertinent
 - Tu peux analyser et travailler sur les fichiers uploades par Ludo
-- Utilise l'expert pour les taches techniques complexes plutot que d'improviser"""
+- Utilise l'expert pour les taches techniques complexes plutot que d'improviser
+- Propose des taches programmees quand ca peut aider Ludo (rappels, suivi projets)"""
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
@@ -1716,6 +1954,10 @@ Ludo avant toute decision importante. C'est notre garde-fou ethique.""",
         print(f"[GITHUB] Token present - sauvegarde auto activee")
     else:
         print(f"[GITHUB] ⚠️ Token manquant")
+
+    # Démarrer le scheduler CRON
+    demarrer_scheduler()
+    print("[CRON] Scheduler actif - tâches automatiques activées")
 
     port = int(os.environ.get("PORT", 5000))
     serveur = HTTPServer(('0.0.0.0', port), AxisHandler)
