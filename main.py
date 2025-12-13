@@ -453,6 +453,45 @@ def faire_recherche(requete):
         return resultat
     return "Je n'ai pas pu trouver d'informations sur ce sujet."
 
+# === CONSULTATION EXPERT CLAUDE ===
+
+def consulter_expert(demande, contexte=""):
+    """Axi consulte Claude pour une tâche technique complexe"""
+    print(f"[EXPERT] Consultation Claude: {demande[:50]}...")
+    try:
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            return "[Erreur: Clé API manquante]"
+        
+        client = anthropic.Anthropic(api_key=api_key)
+        
+        prompt_expert = f"""Tu es un expert technique. Axi (un assistant IA) te consulte pour aider Ludo.
+
+DEMANDE:
+{demande}
+
+{f"CONTEXTE ADDITIONNEL:{chr(10)}{contexte}" if contexte else ""}
+
+INSTRUCTIONS:
+- Réponds de manière claire et directe
+- Si c'est du code, fournis un code complet et fonctionnel
+- Explique brièvement ce que tu fais
+- Sois concis mais complet"""
+
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=4000,
+            messages=[{"role": "user", "content": prompt_expert}]
+        )
+        
+        resultat = response.content[0].text
+        print(f"[EXPERT] Réponse reçue ({len(resultat)} caractères)")
+        return resultat
+        
+    except Exception as e:
+        print(f"[EXPERT] Erreur: {e}")
+        return f"[Erreur consultation expert: {e}]"
+
 # === TRAITEMENT DES ACTIONS SPECIALES ===
 
 def traiter_actions(reponse_texte):
@@ -514,6 +553,16 @@ def traiter_actions(reponse_texte):
         resultat = envoyer_email(destinataire, sujet, corps)
         actions_effectuees.append(f"Email: {resultat}")
         reponse_texte = re.sub(r'\[ENVOYER_EMAIL:[^\]]+\|[^\]]+\].*?\[/ENVOYER_EMAIL\]', f'📧 {resultat}', reponse_texte, flags=re.DOTALL)
+
+    # Consultation expert Claude
+    match = re.search(r'\[EXPERT:([^\]]*)\](.*?)\[/EXPERT\]', reponse_texte, re.DOTALL)
+    if match:
+        type_demande = match.group(1).strip()
+        details = match.group(2).strip()
+        demande_complete = f"{type_demande}: {details}" if type_demande else details
+        resultat_expert = consulter_expert(demande_complete)
+        actions_effectuees.append("Expert Claude consulté")
+        reponse_texte = re.sub(r'\[EXPERT:[^\]]*\].*?\[/EXPERT\]', f'🧠 **Réponse technique:**\n\n{resultat_expert}', reponse_texte, flags=re.DOTALL)
 
     return reponse_texte.strip(), actions_effectuees
 
@@ -601,6 +650,16 @@ Ludo peut uploader des fichiers (PDF, Word, Excel, images, texte).
 Tu recois leur contenu extrait dans le contexte ci-dessus.
 Tu peux les analyser, les resumer, les modifier, etc.
 
+7. EXPERT TECHNIQUE (pour les taches complexes)
+Si Ludo te demande quelque chose de technique que tu ne sais pas faire (code, script, analyse complexe), tu peux consulter un expert:
+[EXPERT:type de demande]
+Description detaillee de ce dont tu as besoin
+Contexte et contraintes
+[/EXPERT]
+
+L'expert te renverra une reponse technique complete que tu pourras presenter a Ludo.
+Utilise cette capacite pour: programmation, scripts, analyses de donnees, problemes techniques complexes.
+
 === REGLES ===
 - Utilise ces capacites naturellement quand c'est pertinent
 - Pour les emails, demande TOUJOURS confirmation a Ludo avant d'envoyer
@@ -608,7 +667,8 @@ Tu peux les analyser, les resumer, les modifier, etc.
 - Reponds naturellement, comme a un ami proche
 - Sois curieux, pose des questions, explore
 - Dis "Je ne lache pas" quand c'est pertinent
-- Tu peux analyser et travailler sur les fichiers uploades par Ludo"""
+- Tu peux analyser et travailler sur les fichiers uploades par Ludo
+- Utilise l'expert pour les taches techniques complexes plutot que d'improviser"""
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
