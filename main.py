@@ -7,7 +7,6 @@ import re
 import smtplib
 import base64
 import io
-import cgi
 import threading
 import time
 from email.mime.text import MIMEText
