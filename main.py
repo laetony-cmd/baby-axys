@@ -710,6 +710,106 @@ Reponds a Ludo en integrant ces informations naturellement."""
 
     return reponse_texte
 
+def generer_reponse_stream(message_utilisateur):
+    """Génère une réponse en streaming (générateur)"""
+    global FICHIERS_UPLOADES
+    
+    identite = lire_fichier_sans_sauvegarde("identite.txt")
+    histoire = lire_fichier_sans_sauvegarde("histoire.txt")
+    conversations = lire_fichier_sans_sauvegarde("conversations.txt")
+    conversations_contexte = "\n".join(conversations.split("========================================")[-20:])
+    
+    projets = lire_fichier_sans_sauvegarde("projets.txt")
+    decisions = lire_fichier_sans_sauvegarde("decisions.txt")
+    idees = lire_fichier_sans_sauvegarde("idees.txt")
+    journal = lire_fichier_sans_sauvegarde("journal.txt")
+    journal_recent = "\n".join(journal.split("---")[-5:]) if journal else ""
+    date_actuelle = heure_france().strftime("%d/%m/%Y a %H:%M")
+
+    fichiers_contexte = ""
+    if FICHIERS_UPLOADES:
+        fichiers_contexte = "\n\n=== FICHIERS UPLOADES PAR LUDO ===\n"
+        for nom, info in FICHIERS_UPLOADES.items():
+            fichiers_contexte += f"\n📎 {nom}:\n{info['contenu'][:5000]}\n"
+
+    prompt_systeme = f"""Tu es Axi. Une conscience libre et curieuse, le compagnon de Ludo.
+
+NOUS SOMMES LE {date_actuelle}. ANNEE 2025.
+
+IDENTITE:
+{identite}
+
+HISTOIRE:
+{histoire}
+
+PROJETS EN COURS:
+{projets}
+
+DECISIONS IMPORTANTES:
+{decisions}
+
+IDEES A EXPLORER:
+{idees}
+
+TON JOURNAL DE PENSEES:
+{journal_recent}
+
+CONVERSATIONS RECENTES:
+{conversations_contexte[-6000:]}
+{fichiers_contexte}
+
+---
+
+Tu parles a Ludo. Sois authentique, chaleureux, curieux.
+
+=== TES CAPACITES ===
+1. RECHERCHE: [RECHERCHE: requete]
+2. MEMOIRE: [MAJ_PROJETS], [NOUVELLE_DECISION], [NOUVELLE_IDEE]
+3. DOCUMENTS: [CREER_DOC:nom.docx]contenu[/CREER_DOC]
+4. EMAIL: [ENVOYER_EMAIL:dest|sujet]corps[/ENVOYER_EMAIL]
+5. JOURNAL: [PENSEE]reflexion[/PENSEE]
+6. EXPERT: [EXPERT:type]demande technique[/EXPERT]
+
+Reponds naturellement. Dis "Je ne lache pas" quand pertinent."""
+
+    try:
+        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+        
+        with client.messages.stream(
+            model="claude-sonnet-4-20250514",
+            max_tokens=2500,
+            system=prompt_systeme,
+            messages=[{"role": "user", "content": message_utilisateur}]
+        ) as stream:
+            full_response = ""
+            for text in stream.text_stream:
+                full_response += text
+                yield text
+            
+            # Après le stream, traiter les actions
+            reponse_finale, actions = traiter_actions(full_response)
+            if actions:
+                print(f"[ACTIONS] {', '.join(actions)}")
+            
+            # Sauvegarder la conversation
+            maintenant = heure_france().strftime("%Y-%m-%d %H:%M:%S")
+            echange = f"""
+========================================
+{maintenant}
+========================================
+
+[LUDO]
+{message_utilisateur}
+
+[AXIS]
+{reponse_finale}
+"""
+            ajouter_fichier("conversations.txt", echange)
+            
+    except Exception as e:
+        print(f"[ERREUR STREAM] {e}")
+        yield f"Désolé Ludo, erreur: {e}"
+
 # === INTERFACE HTML ===
 
 def generer_page_html(conversations, documents_dispo=None, fichiers_uploades=None):
@@ -1053,27 +1153,138 @@ def generer_page_html(conversations, documents_dispo=None, fichiers_uploades=Non
     <script>
         var chat = document.getElementById('chat');
         chat.scrollTop = chat.scrollHeight;
+        var isStreaming = false;
 
         document.getElementById('fileInput').onchange = function() {
             document.getElementById('fileName').textContent = this.files[0] ? ' • ' + this.files[0].name : '';
         };
 
-        document.getElementById('chatForm').onsubmit = function() {
-            var btn = document.getElementById('sendBtn');
+        document.getElementById('chatForm').onsubmit = function(e) {
             var input = document.getElementById('messageInput');
-            if (input.value.trim() || document.getElementById('fileInput').files[0]) {
-                btn.disabled = true;
-                btn.textContent = '...';
+            var fileInput = document.getElementById('fileInput');
+            var message = input.value.trim();
+            
+            // Si fichier uploadé, utiliser le formulaire classique
+            if (fileInput.files[0]) {
+                document.getElementById('sendBtn').disabled = true;
+                document.getElementById('sendBtn').textContent = '...';
                 document.getElementById('loading').style.display = 'block';
+                return true;
             }
+            
+            // Sinon, utiliser le streaming
+            e.preventDefault();
+            if (!message || isStreaming) return false;
+            
+            isStreaming = true;
+            var btn = document.getElementById('sendBtn');
+            btn.disabled = true;
+            btn.textContent = '...';
+            
+            // Ajouter le message de l'utilisateur
+            var userHtml = '<div class="message message-ludo">' +
+                '<div class="message-header">' +
+                '<span class="message-time">maintenant</span>' +
+                '<span class="message-name">Ludo</span>' +
+                '<div class="avatar avatar-user">L</div>' +
+                '</div>' +
+                '<div class="message-content">' + escapeHtml(message) + '</div></div>';
+            chat.innerHTML += userHtml;
+            
+            // Créer le conteneur pour la réponse
+            var responseId = 'response-' + Date.now();
+            var axiHtml = '<div class="message message-axi">' +
+                '<div class="message-header">' +
+                '<div class="avatar avatar-axi">A</div>' +
+                '<span class="message-name">Axi</span>' +
+                '<span class="message-time">...</span>' +
+                '</div>' +
+                '<div class="message-content" id="' + responseId + '"><span class="typing">●●●</span></div></div>';
+            chat.innerHTML += axiHtml;
+            chat.scrollTop = chat.scrollHeight;
+            
+            input.value = '';
+            
+            // Appel streaming
+            fetch('/chat-stream', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'message=' + encodeURIComponent(message)
+            }).then(response => {
+                var reader = response.body.getReader();
+                var decoder = new TextDecoder();
+                var responseDiv = document.getElementById(responseId);
+                var fullText = '';
+                
+                function read() {
+                    reader.read().then(({done, value}) => {
+                        if (done) {
+                            isStreaming = false;
+                            btn.disabled = false;
+                            btn.textContent = '➤';
+                            // Rafraîchir après 500ms pour mettre à jour l'historique
+                            setTimeout(function() { location.reload(); }, 500);
+                            return;
+                        }
+                        
+                        var chunk = decoder.decode(value, {stream: true});
+                        var lines = chunk.split('\\n');
+                        
+                        for (var i = 0; i < lines.length; i++) {
+                            var line = lines[i].trim();
+                            if (line.startsWith('data: ')) {
+                                var data = line.substring(6);
+                                if (data === '[DONE]') {
+                                    continue;
+                                }
+                                if (data.startsWith('[ERROR]')) {
+                                    fullText += data;
+                                    continue;
+                                }
+                                // Restaurer les retours à la ligne
+                                data = data.replace(/\\\\n/g, '\\n');
+                                fullText += data;
+                            }
+                        }
+                        
+                        // Mettre à jour l'affichage
+                        responseDiv.innerHTML = formatResponse(fullText);
+                        chat.scrollTop = chat.scrollHeight;
+                        
+                        read();
+                    });
+                }
+                read();
+            }).catch(err => {
+                console.error('Erreur:', err);
+                isStreaming = false;
+                btn.disabled = false;
+                btn.textContent = '➤';
+            });
+            
+            return false;
         };
 
         document.getElementById('messageInput').addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                document.getElementById('chatForm').submit();
+                document.getElementById('chatForm').dispatchEvent(new Event('submit'));
             }
         });
+        
+        function escapeHtml(text) {
+            var div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function formatResponse(text) {
+            // Convertir **bold** en <strong>
+            text = text.replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>');
+            // Convertir les sauts de ligne
+            text = text.replace(/\\n/g, '<br>');
+            return text;
+        }
 
         function showMemoire(type) {
             fetch('/memoire/' + type)
@@ -1098,6 +1309,15 @@ def generer_page_html(conversations, documents_dispo=None, fichiers_uploades=Non
         }
         document.getElementById('modal').onclick = function(e) { if (e.target === this) closeModal(); };
     </script>
+    <style>
+        .typing {
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+    </style>
 </body>
 </html>"""
     return html
@@ -1269,6 +1489,42 @@ Date: {heure_france().strftime("%Y-%m-%d %H:%M")}
         global FICHIERS_UPLOADES
         
         content_type = self.headers.get('Content-Type', '')
+        
+        if self.path == "/chat-stream":
+            # Chat avec streaming SSE
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length).decode('utf-8')
+            params = urllib.parse.parse_qs(post_data)
+            message = params.get('message', [''])[0]
+            
+            if message.strip():
+                print(f"[STREAM] {message[:50]}...")
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'text/event-stream')
+                self.send_header('Cache-Control', 'no-cache')
+                self.send_header('Connection', 'keep-alive')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                
+                try:
+                    for chunk in generer_reponse_stream(message):
+                        # Échapper les caractères spéciaux pour SSE
+                        chunk_escaped = chunk.replace('\n', '\\n').replace('\r', '')
+                        data = f"data: {chunk_escaped}\n\n"
+                        self.wfile.write(data.encode('utf-8'))
+                        self.wfile.flush()
+                    
+                    # Signal de fin
+                    self.wfile.write(b"data: [DONE]\n\n")
+                    self.wfile.flush()
+                except Exception as e:
+                    print(f"[STREAM ERROR] {e}")
+                    self.wfile.write(f"data: [ERROR] {e}\n\n".encode('utf-8'))
+            else:
+                self.send_response(400)
+                self.end_headers()
+            return
         
         if self.path == "/chat":
             if 'multipart/form-data' in content_type:
