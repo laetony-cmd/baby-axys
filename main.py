@@ -479,7 +479,7 @@ Maximum 200 mots."""
         gmail_user = os.environ.get("GMAIL_USER")
         if gmail_user:
             envoyer_email(
-                "music.music@me.com",  # Email de Ludo
+                "laetony@gmail.com",  # Email de Ludo
                 f"🤖 Axi - {tache['description']}",
                 f"Salut Ludo !\n\n{message}\n\n---\nTâche programmée: {tache['id']}\nJe ne lâche pas ! 💪"
             )
