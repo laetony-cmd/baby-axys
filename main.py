@@ -1192,44 +1192,49 @@ def generer_page_html(conversations, documents_dispo=None, fichiers_uploades=Non
             flex: 1;
             overflow-y: auto;
             padding: 20px 25px;
-            max-width: 900px;
+            max-width: 800px;
             margin: 0 auto;
             width: 100%;
         }
-        .message { margin-bottom: 25px; max-width: 700px; }
-        .message-axi { padding-left: 0; }
-        .message-ludo { margin-left: auto; text-align: right; max-width: 600px; }
+        .message { 
+            margin-bottom: 25px; 
+            padding: 20px 0;
+            border-bottom: 1px solid #2a2a2a;
+        }
+        .message:last-child { border-bottom: none; }
+        .message-axi { }
+        .message-ludo { }
         .message-header {
             display: flex;
             align-items: center;
-            gap: 8px;
-            margin-bottom: 8px;
+            gap: 10px;
+            margin-bottom: 12px;
         }
-        .message-ludo .message-header { justify-content: flex-end; }
         .avatar {
-            width: 26px;
-            height: 26px;
-            border-radius: 5px;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 11px;
+            font-size: 12px;
             font-weight: 600;
         }
         .avatar-axi { background: linear-gradient(135deg, #e94560, #ff8a80); color: white; }
         .avatar-user { background: #3498db; color: white; }
-        .message-name { font-size: 12px; font-weight: 600; }
-        .message-time { font-size: 10px; color: #666; }
+        .message-name { font-size: 13px; font-weight: 600; color: #fff; }
+        .message-time { font-size: 11px; color: #666; }
         .message-content {
-            font-size: 14px;
+            font-size: 15px;
             line-height: 1.7;
             color: #d0d0d0;
+            padding-left: 38px;
         }
         .message-ludo .message-content {
-            background: #2a2a2a;
-            padding: 12px 16px;
-            border-radius: 16px 16px 4px 16px;
-            display: inline-block;
+            background: none;
+            padding: 0 0 0 38px;
+            border-radius: 0;
+            display: block;
             text-align: left;
         }
         .empty-state { text-align: center; color: #666; margin-top: 60px; }
@@ -1433,9 +1438,8 @@ def generer_page_html(conversations, documents_dispo=None, fichiers_uploades=Non
             // Ajouter le message de l'utilisateur
             var userHtml = '<div class="message message-ludo">' +
                 '<div class="message-header">' +
-                '<span class="message-time">maintenant</span>' +
-                '<span class="message-name">Ludo</span>' +
                 '<div class="avatar avatar-user">L</div>' +
+                '<span class="message-name">Ludo</span>' +
                 '</div>' +
                 '<div class="message-content">' + escapeHtml(message) + '</div></div>';
             chat.innerHTML += userHtml;
@@ -1446,7 +1450,6 @@ def generer_page_html(conversations, documents_dispo=None, fichiers_uploades=Non
                 '<div class="message-header">' +
                 '<div class="avatar avatar-axi">A</div>' +
                 '<span class="message-name">Axi</span>' +
-                '<span class="message-time">...</span>' +
                 '</div>' +
                 '<div class="message-content" id="' + responseId + '"><span class="typing">●●●</span></div></div>';
             chat.innerHTML += axiHtml;
@@ -1585,8 +1588,6 @@ def formater_conversations_html(conversations_txt):
     for bloc in blocs:
         if not bloc.strip():
             continue
-        date_match = re.search(r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})', bloc)
-        date_str = date_match.group(1)[-8:-3] if date_match else ""
 
         if "[LUDO]" in bloc:
             parties = bloc.split("[LUDO]")
@@ -1596,9 +1597,8 @@ def formater_conversations_html(conversations_txt):
                     contenu_ludo_html = contenu_ludo.replace('<', '&lt;').replace('>', '&gt;')
                     html += f'''<div class="message message-ludo">
                         <div class="message-header">
-                            <span class="message-time">{date_str}</span>
-                            <span class="message-name">Ludo</span>
                             <div class="avatar avatar-user">L</div>
+                            <span class="message-name">Ludo</span>
                         </div>
                         <div class="message-content">{contenu_ludo_html}</div>
                     </div>'''
@@ -1614,7 +1614,6 @@ def formater_conversations_html(conversations_txt):
                         <div class="message-header">
                             <div class="avatar avatar-axi">A</div>
                             <span class="message-name">Axi</span>
-                            <span class="message-time">{date_str}</span>
                         </div>
                         <div class="message-content">{contenu_axis_html}</div>
                     </div>'''
