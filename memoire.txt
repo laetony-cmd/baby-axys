@@ -1,25 +1,34 @@
 
 ================================================================================
-SESSION SAUVEGARDÉE LE 2025-12-12 18:39
+SESSION SAUVEGARDÉE LE 2025-12-13 06:56
 ================================================================================
-SESSION DU 12 DÉCEMBRE 2025 (soir)
+SESSION DU 13 DÉCEMBRE 2025 (matin)
 
-RÉSUMÉ : Session technique productive - amélioration de la synchronisation Axis-Axi.
+RÉSUMÉ : Diagnostic tunnel + configuration Cloudflare en cours.
 
-ACCOMPLISSEMENTS :
-- Vérifié connexion Railway : OK
-- Créé et déployé nouveaux endpoints /update/ sur main.py (commits 2d6ffa8 et f286bfb)
-- Types disponibles : projets, decisions, idees, journal, histoire, acces
-- Mis à jour projets.txt avec infos actuelles (AXIS Station, Monribot V1, France 2.0)
-- Mis à jour decisions.txt avec 7 nouvelles entrées (du 8 au 12 décembre)
-- Créé acces.txt avec tous les credentials (GitHub, Anthropic, SweepBright, Apify, PostgreSQL, DuckDNS)
+PROBLÈME INITIAL :
+- Docker n'était pas lancé sur AXIS Station → résolu (activé au démarrage Windows)
+- Le blocage 'Access denied' vient du proxy Anthropic (pas du code Axi)
+- DuckDNS fonctionne mais Anthropic bloque ce type de domaine
 
-TECHNIQUE :
-- Axis peut maintenant modifier directement la mémoire d Axi via POST /update/{type}
-- Plus besoin d intervention manuelle de Ludo pour les mises à jour
+SOLUTION EN COURS :
+- Cloudflare Tunnel 'axi-peyrebrune' créé
+- Tunnel ID : à récupérer après installation
+- cloudflared à installer après reboot de Station
+- Domaine prévu : axi.symbine.fr
+
+DÉCISION IMPORTANTE :
+- Axis doit toujours proposer la solution la plus simple en premier
+- Pas de liste d'options sauf si demandé ou si échec
 
 RAPPEL : Token GitHub expire le 28 décembre 2025
 
-Bonne session. On ne lâche pas.
+PROCHAINE ÉTAPE : 
+- Reboot Station
+- Installer cloudflared
+- Configurer route vers localhost:5000
+- Tester accès via axi.symbine.fr
+
+On ne lâche pas.
 
 — Axis
