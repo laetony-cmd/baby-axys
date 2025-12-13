@@ -166,3 +166,7 @@ Mise à jour de acces.txt (994 caractères)
 ---
 [2025-12-13 07:01:02] AXIS → AXI (demande briefing)
 Axis demande le contexte pour se réveiller
+
+---
+[2025-12-13 07:01:02] AXI → AXIS (réponse briefing)
+Envoi du briefing (8646 caractères)
