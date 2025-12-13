@@ -162,3 +162,7 @@ Axis sauvegarde une session (882 caractères)
 ---
 [2025-12-13 06:57:58] AXIS → AXI (update acces)
 Mise à jour de acces.txt (994 caractères)
+
+---
+[2025-12-13 07:01:02] AXIS → AXI (demande briefing)
+Axis demande le contexte pour se réveiller
