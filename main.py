@@ -1192,10 +1192,13 @@ def generer_page_html(conversations, documents_dispo=None, fichiers_uploades=Non
             flex: 1;
             overflow-y: auto;
             padding: 20px 25px;
+            max-width: 900px;
+            margin: 0 auto;
+            width: 100%;
         }
         .message { margin-bottom: 25px; max-width: 700px; }
         .message-axi { padding-left: 0; }
-        .message-ludo { margin-left: auto; text-align: right; }
+        .message-ludo { margin-left: auto; text-align: right; max-width: 600px; }
         .message-header {
             display: flex;
             align-items: center;
@@ -1236,7 +1239,7 @@ def generer_page_html(conversations, documents_dispo=None, fichiers_uploades=Non
             padding: 15px 25px 20px;
             border-top: 1px solid #2a2a2a;
         }
-        .input-wrapper { max-width: 700px; }
+        .input-wrapper { max-width: 800px; margin: 0 auto; }
         .input-box {
             display: flex;
             align-items: flex-end;
