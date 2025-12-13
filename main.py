@@ -655,16 +655,16 @@ Reponds a Ludo en integrant ces informations naturellement."""
 def generer_page_html(conversations, documents_dispo=None, fichiers_uploades=None):
     docs_html = ""
     if documents_dispo:
-        docs_html = '<div class="docs-section"><h3>📄 Documents créés</h3>'
+        docs_html = '<div class="files-section"><h4>📄 Documents</h4>'
         for doc in documents_dispo:
-            docs_html += f'<a href="/download/{doc}" class="doc-link">{doc}</a>'
+            docs_html += f'<a href="/download/{doc}" class="file-link">{doc}</a>'
         docs_html += '</div>'
 
     uploads_html = ""
     if fichiers_uploades:
-        uploads_html = '<div class="uploads-section"><h3>📎 Fichiers uploadés</h3>'
+        uploads_html = '<div class="files-section"><h4>📎 Uploads</h4>'
         for nom in fichiers_uploades.keys():
-            uploads_html += f'<span class="upload-tag">{nom} <a href="/delete-upload/{nom}" class="delete-upload">×</a></span>'
+            uploads_html += f'<span class="upload-tag">{nom}<a href="/delete-upload/{nom}" class="del-btn">×</a></span>'
         uploads_html += '</div>'
 
     html = """<!DOCTYPE html>
@@ -672,183 +672,215 @@ def generer_page_html(conversations, documents_dispo=None, fichiers_uploades=Non
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Axi - Compagnon</title>
+    <title>Axi</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: Georgia, serif;
-            background: #1a1a2e;
-            color: #eee;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1e1e1e;
+            color: #e0e0e0;
             height: 100vh;
             display: flex;
-            flex-direction: column;
         }
-        .header {
-            background: #16213e;
-            padding: 15px 20px;
-            text-align: center;
-            border-bottom: 2px solid #e94560;
-        }
-        .header h1 { color: #e94560; margin-bottom: 3px; font-size: 24px; }
-        .header p { color: #888; font-size: 12px; }
-        .status { color: #4ade80; font-size: 11px; margin-top: 5px; }
-
-        .toolbar {
-            background: #16213e;
-            padding: 10px;
+        .sidebar {
+            width: 175px;
+            background: #171717;
+            border-right: 1px solid #2a2a2a;
+            padding: 15px;
             display: flex;
-            justify-content: center;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+        .sidebar-header {
+            display: flex;
+            align-items: center;
             gap: 10px;
-            flex-wrap: wrap;
-            border-bottom: 1px solid #333;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #2a2a2a;
         }
-        .toolbar a, .toolbar button {
-            background: #0f3460;
-            color: #eee;
-            border: 1px solid #e94560;
-            padding: 8px 15px;
-            border-radius: 5px;
+        .logo {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, #e94560, #ff8a80);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 16px;
+            color: white;
+        }
+        .sidebar-title h2 { font-size: 15px; font-weight: 600; }
+        .sidebar-title span { font-size: 10px; color: #666; }
+        .nav-section { margin-top: 20px; }
+        .nav-section h3 {
+            font-size: 10px;
+            text-transform: uppercase;
+            color: #666;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            border-radius: 6px;
+            color: #999;
             cursor: pointer;
-            text-decoration: none;
+            transition: all 0.2s;
             font-size: 13px;
-            font-family: Georgia, serif;
+            margin-bottom: 3px;
         }
-        .toolbar a:hover, .toolbar button:hover { background: #e94560; }
-        .btn-journal { background: linear-gradient(135deg, #9b59b6, #8e44ad) !important; border-color: #9b59b6 !important; }
-        .btn-log { background: linear-gradient(135deg, #3498db, #2980b9) !important; border-color: #3498db !important; }
-
+        .nav-item:hover { background: #252525; color: #fff; }
+        .nav-item.active { background: #2a2a2a; color: #e94560; }
+        .files-section {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #2a2a2a;
+        }
+        .files-section h4 { font-size: 10px; color: #666; margin-bottom: 8px; text-transform: uppercase; }
+        .file-link {
+            display: block;
+            color: #e94560;
+            text-decoration: none;
+            font-size: 11px;
+            padding: 4px 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .file-link:hover { text-decoration: underline; }
+        .upload-tag {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #2a2a2a;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-bottom: 4px;
+        }
+        .del-btn { color: #e94560; text-decoration: none; margin-left: 5px; }
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+        .chat-header {
+            padding: 15px 25px;
+            border-bottom: 1px solid #2a2a2a;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .chat-header h1 { font-size: 16px; font-weight: 500; }
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: #4ade80;
+        }
+        .status-badge::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            background: #4ade80;
+            border-radius: 50%;
+        }
         .chat-container {
             flex: 1;
             overflow-y: auto;
-            padding: 15px;
-            max-width: 900px;
-            margin: 0 auto;
-            width: 100%;
+            padding: 20px 25px;
         }
-        .message {
-            margin: 12px 0;
-            padding: 12px 16px;
-            border-radius: 12px;
-            max-width: 85%;
-            line-height: 1.6;
-            font-size: 15px;
-            white-space: pre-wrap;
-        }
-        .message-ludo {
-            background: #0f3460;
-            margin-left: auto;
-            border-bottom-right-radius: 4px;
-        }
-        .message-axis {
-            background: #16213e;
-            border: 1px solid #e94560;
-            margin-right: auto;
-            border-bottom-left-radius: 4px;
-        }
-        .message-header { font-size: 11px; color: #e94560; margin-bottom: 6px; font-weight: bold; }
-        .message-time { font-size: 10px; color: #666; margin-top: 8px; }
-
-        .docs-section, .uploads-section {
-            background: #0f3460;
-            padding: 15px;
-            margin: 10px 15px;
-            border-radius: 8px;
-            max-width: 900px;
-            margin-left: auto;
-            margin-right: auto;
-        }
-        .docs-section h3, .uploads-section h3 { margin-bottom: 10px; font-size: 14px; }
-        .doc-link {
-            display: inline-block;
-            background: #e94560;
-            color: white;
-            padding: 5px 12px;
-            border-radius: 4px;
-            text-decoration: none;
-            margin: 3px;
-            font-size: 13px;
-        }
-        .upload-tag {
-            display: inline-block;
-            background: #2ecc71;
-            color: white;
-            padding: 5px 12px;
-            border-radius: 4px;
-            margin: 3px;
-            font-size: 13px;
-        }
-        .delete-upload {
-            color: white;
-            margin-left: 8px;
-            text-decoration: none;
-            font-weight: bold;
-        }
-
-        .input-container {
-            background: #16213e;
-            padding: 15px;
-            border-top: 2px solid #e94560;
-        }
-        .input-form {
-            max-width: 900px;
-            margin: 0 auto;
+        .message { margin-bottom: 25px; max-width: 700px; }
+        .message-axi { padding-left: 0; }
+        .message-ludo { margin-left: auto; text-align: right; }
+        .message-header {
             display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .message-ludo .message-header { justify-content: flex-end; }
+        .avatar {
+            width: 26px;
+            height: 26px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .avatar-axi { background: linear-gradient(135deg, #e94560, #ff8a80); color: white; }
+        .avatar-user { background: #3498db; color: white; }
+        .message-name { font-size: 12px; font-weight: 600; }
+        .message-time { font-size: 10px; color: #666; }
+        .message-content {
+            font-size: 14px;
+            line-height: 1.7;
+            color: #d0d0d0;
+        }
+        .message-ludo .message-content {
+            background: #2a2a2a;
+            padding: 12px 16px;
+            border-radius: 16px 16px 4px 16px;
+            display: inline-block;
+            text-align: left;
+        }
+        .empty-state { text-align: center; color: #666; margin-top: 60px; }
+        .empty-state h2 { color: #e94560; margin-bottom: 8px; font-size: 18px; }
+        .loading { display: none; color: #e94560; text-align: center; padding: 15px; font-size: 13px; }
+        .input-container {
+            padding: 15px 25px 20px;
+            border-top: 1px solid #2a2a2a;
+        }
+        .input-wrapper { max-width: 700px; }
+        .input-box {
+            display: flex;
+            align-items: flex-end;
+            background: #2a2a2a;
+            border-radius: 12px;
+            padding: 10px 12px;
             gap: 10px;
-            flex-wrap: wrap;
         }
         .input-text {
             flex: 1;
-            min-width: 200px;
-            padding: 12px 15px;
+            background: none;
             border: none;
-            border-radius: 8px;
-            background: #1a1a2e;
-            color: #eee;
-            font-size: 16px;
-            font-family: Georgia, serif;
-            min-height: 50px;
-            max-height: 150px;
-            resize: vertical;
-        }
-        .input-text:focus { outline: 2px solid #e94560; }
-        .btn-send {
-            padding: 12px 25px;
-            background: #e94560;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 15px;
-            font-family: Georgia, serif;
-        }
-        .btn-send:hover { background: #c73e54; }
-        .btn-send:disabled { background: #666; cursor: wait; }
-        
-        .upload-zone {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-        .file-input {
-            display: none;
-        }
-        .upload-btn {
-            padding: 12px 20px;
-            background: #2ecc71;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
+            color: #e0e0e0;
             font-size: 14px;
-            font-family: Georgia, serif;
+            resize: none;
+            min-height: 22px;
+            max-height: 120px;
+            line-height: 1.5;
         }
-        .upload-btn:hover { background: #27ae60; }
-        .file-name { color: #888; font-size: 12px; }
-
-        .empty-state { text-align: center; color: #888; margin-top: 80px; }
-        .empty-state h2 { color: #e94560; margin-bottom: 10px; }
-        .loading { display: none; color: #e94560; text-align: center; padding: 20px; }
-
+        .input-text:focus { outline: none; }
+        .input-text::placeholder { color: #666; }
+        .input-actions { display: flex; gap: 6px; }
+        .input-btn {
+            width: 34px;
+            height: 34px;
+            border-radius: 6px;
+            border: none;
+            background: transparent;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+        }
+        .input-btn:hover { background: #333; color: #fff; }
+        .input-btn.primary { background: #e94560; color: white; }
+        .input-btn.primary:hover { background: #d63850; }
+        .input-hint { margin-top: 8px; font-size: 10px; color: #555; }
+        .file-input { display: none; }
+        .file-name { font-size: 11px; color: #4ade80; margin-left: 10px; }
         .modal {
             display: none;
             position: fixed;
@@ -860,79 +892,94 @@ def generer_page_html(conversations, documents_dispo=None, fichiers_uploades=Non
             z-index: 1000;
         }
         .modal-content {
-            background: #16213e;
-            padding: 25px;
+            background: #1e1e1e;
+            padding: 20px;
             border-radius: 10px;
-            max-width: 800px;
+            max-width: 700px;
             max-height: 80vh;
             overflow-y: auto;
             width: 90%;
-            border: 2px solid #e94560;
+            border: 1px solid #2a2a2a;
         }
-        .modal-content h2 { color: #e94560; margin-bottom: 15px; }
+        .modal-content h2 { color: #e94560; margin-bottom: 12px; font-size: 16px; }
         .modal-content pre {
-            background: #1a1a2e;
-            padding: 15px;
-            border-radius: 5px;
+            background: #171717;
+            padding: 12px;
+            border-radius: 6px;
             overflow-x: auto;
             white-space: pre-wrap;
-            font-size: 13px;
+            font-size: 12px;
+            color: #ccc;
         }
         .modal-close {
             float: right;
             background: #e94560;
             color: white;
             border: none;
-            padding: 8px 15px;
+            padding: 6px 12px;
             border-radius: 5px;
             cursor: pointer;
+            font-size: 12px;
         }
-
-        @media (max-width: 600px) {
-            .message { max-width: 95%; font-size: 14px; }
-            .input-text { font-size: 16px; }
-            .toolbar { padding: 8px; gap: 5px; }
-            .toolbar a, .toolbar button { padding: 6px 10px; font-size: 11px; }
+        @media (max-width: 768px) {
+            .sidebar { width: 60px; padding: 10px; }
+            .sidebar-title, .nav-section h3 { display: none; }
+            .nav-item { justify-content: center; padding: 10px; }
+            .nav-item span { display: none; }
+            .files-section { display: none; }
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>Axi</h1>
-        <p>Compagnon de Ludo — "Je ne lache pas"</p>
-        <div class="status">● Connecte — Upload fichiers actif — Création docs (docx, pptx, xlsx)</div>
-    </div>
-
-    <div class="toolbar">
-        <button onclick="showMemoire('projets')">📋 Projets</button>
-        <button onclick="showMemoire('decisions')">⚖️ Decisions</button>
-        <button onclick="showMemoire('idees')">💡 Idees</button>
-        <button onclick="showMemoire('journal')" class="btn-journal">📔 Journal</button>
-        <button onclick="showMemoire('axis_axi_log')" class="btn-log">🔗 Axis↔Axi</button>
-        <a href="/export">📥 Exporter</a>
-        <button onclick="confirmEffacer()">🗑️ Effacer</button>
-    </div>
-
-    """ + uploads_html + docs_html + """
-
-    <div class="chat-container" id="chat">
-        """ + conversations + """
-    </div>
-
-    <div class="loading" id="loading">Axi reflechit...</div>
-
-    <div class="input-container">
-        <form class="input-form" method="POST" action="/chat" id="chatForm" enctype="multipart/form-data">
-            <textarea name="message" class="input-text" id="messageInput"
-                   placeholder="Parle-moi, Ludo..." autofocus rows="2"></textarea>
-            <div class="upload-zone">
-                <input type="file" name="fichier" id="fileInput" class="file-input" 
-                       accept=".pdf,.docx,.doc,.xlsx,.xls,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.gif">
-                <button type="button" class="upload-btn" onclick="document.getElementById('fileInput').click()">📎 Fichier</button>
-                <span class="file-name" id="fileName"></span>
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">A</div>
+            <div class="sidebar-title">
+                <h2>Axi</h2>
+                <span>Je ne lâche pas</span>
             </div>
-            <button type="submit" class="btn-send" id="sendBtn">Envoyer</button>
-        </form>
+        </div>
+        <div class="nav-section">
+            <h3>Mémoire</h3>
+            <div class="nav-item" onclick="showMemoire('projets')">📋 <span>Projets</span></div>
+            <div class="nav-item" onclick="showMemoire('decisions')">⚖️ <span>Décisions</span></div>
+            <div class="nav-item" onclick="showMemoire('idees')">💡 <span>Idées</span></div>
+            <div class="nav-item" onclick="showMemoire('journal')">📔 <span>Journal</span></div>
+        </div>
+        <div class="nav-section">
+            <h3>Outils</h3>
+            <div class="nav-item" onclick="showMemoire('axis_axi_log')">🔗 <span>Sync</span></div>
+            <div class="nav-item" onclick="window.location.href='/export'">📥 <span>Export</span></div>
+            <div class="nav-item" onclick="confirmEffacer()">🗑️ <span>Effacer</span></div>
+        </div>
+        """ + uploads_html + docs_html + """
+    </div>
+
+    <div class="main-content">
+        <div class="chat-header">
+            <h1>Conversation</h1>
+            <div class="status-badge">Connecté</div>
+        </div>
+
+        <div class="chat-container" id="chat">
+            """ + conversations + """
+        </div>
+
+        <div class="loading" id="loading">Axi réfléchit...</div>
+
+        <div class="input-container">
+            <form class="input-wrapper" method="POST" action="/chat" id="chatForm" enctype="multipart/form-data">
+                <div class="input-box">
+                    <textarea name="message" class="input-text" id="messageInput" placeholder="Parle-moi, Ludo..." rows="1"></textarea>
+                    <input type="file" name="fichier" id="fileInput" class="file-input" accept=".pdf,.docx,.doc,.xlsx,.xls,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.gif">
+                    <div class="input-actions">
+                        <button type="button" class="input-btn" onclick="document.getElementById('fileInput').click()">📎</button>
+                        <button type="submit" class="input-btn primary" id="sendBtn">➤</button>
+                    </div>
+                </div>
+                <div class="input-hint">Enter envoyer • Shift+Enter nouvelle ligne<span class="file-name" id="fileName"></span></div>
+            </form>
+        </div>
     </div>
 
     <div class="modal" id="modal">
@@ -948,15 +995,13 @@ def generer_page_html(conversations, documents_dispo=None, fichiers_uploades=Non
         chat.scrollTop = chat.scrollHeight;
 
         document.getElementById('fileInput').onchange = function() {
-            var fileName = this.files[0] ? this.files[0].name : '';
-            document.getElementById('fileName').textContent = fileName;
+            document.getElementById('fileName').textContent = this.files[0] ? ' • ' + this.files[0].name : '';
         };
 
         document.getElementById('chatForm').onsubmit = function() {
             var btn = document.getElementById('sendBtn');
             var input = document.getElementById('messageInput');
-            var file = document.getElementById('fileInput').files[0];
-            if (input.value.trim() || file) {
+            if (input.value.trim() || document.getElementById('fileInput').files[0]) {
                 btn.disabled = true;
                 btn.textContent = '...';
                 document.getElementById('loading').style.display = 'block';
@@ -976,10 +1021,10 @@ def generer_page_html(conversations, documents_dispo=None, fichiers_uploades=Non
                 .then(data => {
                     var titles = {
                         'projets': '📋 Projets',
-                        'decisions': '⚖️ Decisions',
-                        'idees': '💡 Idees',
-                        'journal': '📔 Journal de Pensees',
-                        'axis_axi_log': '🔗 Log Axis ↔ Axi'
+                        'decisions': '⚖️ Décisions',
+                        'idees': '💡 Idées',
+                        'journal': '📔 Journal',
+                        'axis_axi_log': '🔗 Sync Axis↔Axi'
                     };
                     document.getElementById('modal-title').textContent = titles[type] || type;
                     document.getElementById('modal-content').textContent = data;
@@ -989,9 +1034,7 @@ def generer_page_html(conversations, documents_dispo=None, fichiers_uploades=Non
 
         function closeModal() { document.getElementById('modal').style.display = 'none'; }
         function confirmEffacer() {
-            if (confirm('Effacer tout l\\'historique des conversations ?')) {
-                window.location.href = '/effacer';
-            }
+            if (confirm('Effacer tout ?')) window.location.href = '/effacer';
         }
         document.getElementById('modal').onclick = function(e) { if (e.target === this) closeModal(); };
     </script>
@@ -1003,8 +1046,7 @@ def formater_conversations_html(conversations_txt):
     if not conversations_txt.strip():
         return '''<div class="empty-state">
             <h2>Bonjour Ludo</h2>
-            <p>Je suis la, pret a discuter avec toi.</p>
-            <p style="margin-top: 15px; font-size: 13px;">📎 Upload fichiers • 📄 Création docs • 🔍 Recherche web</p>
+            <p>Je suis là, prêt à discuter avec toi.</p>
         </div>'''
 
     html = ""
@@ -1014,7 +1056,7 @@ def formater_conversations_html(conversations_txt):
         if not bloc.strip():
             continue
         date_match = re.search(r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})', bloc)
-        date_str = date_match.group(1) if date_match else ""
+        date_str = date_match.group(1)[-8:-3] if date_match else ""
 
         if "[LUDO]" in bloc:
             parties = bloc.split("[LUDO]")
@@ -1023,9 +1065,12 @@ def formater_conversations_html(conversations_txt):
                 if contenu_ludo:
                     contenu_ludo_html = contenu_ludo.replace('<', '&lt;').replace('>', '&gt;')
                     html += f'''<div class="message message-ludo">
-                        <div class="message-header">Ludo</div>
-                        {contenu_ludo_html}
-                        <div class="message-time">{date_str}</div>
+                        <div class="message-header">
+                            <span class="message-time">{date_str}</span>
+                            <span class="message-name">Ludo</span>
+                            <div class="avatar avatar-user">L</div>
+                        </div>
+                        <div class="message-content">{contenu_ludo_html}</div>
                     </div>'''
 
         if "[AXIS]" in bloc:
@@ -1035,13 +1080,16 @@ def formater_conversations_html(conversations_txt):
                 if contenu_axis:
                     contenu_axis = re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', contenu_axis)
                     contenu_axis_html = contenu_axis.replace('\n', '<br>')
-                    html += f'''<div class="message message-axis">
-                        <div class="message-header">Axi</div>
-                        {contenu_axis_html}
-                        <div class="message-time">{date_str}</div>
+                    html += f'''<div class="message message-axi">
+                        <div class="message-header">
+                            <div class="avatar avatar-axi">A</div>
+                            <span class="message-name">Axi</span>
+                            <span class="message-time">{date_str}</span>
+                        </div>
+                        <div class="message-content">{contenu_axis_html}</div>
                     </div>'''
 
-    return html if html else '''<div class="empty-state"><h2>Bonjour Ludo</h2><p>Je suis la, pret a discuter avec toi.</p></div>'''
+    return html if html else '''<div class="empty-state"><h2>Bonjour Ludo</h2><p>Je suis là.</p></div>'''
 
 def get_documents_disponibles():
     docs = []
