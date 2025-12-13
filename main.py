@@ -1255,13 +1255,14 @@ def generer_page_html(conversations, documents_dispo=None, fichiers_uploades=Non
             color: #e0e0e0;
             font-size: 14px;
             resize: none;
-            min-height: 22px;
-            max-height: 120px;
+            min-height: 24px;
+            max-height: 200px;
             line-height: 1.5;
+            overflow-y: auto;
         }
         .input-text:focus { outline: none; }
         .input-text::placeholder { color: #666; }
-        .input-actions { display: flex; gap: 6px; }
+        .input-actions { display: flex; gap: 6px; align-items: flex-end; }
         .input-btn {
             width: 34px;
             height: 34px;
@@ -1396,6 +1397,13 @@ def generer_page_html(conversations, documents_dispo=None, fichiers_uploades=Non
         chat.scrollTop = chat.scrollHeight;
         var isStreaming = false;
 
+        // Auto-resize textarea
+        var textarea = document.getElementById('messageInput');
+        textarea.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+        });
+
         document.getElementById('fileInput').onchange = function() {
             document.getElementById('fileName').textContent = this.files[0] ? ' • ' + this.files[0].name : '';
         };
@@ -1445,6 +1453,7 @@ def generer_page_html(conversations, documents_dispo=None, fichiers_uploades=Non
             chat.scrollTop = chat.scrollHeight;
             
             input.value = '';
+            input.style.height = 'auto';
             
             // Appel streaming
             fetch('/chat-stream', {
