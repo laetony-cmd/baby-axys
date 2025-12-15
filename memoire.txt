@@ -1,5 +1,29 @@
 
 ================================================================================
-SESSION SAUVEGARDÃ‰E LE 2025-12-15 08:07
+SESSION SAUVEGARDÃ‰E LE 2025-12-15 09:45
 ================================================================================
-[AXIS] Mise à jour accès - GitHub password ajouté: UV9qu2cjSZ3PWUz
+SESSION DU 15 DÉCEMBRE 2025 (matin)
+
+RÉSUMÉ : Setup complet AXIS Station   synchronisation multi-appareils.
+
+ACCOMPLI :
+- Tunnel Cloudflare OPÉRATIONNEL : axi.symbine.fr et agences.symbine.fr
+- Arc Browser synchronisé Mac   Windows (compte laetony@gmail.com)
+- Règles OPTIMISATION injectées dans Axi (8 règles : jamais d'options, toujours décider, anticiper, etc.)
+- Code poussé sur GitHub, Railway redéployé automatiquement
+- Google Drive installé sur serveur   Mac   iPhone
+- Fichier ACCES_AXIS_STATION.txt synchronisé partout
+
+INFRASTRUCTURE FINALE :
+- Serveur : AXIS Station (192.168.1.112)
+- Axi local : http://localhost:5000
+- Axi externe : https://axi.symbine.fr
+- Agences externe : https://agences.symbine.fr
+- Railway : pont de secours
+- Sync fichiers : Google Drive (laetony@gmail.com)
+
+RAPPEL : Token GitHub expire le 28 décembre 2025
+
+On ne lâche pas.
+
+— Axis
