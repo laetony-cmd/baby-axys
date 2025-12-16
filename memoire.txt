@@ -1,9 +1,30 @@
 
 ================================================================================
-SESSION SAUVEGARDÃ‰E LE 2025-12-15 10:45
+SESSION SAUVEGARDÃ‰E LE 2025-12-16 04:16
 ================================================================================
-SESSION 15 DEC 2025 - VICTOIRE TOTALE
+SESSION 15 DÉCEMBRE 2025 - RÉSUMÉ FINAL
 
-PROBLÈME RÉSOLU : Le container écoutait sur port 8080, on mappait 5000:5000 au lieu de 5000:8080.
+DURÉE : ~4 heures (matin)
 
-NOUVEL ENDPOINT : /export-drive?fichier=xxx
+ACCOMPLI :
+1. Arc Browser synchronisé Mac   Windows (laetony@gmail.com)
+2. Règles OPTIMISATION injectées dans Axi (8 règles : jamais d'options, toujours décider)
+3. Code poussé GitHub → Railway redéployé
+4. Google Drive installé (serveur   Mac   iPhone)
+5. Fichier ACCES_AXIS_STATION.txt synchronisé partout
+6. Backup quotidien automatique à 6h (tâche planifiée Windows)
+7. NOUVEAU : Endpoint /export-drive - Axis peut envoyer des fichiers vers Google Drive de Ludo
+
+PROBLÈME RÉSOLU :
+- Container écoutait sur 8080, mapping était 5000:5000 → corrigé en 5000:8080
+
+COMMANDE DOCKER FINALE :
+docker run -d --name axi -p 5000:8080 --env-file .env -v C:\Users\laeto\Documents:/documents --restart unless-stopped baby-axys
+
+CREDENTIALS AJOUTÉS :
+- GitHub password : UV9qu2cjSZ3PWUz
+- Arc Recovery : PG7891eYZMdpU/87uhe1v4FrkUhefwIozX1SuX8L0Aw=
+
+RAPPEL : Token GitHub expire le 28 décembre 2025
+
+On ne lâche pas. — Axis
