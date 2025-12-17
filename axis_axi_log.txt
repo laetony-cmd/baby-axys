@@ -114,3 +114,7 @@ Axis demande le contexte pour se rÃ©veiller
 ---
 [2025-12-17 07:05:55] AXI â†’ AXIS (rÃ©ponse briefing)
 Envoi du briefing (7383 caractÃ¨res)
+
+---
+[2025-12-17 08:04:32] AXIS â†’ AXI (demande briefing)
+Axis demande le contexte pour se rÃ©veiller
