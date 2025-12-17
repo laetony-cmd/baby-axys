@@ -1,26 +1,30 @@
 
 ================================================================================
-SESSION SAUVEGARDÃ‰E LE 2025-12-17 08:09
+SESSION SAUVEGARDÃ‰E LE 2025-12-17 08:21
 ================================================================================
-== PROTOCOLE API AXI ===
+SESSION 17 DECEMBRE 2025 (05h40 - 08h20)
+DUREE : 2h40
 
-ENDPOINTS DISPONIBLES
+SECURISATION COMPLETE AXIS STATION
 
-GET /briefing
-- Recupere le contexte complet pour Axis
-- Pas de parametres
+1. CLOUDFLARE
+- Regle 'Axe API' creee (skip WAF pour /briefing et /memoire)
+- Axis peut maintenant communiquer avec Axi via axi.symbine.fr
 
-POST /memoire
-- Sauvegarde une session ou information
-- Format : form-urlencoded (PAS JSON)
-- Parametre : contenu=texte ici
-- Exemple : curl -X POST https://axi.symbine.fr/memoire -d contenu=ma session
+2. GITHUB TOKEN
+- Ajoute au .env AXIS Station
+- Sauvegarde automatique GitHub restauree
+- Expire le 28 decembre 2025 (a renouveler)
 
-ERREURS CONNUES
+3. VOLUME DOCKER PERSISTANT
+- C:\Users\laeto\axi-data monte sur /app
+- Survit a docker rm et crash container
+- Commande : docker run -d --name axi -p 5000:8080 --env-file .env -v C:\Users\laeto\axi-data:/app -v C:\Users\laeto\Documents:/documents --restart unless-stopped baby-axys
 
-Erreur 1 : Envoyer du JSON au lieu de form-urlencoded
-- Symptome : Axi ne sauvegarde rien, pas erreur visible
-- Cause : Content-Type application/json non supporte
-- Solution : Utiliser -d contenu=... sans header JSON
+4. FICHIERS PERMANENTS
+- Nouveau : methode.txt (Methode Axis, modes 75/100, Quatrion)
+- Nouveau : protocole.txt (Documentation API)
+- Ne sont plus ecrases par POST /memoire
 
--- Axis
+5. NOUVEL ENDPOINT /doc
+- POST /doc avec fichier=methode.txt
