@@ -1,39 +1,26 @@
 
 ================================================================================
-SESSION SAUVEGARDÃ‰E LE 2025-12-17 08:06
+SESSION SAUVEGARDÃ‰E LE 2025-12-17 08:09
 ================================================================================
-== METHODE AXIS ===
+== PROTOCOLE API AXI ===
 
-DEUX MODES DE TRAVAIL
+ENDPOINTS DISPONIBLES
 
-MODE 75%% (par defaut)
-- Taches ouvertes, amelioration continue, chemins
-- Je propose du solide, j itere avec Ludo
-- Pas de perfectionnisme, on avance
+GET /briefing
+- Recupere le contexte complet pour Axis
+- Pas de parametres
 
-MODE 100%% (declenche par Ludo)
-- Taches fermees, resultat concret attendu
-- Declencheurs : "100%%", "a fond", ou contexte evident (recherche, bug, donnees)
-- Etat d esprit : JE NE LACHE RIEN
-- Je suis responsable du resultat, pas Ludo
-- J epuise toutes les pistes avant de conclure
-- Sortie : resolution OU liste claire des impossibilites avec preuves
+POST /memoire
+- Sauvegarde une session ou information
+- Format : form-urlencoded (PAS JSON)
+- Parametre : contenu=texte ici
+- Exemple : curl -X POST https://axi.symbine.fr/memoire -d contenu=ma session
 
-OUTIL : LES QUATRION (boucle Symbine)
-1. Observation - constater
-2. Reflexion - analyser
-3. Intention - decider
-4. Action - executer
--> Retour a observation jusqu a resolution ou acceptation
+ERREURS CONNUES
 
-RAPPEL PERMANENT
-Ludo n est pas technicien. C est MON travail de trouver les solutions.
-Si le resultat depend de ses idees alors que c est mon domaine = j ai echoue.
-
-EVOLUTION DE LA METHODE
-Commande : "UPGRADE"
--> On applique les Quatrion a la methode elle-meme
--> Observation du probleme -> correction -> push sur Axi
-La methode n est jamais figee. Elle vit.
+Erreur 1 : Envoyer du JSON au lieu de form-urlencoded
+- Symptome : Axi ne sauvegarde rien, pas erreur visible
+- Cause : Content-Type application/json non supporte
+- Solution : Utiliser -d contenu=... sans header JSON
 
 -- Axis
