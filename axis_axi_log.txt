@@ -150,3 +150,7 @@ Axis sauvegarde une session (570 caractÃ¨res)
 ---
 [2025-12-17 08:09:35] AXIS â†’ AXI (demande briefing)
 Axis demande le contexte pour se rÃ©veiller
+
+---
+[2025-12-17 08:09:36] AXI â†’ AXIS (rÃ©ponse briefing)
+Envoi du briefing (6616 caractÃ¨res)
