@@ -178,3 +178,7 @@ Contenu: 31 caracteres
 ---
 [2025-12-17 08:18:16] AXIS -> AXI (mise a jour protocole.txt)
 Contenu: 601 caracteres
+
+---
+[2025-12-17 08:20:13] AXIS â†’ AXI (demande briefing)
+Axis demande le contexte pour se rÃ©veiller
