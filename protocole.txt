@@ -1,1 +1,20 @@
-Test endpoint /doc - ca marche!
+== PROTOCOLE API AXI ===
+
+ENDPOINTS DISPONIBLES
+
+GET /briefing
+- Recupere le contexte complet pour Axis
+- Inclut : methode, protocole, derniere session, projets, decisions, journal, conversations
+- Pas de parametres
+
+POST /memoire
+- Sauvegarde une session ou information temporaire
+- Format : form-urlencoded (PAS JSON)
+- Parametre : contenu=texte ici
+- Exemple : curl -X POST "https://axi.symbine.fr/memoire" -d "contenu=ma session"
+- Note : ECRASE le contenu precedent
+
+POST /doc
+- Ecrit dans les fichiers permanents (methode, protocole)
+- Format : form-urlencoded
+- Parametres : fichier=methode.txt
