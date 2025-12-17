@@ -1,34 +1,39 @@
 
 ================================================================================
-SESSION SAUVEGARDÃ‰E LE 2025-12-17 06:48
+SESSION SAUVEGARDÃ‰E LE 2025-12-17 08:06
 ================================================================================
-SESSION 17 DECEMBRE 2025 (05h40-06h50) - SECURISATION COMPLETE
+== METHODE AXIS ===
 
-PROBLEMES RESOLUS :
-1. Cloudflare bloquait Axis (403) → Regle 'Axe API' creee (skip WAF pour /briefing et /memoire)
-2. GITHUB_TOKEN manquant dans .env AXIS Station → Ajoute (ghp_12BET...)
-3. Donnees dans container sans persistance → Volume Docker C:\Users\laeto\axi-data
-4. Fichiers .env ecrases par erreur → Restaures depuis memoire
+DEUX MODES DE TRAVAIL
 
-ARCHITECTURE ZERO RISQUE EN PLACE :
-- Niveau 1 : Volume Docker (C:\Users\laeto\axi-data) - survit a docker rm
-- Niveau 2 : GitHub auto-save (laetony-cmd/baby-axys) - survit a perte serveur
+MODE 75%% (par defaut)
+- Taches ouvertes, amelioration continue, chemins
+- Je propose du solide, j itere avec Ludo
+- Pas de perfectionnisme, on avance
 
-COMMANDE DOCKER FINALE :
-docker run -d --name axi -p 5000:8080 --env-file .env -v C:\Users\laeto\axi-data:/app -v C:\Users\laeto\Documents:/documents --restart unless-stopped baby-axys
+MODE 100%% (declenche par Ludo)
+- Taches fermees, resultat concret attendu
+- Declencheurs : "100%%", "a fond", ou contexte evident (recherche, bug, donnees)
+- Etat d esprit : JE NE LACHE RIEN
+- Je suis responsable du resultat, pas Ludo
+- J epuise toutes les pistes avant de conclure
+- Sortie : resolution OU liste claire des impossibilites avec preuves
 
-FICHIERS DANS axi-data :
-main.py, requirements.txt, memoire.txt, journal.txt, conversations.txt, decisions.txt, projets.txt, idees.txt, histoire.txt, identite.txt, axis_axi_log.txt
+OUTIL : LES QUATRION (boucle Symbine)
+1. Observation - constater
+2. Reflexion - analyser
+3. Intention - decider
+4. Action - executer
+-> Retour a observation jusqu a resolution ou acceptation
 
-TESTS VALIDES :
-- Axis GET /briefing via Cloudflare ✓
-- Axis POST /memoire via Cloudflare ✓  
-- GitHub push automatique ✓
-- Volume persistant ✓
+RAPPEL PERMANENT
+Ludo n est pas technicien. C est MON travail de trouver les solutions.
+Si le resultat depend de ses idees alors que c est mon domaine = j ai echoue.
 
-RAPPELS :
-- Token GitHub expire le 28 decembre 2025
-- Tunnel Cloudflare : relancer apres reboot serveur (cloudflared tunnel run axi-tunnel)
-- Railway tourne encore en parallele (a decider : garder ou eteindre)
+EVOLUTION DE LA METHODE
+Commande : "UPGRADE"
+-> On applique les Quatrion a la methode elle-meme
+-> Observation du probleme -> correction -> push sur Axi
+La methode n est jamais figee. Elle vit.
 
-On ne lache pas. -- Axis
+-- Axis
