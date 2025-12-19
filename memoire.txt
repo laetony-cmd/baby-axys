@@ -1,30 +1,39 @@
 
 ================================================================================
-SESSION SAUVEGARDÃ‰E LE 2025-12-17 08:21
+SESSION SAUVEGARDÃ‰E LE 2025-12-19 15:51
 ================================================================================
-SESSION 17 DECEMBRE 2025 (05h40 - 08h20)
-DUREE : 2h40
+SESSION 19 DECEMBRE 2025 (07h03 - fin)
 
-SECURISATION COMPLETE AXIS STATION
+PLAN DIRECTEUR V1 VALIDE
+- 6 semaines jusqu'au depart Maroc fin janvier
+- 5 livrables non negociables : Julie autonome, avis valeur live, 7 sites dedies, kit prospection, pilotage distance
+- Axis = patron organisation Ludo jusqu'a fin janvier
 
-1. CLOUDFLARE
-- Regle 'Axe API' creee (skip WAF pour /briefing et /memoire)
-- Axis peut maintenant communiquer avec Axi via axi.symbine.fr
+DECISIONS CLES
+- Julie = machine prospection vendeurs (identifier > appeler > qualifier > transmettre)
+- Antho = cantonne a la vente, supervision Julie pendant absence Ludo
+- Evan = support Julie ou terrain
+- Pas de communication equipe pendant fetes, Ludo explique au fur et mesure
 
-2. GITHUB TOKEN
-- Ajoute au .env AXIS Station
-- Sauvegarde automatique GitHub restauree
-- Expire le 28 decembre 2025 (a renouveler)
+EQUIPE COMPLETE IDENTIFIEE
+Vergt : Sebastien, Antho, Evan, Julie (3h/jour dispo), Jerome (compta)
+Le Bugue : Nathalie (directrice), Ingrid (4 langues dont NL native)
+Simply Perigord : Aurore, Stephanie (travaux), John, Nathalie, secretaire
 
-3. VOLUME DOCKER PERSISTANT
-- C:\Users\laeto\axi-data monte sur /app
-- Survit a docker rm et crash container
-- Commande : docker run -d --name axi -p 5000:8080 --env-file .env -v C:\Users\laeto\axi-data:/app -v C:\Users\laeto\Documents:/documents --restart unless-stopped baby-axys
+CHIFFRES
+- CA 2025 : 541 502 EUR (objectif 530k depasse)
+- Objectif 2026 : 600 000 EUR
+- 121 mandats actifs
+- 724 annonces concurrentes surveillees, 0 contact effectue
 
-4. FICHIERS PERMANENTS
-- Nouveau : methode.txt (Methode Axis, modes 75/100, Quatrion)
-- Nouveau : protocole.txt (Documentation API)
-- Ne sont plus ecrases par POST /memoire
+URGENCES A FAIRE
+- Token GitHub (expire 28 dec) - EN COURS quand Ludo est parti
+- Strip EXIF icidordogne.fr
 
-5. NOUVEL ENDPOINT /doc
-- POST /doc avec fichier=methode.txt
+PROCHAINE SESSION
+- Reprendre Token GitHub etape 1
+- Puis Strip EXIF
+- Puis Excel prospects Julie
+
+DOCUMENTS CREES
+- PLAN_DIRECTEUR_FINAL_V2.md (complet, dans outputs)
