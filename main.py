@@ -523,7 +523,58 @@ Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
                 self.send_json({"status": "error", "message": "Empty content"}, 400)
             return
         
+        # === POST /chat-proxy ===
+        if path == "/chat-proxy":
+            try:
+                data = json.loads(post_data)
+                system_prompt = data.get('system', '')
+                messages = data.get('messages', [])
+                
+                # Appel API Anthropic
+                api_key = os.environ.get("ANTHROPIC_API_KEY")
+                req_data = json.dumps({
+                    "model": "claude-3-haiku-20240307",
+                    "max_tokens": 1024,
+                    "system": system_prompt,
+                    "messages": messages
+                }).encode('utf-8')
+                
+                req = urllib.request.Request(
+                    "https://api.anthropic.com/v1/messages",
+                    data=req_data,
+                    headers={
+                        'Content-Type': 'application/json',
+                        'x-api-key': api_key,
+                        'anthropic-version': '2023-06-01'
+                    }
+                )
+                
+                with urllib.request.urlopen(req, timeout=30) as response:
+                    result = json.loads(response.read().decode('utf-8'))
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps(result).encode('utf-8'))
+                
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+            return
+        
         self.send_json({"status": "error", "message": "Unknown endpoint"}, 404)
+    
+    def do_OPTIONS(self):
+        """Handler pour les requêtes CORS preflight"""
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
     
     def log_message(self, format, *args):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] {args[0]}")
