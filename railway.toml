@@ -1,0 +1,10 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "python main.py"
+
+# Cron job - 7h UTC = 8h Paris
+[[crons]]
+schedule = "0 7 * * *"
+endpoint = "/run-veille"
