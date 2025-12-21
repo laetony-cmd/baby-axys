@@ -529,14 +529,45 @@ Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
                 data = json.loads(post_data)
                 system_prompt = data.get('system', '')
                 messages = data.get('messages', [])
+                site_id = data.get('site_id', 'default')
                 
-                # Appel API Anthropic
+                # Charger le memo du site
+                try:
+                    memos = json.loads(lire_fichier("SITE_MEMOS.json") or "{}")
+                except:
+                    memos = {}
+                site_memo = memos.get(site_id, "")
+                
+                # Détecter #memo dans le dernier message pour ajouter des infos
+                last_msg = messages[-1].get('content', '') if messages else ''
+                if last_msg.strip().startswith('#memo '):
+                    memo_content = last_msg.strip()[6:].strip()
+                    if site_memo:
+                        site_memo += "\n" + memo_content
+                    else:
+                        site_memo = memo_content
+                    memos[site_id] = site_memo
+                    ecrire_fichier("SITE_MEMOS.json", json.dumps(memos, ensure_ascii=False))
+                    # Répondre confirmation
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"content": [{"text": f"✅ Mémo enregistré : {memo_content}"}]}).encode('utf-8'))
+                    return
+                
+                # Ajouter le memo au system prompt
+                if site_memo:
+                    system_prompt += f"\n\nINFORMATIONS MÉMORISÉES:\n{site_memo}"
+                
+                # Appel API Anthropic avec web search
                 api_key = os.environ.get("ANTHROPIC_API_KEY")
                 req_data = json.dumps({
-                    "model": "claude-3-haiku-20240307",
+                    "model": "claude-sonnet-4-20250514",
                     "max_tokens": 1024,
                     "system": system_prompt,
-                    "messages": messages
+                    "messages": messages,
+                    "tools": [{"type": "web_search_20250305", "name": "web_search", "max_uses": 3}]
                 }).encode('utf-8')
                 
                 req = urllib.request.Request(
@@ -545,18 +576,25 @@ Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
                     headers={
                         'Content-Type': 'application/json',
                         'x-api-key': api_key,
-                        'anthropic-version': '2023-06-01'
+                        'anthropic-version': '2023-06-01',
+                        'anthropic-beta': 'web-search-2025-03-05'
                     }
                 )
                 
-                with urllib.request.urlopen(req, timeout=30) as response:
+                with urllib.request.urlopen(req, timeout=60) as response:
                     result = json.loads(response.read().decode('utf-8'))
+                
+                # Extraire le texte de la réponse (ignorer les blocs web_search)
+                text_content = ""
+                for block in result.get("content", []):
+                    if block.get("type") == "text":
+                        text_content += block.get("text", "")
                 
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
                 self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
-                self.wfile.write(json.dumps(result).encode('utf-8'))
+                self.wfile.write(json.dumps({"content": [{"text": text_content}]}).encode('utf-8'))
                 
             except Exception as e:
                 self.send_response(500)
