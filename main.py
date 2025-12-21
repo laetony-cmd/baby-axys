@@ -523,6 +523,58 @@ Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
                 self.send_json({"status": "error", "message": "Empty content"}, 400)
             return
         
+        # === POST /contact ===
+        if path == "/contact":
+            try:
+                data = json.loads(post_data)
+                name = data.get('name', '')
+                email = data.get('email', '')
+                phone = data.get('phone', 'Non renseigné')
+                message = data.get('message', '')
+                bien = data.get('bien', 'Bien non spécifié')
+                
+                # Construire l'email
+                html = f"""<html><body style="font-family:Arial;padding:20px;">
+                <h2 style="color:#2E7D32;">📬 Nouvelle demande de renseignement</h2>
+                <p><strong>Bien concerné:</strong> {bien}</p>
+                <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+                <p><strong>Nom:</strong> {name}</p>
+                <p><strong>Email:</strong> <a href="mailto:{email}">{email}</a></p>
+                <p><strong>Téléphone:</strong> {phone}</p>
+                <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+                <p><strong>Message:</strong></p>
+                <p style="background:#f5f5f5;padding:15px;border-radius:8px;">{message}</p>
+                <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+                <p style="color:#888;font-size:12px;">Envoyé depuis le site vitrine ICI Dordogne</p>
+                </body></html>"""
+                
+                msg = MIMEMultipart()
+                msg['Subject'] = f"📬 Demande de renseignement - {bien}"
+                msg['From'] = SMTP_USER
+                msg['To'] = EMAIL_TO
+                msg['Cc'] = EMAIL_CC
+                msg['Reply-To'] = email
+                msg.attach(MIMEText(html, 'html', 'utf-8'))
+                
+                with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as s:
+                    s.starttls()
+                    s.login(SMTP_USER, SMTP_PASSWORD)
+                    s.sendmail(SMTP_USER, [EMAIL_TO, EMAIL_CC], msg.as_string())
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok", "message": "Email sent"}).encode('utf-8'))
+                
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+            return
+        
         # === POST /chat-proxy ===
         if path == "/chat-proxy":
             try:
