@@ -1,7 +1,7 @@
 """
-AXI ICI DORDOGNE v5 - Service unifié Railway
+AXI ICI DORDOGNE v6 - Service unifié Railway
 - Veille DPE ADEME (8h00)
-- Veille Concurrence 16 agences (7h00)
+- Veille Concurrence v6 MACHINE DE GUERRE (7h00)
 - Enrichissement DVF (historique ventes)
 - Endpoints API
 """
@@ -61,6 +61,7 @@ AGENCES = [
 # Fichiers de stockage
 FICHIER_DPE = "dpe_connus.json"
 FICHIER_ANNONCES = "annonces_connues.json"
+FICHIER_URLS = "urls_annonces.json"
 DVF_CACHE_DIR = "/tmp/dvf_cache"
 
 # ============================================================
@@ -512,142 +513,181 @@ def run_veille_dpe():
     return {"total": total, "nouveaux": len(nouveaux_dpe)}
 
 # ============================================================
-# VEILLE CONCURRENCE
+# VEILLE CONCURRENCE v6 - MACHINE DE GUERRE
 # ============================================================
 
-def extraire_prix(html):
-    """Extrait les prix d'une page HTML"""
-    prix_pattern = r'(\d{2,3}[\s\.]?\d{3})\s*€'
-    matches = re.findall(prix_pattern, html)
-    prix = []
-    for m in matches:
-        try:
-            p = int(m.replace(' ', '').replace('.', ''))
-            if 50000 <= p <= 2000000:
-                prix.append(p)
-        except:
-            pass
-    return list(set(prix))
-
-def scraper_agence(agence):
-    """Scrape une agence et retourne les annonces détectées"""
-    html = fetch_url(agence['url'])
-    if not html:
-        return {"agence": agence['nom'], "status": "erreur", "annonces": 0}
+def extraire_urls_annonces(html, base_url):
+    """Extrait les URLs des annonces d'une page HTML"""
+    from urllib.parse import urljoin
+    urls = set()
     
-    prix = extraire_prix(html)
-    
-    nb_annonces = 0
     patterns = [
-        r'(\d+)\s*bien',
-        r'(\d+)\s*annonce',
-        r'(\d+)\s*résultat',
+        r'href=["\']([^"\']*(?:detail|annonce|bien|property|fiche|vente)[^"\']*)["\']',
+        r'href=["\']([^"\']*(?:maison|appartement|terrain|propriete|villa)[^"\']*)["\']',
+        r'href=["\']([^"\']+/\d{5,}[^"\']*)["\']',
     ]
     
     for pattern in patterns:
-        match = re.search(pattern, html, re.IGNORECASE)
-        if match:
+        matches = re.findall(pattern, html, re.IGNORECASE)
+        for m in matches:
+            if m.startswith('http'):
+                url = m
+            elif m.startswith('/'):
+                url = urljoin(base_url, m)
+            else:
+                continue
+            
+            if any(x in url.lower() for x in ['contact', 'agence', 'mention', 'cookie', 'politique', 'cgu', '#', 'javascript', 'login', 'compte']):
+                continue
+            urls.add(url)
+    
+    return list(urls)
+
+def extraire_cp_page_detail(html):
+    """Extrait le code postal Dordogne d'une page de détail"""
+    matches = re.findall(r'\b(24\d{3})\b', html)
+    for m in matches:
+        return m
+    return None
+
+def extraire_prix_page(html):
+    """Extrait le prix d'une page"""
+    patterns = [r'(\d{2,3}[\s\xa0]?\d{3})\s*€']
+    for pattern in patterns:
+        matches = re.findall(pattern, html, re.IGNORECASE)
+        for m in matches:
             try:
-                nb_annonces = max(nb_annonces, int(match.group(1)))
+                prix = int(m.replace(' ', '').replace('\xa0', ''))
+                if 30000 <= prix <= 3000000:
+                    return prix
             except:
                 pass
-    
-    if nb_annonces == 0:
-        nb_annonces = len(prix)
-    
+    return None
+
+def extraire_titre_page(html):
+    """Extrait le titre d'une annonce"""
+    patterns = [r'<h1[^>]*>([^<]+)</h1>', r'<title>([^<]+)</title>']
+    for pattern in patterns:
+        match = re.search(pattern, html, re.IGNORECASE)
+        if match:
+            titre = match.group(1).strip()
+            titre = re.sub(r'\s+', ' ', titre)
+            if len(titre) > 10:
+                return titre[:100]
+    return None
+
+def enrichir_annonce(url):
+    """Va chercher les détails d'une annonce (CP, prix, titre)"""
+    html = fetch_url(url)
+    if not html:
+        return None
     return {
-        "agence": agence['nom'],
-        "url": agence['url'],
-        "status": "ok",
-        "annonces": nb_annonces,
-        "prix_detectes": len(prix),
-        "prix_min": min(prix) if prix else None,
-        "prix_max": max(prix) if prix else None
+        "url": url,
+        "cp": extraire_cp_page_detail(html),
+        "prix": extraire_prix_page(html),
+        "titre": extraire_titre_page(html),
+        "date_vue": datetime.now().isoformat()
     }
 
+def scraper_agence_urls(agence):
+    """Scrape une agence et retourne les URLs d'annonces"""
+    html = fetch_url(agence['url'])
+    if not html:
+        return {"agence": agence['nom'], "status": "erreur", "urls": []}
+    
+    urls = extraire_urls_annonces(html, agence['url'])
+    
+    # Pagination si beaucoup d'annonces
+    if len(urls) > 10:
+        for page in [2, 3]:
+            sep = '&' if '?' in agence['url'] else '?'
+            html2 = fetch_url(f"{agence['url']}{sep}page={page}")
+            if html2:
+                urls.extend(extraire_urls_annonces(html2, agence['url']))
+            time.sleep(0.3)
+    
+    return {"agence": agence['nom'], "url": agence['url'], "status": "ok", "urls": list(set(urls))}
+
 def run_veille_concurrence():
-    """Exécute la veille concurrence sur toutes les agences"""
-    print(f"[VEILLE CONCURRENCE] Démarrage - {datetime.now()}")
+    """Veille concurrence v6 - Machine de guerre avec enrichissement CP"""
+    print(f"[VEILLE v6] Démarrage - {datetime.now()}")
     
-    resultats = []
-    total_annonces = 0
+    cache = charger_json(FICHIER_URLS, {"urls": {}, "derniere_maj": None})
+    urls_connues = set(cache.get("urls", {}).keys())
+    print(f"[VEILLE v6] {len(urls_connues)} URLs en cache")
     
+    # Scraper toutes les agences
+    toutes_urls = {}
     for agence in AGENCES:
-        print(f"  → Scraping {agence['nom']}...")
-        result = scraper_agence(agence)
-        resultats.append(result)
-        total_annonces += result.get('annonces', 0)
-        time.sleep(1)
+        print(f"  → {agence['nom']}...")
+        result = scraper_agence_urls(agence)
+        for url in result.get('urls', []):
+            toutes_urls[url] = agence['nom']
+        time.sleep(0.5)
     
-    anciennes = charger_json(FICHIER_ANNONCES, {})
-    changements = []
+    print(f"[VEILLE v6] {len(toutes_urls)} URLs détectées")
     
-    for r in resultats:
-        nom = r['agence']
-        ancien_count = anciennes.get(nom, {}).get('annonces', 0)
-        nouveau_count = r.get('annonces', 0)
-        
-        if ancien_count > 0 and nouveau_count != ancien_count:
-            diff = nouveau_count - ancien_count
-            changements.append({
-                "agence": nom,
-                "avant": ancien_count,
-                "apres": nouveau_count,
-                "diff": diff
-            })
-        
-        anciennes[nom] = {"annonces": nouveau_count, "date": datetime.now().isoformat()}
+    # Nouvelles URLs
+    nouvelles_urls = {url: ag for url, ag in toutes_urls.items() if url not in urls_connues}
+    print(f"[VEILLE v6] {len(nouvelles_urls)} NOUVELLES à enrichir")
     
-    sauver_json(FICHIER_ANNONCES, anciennes)
+    # Enrichir (max 50)
+    annonces_enrichies = []
+    for url, agence in list(nouvelles_urls.items())[:50]:
+        detail = enrichir_annonce(url)
+        if detail:
+            detail['agence'] = agence
+            annonces_enrichies.append(detail)
+            cache["urls"][url] = detail
+        time.sleep(0.3)
     
-    print(f"[VEILLE CONCURRENCE] Total: {total_annonces} annonces, {len(changements)} changements")
+    # Filtrer sur CP cibles
+    dans_zone = [a for a in annonces_enrichies if a.get('cp') in CODES_POSTAUX]
+    print(f"[VEILLE v6] {len(dans_zone)} dans la zone cible")
     
+    cache["derniere_maj"] = datetime.now().isoformat()
+    sauver_json(FICHIER_URLS, cache)
+    
+    # Email
     html = f"""
-    <h2>📊 Veille Concurrence ICI Dordogne</h2>
+    <h2>🎯 Veille Concurrence ICI Dordogne v6</h2>
     <p>Rapport du {datetime.now().strftime('%d/%m/%Y à %H:%M')}</p>
-    
-    <h3>Résumé: {total_annonces} annonces sur {len(AGENCES)} agences</h3>
+    <h3>📊 Résumé</h3>
+    <ul>
+        <li><strong>{len(toutes_urls)}</strong> annonces sur {len(AGENCES)} agences</li>
+        <li><strong>{len(nouvelles_urls)}</strong> nouvelles détectées</li>
+        <li><strong style="color: #16a34a;">{len(dans_zone)}</strong> dans votre zone (12 CP)</li>
+    </ul>
     """
     
-    if changements:
-        html += "<h3>⚠️ Changements détectés:</h3><ul>"
-        for c in changements:
-            signe = "+" if c['diff'] > 0 else ""
-            html += f"<li><strong>{c['agence']}</strong>: {c['avant']} → {c['apres']} ({signe}{c['diff']})</li>"
-        html += "</ul>"
-    
-    html += """
-    <h3>Détail par agence:</h3>
-    <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse;">
-    <tr style="background: #16213e; color: white;">
-        <th>Agence</th>
-        <th>Annonces</th>
-        <th>Prix Min</th>
-        <th>Prix Max</th>
-        <th>Status</th>
-    </tr>
-    """
-    
-    for r in sorted(resultats, key=lambda x: x.get('annonces', 0), reverse=True):
-        prix_min = f"{r['prix_min']:,}€".replace(',', ' ') if r.get('prix_min') else "N/C"
-        prix_max = f"{r['prix_max']:,}€".replace(',', ' ') if r.get('prix_max') else "N/C"
-        status_color = "#4ade80" if r['status'] == 'ok' else "#ef4444"
-        
-        html += f"""
-        <tr>
-            <td><a href="{r.get('url', '#')}">{r['agence']}</a></td>
-            <td style="text-align: center; font-weight: bold;">{r.get('annonces', 0)}</td>
-            <td>{prix_min}</td>
-            <td>{prix_max}</td>
-            <td style="color: {status_color};">{r['status']}</td>
+    if dans_zone:
+        html += """
+        <h3>🎯 NOUVELLES ANNONCES DANS VOTRE ZONE</h3>
+        <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%;">
+        <tr style="background: #16213e; color: white;">
+            <th>Agence</th><th>CP</th><th>Prix</th><th>Titre</th><th>Lien</th>
         </tr>
         """
+        for a in dans_zone:
+            prix_str = f"{a['prix']:,}€".replace(',', ' ') if a.get('prix') else "N/C"
+            html += f"""
+            <tr>
+                <td>{a.get('agence', 'N/C')}</td>
+                <td style="font-weight: bold;">{a.get('cp', 'N/C')}</td>
+                <td>{prix_str}</td>
+                <td>{(a.get('titre') or 'N/C')[:50]}</td>
+                <td><a href="{a['url']}">Voir</a></td>
+            </tr>
+            """
+        html += "</table>"
+    else:
+        html += "<p><em>Aucune nouvelle annonce dans votre zone aujourd'hui.</em></p>"
     
-    html += "</table>"
+    html += f"<p><small>CP surveillés: {', '.join(CODES_POSTAUX)}</small></p>"
     
-    envoyer_email(f"📊 Veille Concurrence - {total_annonces} annonces", html)
+    envoyer_email(f"🎯 Veille Concurrence - {len(dans_zone)} nouvelles dans votre zone", html)
     
-    return {"total": total_annonces, "agences": len(AGENCES), "changements": len(changements)}
+    return {"total": len(toutes_urls), "nouvelles": len(nouvelles_urls), "enrichies": len(annonces_enrichies), "dans_zone": len(dans_zone)}
 
 # ============================================================
 # MEMORY API
@@ -767,7 +807,7 @@ class AxiHandler(BaseHTTPRequestHandler):
         
         if path == '/':
             self.send_json({
-                "service": "Axi ICI Dordogne v5",
+                "service": "Axi ICI Dordogne v6",
                 "status": "ok",
                 "features": ["DPE", "Concurrence", "DVF"],
                 "endpoints": ["/memory", "/status", "/dvf/stats", "/dvf/enrichir", "/run-veille", "/test-veille", "/run-veille-concurrence", "/test-veille-concurrence"]
@@ -784,7 +824,7 @@ class AxiHandler(BaseHTTPRequestHandler):
             self.send_json({
                 "status": "ok",
                 "time": datetime.now().isoformat(),
-                "service": "Axi ICI Dordogne v5",
+                "service": "Axi ICI Dordogne v6",
                 "crons": ["07:00 concurrence", "08:00 DPE"],
                 "dvf": enrichisseur.get_stats(),
                 "email_to": EMAIL_TO,
@@ -826,13 +866,34 @@ Je ne lâche pas.
             self.send_json({"status": "ok", **result, "sent_to": EMAIL_TO})
         
         elif path == '/test-veille-concurrence':
-            print("[TEST] Veille Concurrence (sans email)")
-            total = 0
+            print("[TEST] Veille Concurrence v6 (sans email)")
+            # Test sur 3 agences
+            test_urls = {}
             for agence in AGENCES[:3]:
-                result = scraper_agence(agence)
-                total += result.get('annonces', 0)
-                time.sleep(0.5)
-            self.send_json({"status": "ok", "agences_testees": 3, "annonces": total, "sent_to": "non envoyé"})
+                result = scraper_agence_urls(agence)
+                for url in result.get('urls', []):
+                    test_urls[url] = agence['nom']
+                time.sleep(0.3)
+            
+            # Enrichir 5 URLs max
+            enrichies = []
+            for url in list(test_urls.keys())[:5]:
+                detail = enrichir_annonce(url)
+                if detail:
+                    detail['agence'] = test_urls[url]
+                    enrichies.append(detail)
+                time.sleep(0.2)
+            
+            dans_zone = [a for a in enrichies if a.get('cp') in CODES_POSTAUX]
+            self.send_json({
+                "status": "ok",
+                "agences_testees": 3,
+                "urls_trouvees": len(test_urls),
+                "enrichies": len(enrichies),
+                "dans_zone": len(dans_zone),
+                "details": enrichies[:5],
+                "sent_to": "non envoyé"
+            })
         
         elif path == '/test-veille':
             print("[TEST] Veille DPE (sans email)")
