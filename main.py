@@ -28,6 +28,11 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 
+# Scheduler
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+import pytz
+
 # ============================================================
 # CONFIGURATION
 # ============================================================
@@ -800,6 +805,37 @@ def init_files():
 """)
 
 
+# ============================================================
+# SCHEDULER (CRON INTÉGRÉ)
+# ============================================================
+
+def tache_veille_quotidienne():
+    """Tâche quotidienne à 8h00 Paris"""
+    print(f"[{datetime.now().strftime('%d/%m %H:%M')}] Lancement veille quotidienne...")
+    try:
+        result = executer_veille(envoyer=True)
+        print(f"[VEILLE] Résultat: {result}")
+    except Exception as e:
+        print(f"[ERREUR] Veille: {e}")
+
+def demarrer_scheduler():
+    """Démarre le scheduler en arrière-plan"""
+    scheduler = BackgroundScheduler(timezone=pytz.timezone('Europe/Paris'))
+    
+    # Veille DPE tous les jours à 08h00 Paris
+    scheduler.add_job(
+        tache_veille_quotidienne,
+        CronTrigger(hour=8, minute=0, timezone=pytz.timezone('Europe/Paris')),
+        id='veille_dpe_quotidienne',
+        name='Veille DPE 8h00',
+        replace_existing=True
+    )
+    
+    scheduler.start()
+    print("[SCHEDULER] Cron activé - Veille DPE à 8h00 Paris quotidien")
+    return scheduler
+
+
 def main():
     print("=" * 50)
     print("AXI - SERVICE UNIFIÉ ICI DORDOGNE")
@@ -807,15 +843,23 @@ def main():
     
     init_files()
     
+    # Démarrer le scheduler cron
+    scheduler = demarrer_scheduler()
+    
     port = int(os.environ.get("PORT", 8080))
     serveur = HTTPServer(('0.0.0.0', port), AxiHandler)
     
     print(f"Port: {port}")
     print(f"Endpoints: /memory, /briefing, /status, /run-veille, /test-veille")
     print(f"Email to: {EMAIL_TO}")
+    print(f"Cron: Veille DPE à 8h00 Paris")
     print("En attente...")
     
-    serveur.serve_forever()
+    try:
+        serveur.serve_forever()
+    except KeyboardInterrupt:
+        scheduler.shutdown()
+        print("Arrêt propre.")
 
 
 if __name__ == "__main__":
