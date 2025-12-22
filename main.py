@@ -9,11 +9,10 @@ Endpoints:
 - GET  /status        → Health check
 - GET  /run-veille    → Exécute la veille DPE et envoie l'email
 - GET  /test-veille   → Test sans envoi d'email
-- GET  /emails        → Lire les emails (param: limit, folder)
 - POST /chat          → Envoyer un message à Axi
 
 Auteur: Axis pour Ludo
-Version: 2.1 - 21/12/2025
+Version: 2.0 - 21/12/2025
 """
 
 import os
@@ -22,15 +21,12 @@ import re
 import urllib.request
 import urllib.parse
 import smtplib
-import imaplib
 import tempfile
 from datetime import datetime, timedelta
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
-from email.header import decode_header
-import email as email_lib
 
 # ============================================================
 # CONFIGURATION
@@ -82,66 +78,6 @@ def ecrire_fichier(chemin, contenu):
 def ajouter_fichier(chemin, contenu):
     with open(chemin, 'a', encoding='utf-8') as f:
         f.write(contenu)
-
-
-# ============================================================
-# LECTURE EMAILS IMAP
-# ============================================================
-
-def lire_emails(limit=20, folder="INBOX"):
-    """Lit les derniers emails via IMAP"""
-    try:
-        mail = imaplib.IMAP4_SSL("imap.gmail.com")
-        mail.login(SMTP_USER, SMTP_PASSWORD)
-        mail.select(folder)
-        
-        status, messages = mail.search(None, "ALL")
-        email_ids = messages[0].split()
-        
-        emails = []
-        for eid in email_ids[-limit:]:
-            status, msg_data = mail.fetch(eid, "(RFC822)")
-            for response_part in msg_data:
-                if isinstance(response_part, tuple):
-                    msg = email_lib.message_from_bytes(response_part[1])
-                    
-                    # Décoder le sujet
-                    subject_raw, encoding = decode_header(msg["Subject"] or "")[0]
-                    if isinstance(subject_raw, bytes):
-                        subject = subject_raw.decode(encoding or "utf-8", errors="ignore")
-                    else:
-                        subject = str(subject_raw) if subject_raw else ""
-                    
-                    # Extraire le corps
-                    body = ""
-                    if msg.is_multipart():
-                        for part in msg.walk():
-                            if part.get_content_type() == "text/plain":
-                                try:
-                                    body = part.get_payload(decode=True).decode(errors="ignore")[:500]
-                                except:
-                                    pass
-                                break
-                    else:
-                        try:
-                            body = msg.get_payload(decode=True).decode(errors="ignore")[:500]
-                        except:
-                            pass
-                    
-                    emails.append({
-                        "id": eid.decode(),
-                        "from": msg.get("From", "")[:100],
-                        "to": msg.get("To", "")[:100],
-                        "date": msg.get("Date", "")[:50],
-                        "subject": subject[:200],
-                        "preview": body[:300].replace("\n", " ").strip()
-                    })
-        
-        mail.logout()
-        return {"status": "ok", "count": len(emails), "emails": list(reversed(emails))}
-    
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
 
 
 # ============================================================
@@ -467,7 +403,6 @@ def generer_page_html_chat(conversations_html):
     <div class="endpoint">GET <a href="/status">/status</a> → Health check JSON</div>
     <div class="endpoint">GET <a href="/test-veille">/test-veille</a> → Test veille DPE (sans email)</div>
     <div class="endpoint">GET <a href="/run-veille">/run-veille</a> → Exécuter veille DPE + envoyer email</div>
-    <div class="endpoint">GET <a href="/emails">/emails</a> → Lire les emails (param: limit, folder)</div>
     
     <h2>Configuration veille</h2>
     <ul>
@@ -563,23 +498,6 @@ Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
                 self.send_json({"status": "error", "message": str(e)}, 500)
             return
         
-        # === /emails ===
-        if path == "/emails" or path.startswith("/emails?"):
-            try:
-                # Parser les paramètres
-                limit = 20
-                folder = "INBOX"
-                if "?" in self.path:
-                    params = urllib.parse.parse_qs(self.path.split("?")[1])
-                    limit = int(params.get("limit", [20])[0])
-                    folder = params.get("folder", ["INBOX"])[0]
-                
-                result = lire_emails(limit=min(limit, 50), folder=folder)
-                self.send_json(result)
-            except Exception as e:
-                self.send_json({"status": "error", "message": str(e)}, 500)
-            return
-        
         # === / (accueil) ===
         html = generer_page_html_chat("")
         self.send_html(html)
@@ -648,6 +566,115 @@ Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
                 self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
                 self.wfile.write(json.dumps({"status": "ok", "message": "Email sent"}).encode('utf-8'))
+                
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+            return
+        
+        # === POST /send-fiche ===
+        if path == "/send-fiche":
+            try:
+                data = json.loads(post_data)
+                email = data.get('email', '')
+                lang = data.get('lang', 'fr')
+                bien = data.get('bien', 'Maison Manzac-sur-Vern')
+                
+                # URLs des PDFs sur le site
+                pdf_urls = {
+                    'fr': 'https://nouveaute-maisonavendre-manzacsurvern.netlify.app/docs/Fiche_Manzac_FR.pdf',
+                    'en': 'https://nouveaute-maisonavendre-manzacsurvern.netlify.app/docs/Fiche_Manzac_EN.pdf',
+                    'nl': 'https://nouveaute-maisonavendre-manzacsurvern.netlify.app/docs/Fiche_Manzac_NL.pdf'
+                }
+                pdf_url = pdf_urls.get(lang, pdf_urls['fr'])
+                
+                # Textes par langue
+                texts = {
+                    'fr': {
+                        'subject': f'📄 Fiche technique - {bien}',
+                        'title': 'Voici votre fiche technique',
+                        'intro': f'Vous avez demandé la fiche technique pour : <strong>{bien}</strong>',
+                        'button': 'Télécharger la fiche PDF',
+                        'contact': 'Une question ? Contactez-nous :',
+                        'signature': 'L\'équipe ICI Dordogne'
+                    },
+                    'en': {
+                        'subject': f'📄 Property details - {bien}',
+                        'title': 'Here is your property sheet',
+                        'intro': f'You requested the property sheet for: <strong>{bien}</strong>',
+                        'button': 'Download PDF sheet',
+                        'contact': 'Any questions? Contact us:',
+                        'signature': 'The ICI Dordogne team'
+                    },
+                    'nl': {
+                        'subject': f'📄 Technische fiche - {bien}',
+                        'title': 'Hier is uw technische fiche',
+                        'intro': f'U heeft de technische fiche aangevraagd voor: <strong>{bien}</strong>',
+                        'button': 'Download PDF fiche',
+                        'contact': 'Vragen? Neem contact op:',
+                        'signature': 'Het team van ICI Dordogne'
+                    }
+                }
+                t = texts.get(lang, texts['fr'])
+                
+                # Email au client
+                html_client = f"""<html><body style="font-family:Arial;padding:20px;background:#f7f7f7;">
+                <div style="max-width:600px;margin:0 auto;background:white;border-radius:10px;overflow:hidden;">
+                    <div style="background:linear-gradient(135deg,#2c5282,#1a365d);padding:25px;text-align:center;">
+                        <h1 style="color:white;margin:0;font-size:22px;">{t['title']}</h1>
+                    </div>
+                    <div style="padding:30px;">
+                        <p style="font-size:16px;color:#333;">{t['intro']}</p>
+                        <div style="text-align:center;margin:30px 0;">
+                            <a href="{pdf_url}" style="display:inline-block;background:#c53030;color:white;padding:15px 30px;text-decoration:none;border-radius:8px;font-weight:bold;font-size:16px;">{t['button']}</a>
+                        </div>
+                        <hr style="border:none;border-top:1px solid #eee;margin:25px 0;">
+                        <p style="color:#666;">{t['contact']}</p>
+                        <p style="color:#333;"><strong>📞 05 53 13 33 33</strong><br>
+                        <a href="mailto:agence@icidordogne.fr" style="color:#2c5282;">agence@icidordogne.fr</a></p>
+                        <p style="margin-top:25px;color:#888;">— {t['signature']}</p>
+                    </div>
+                </div>
+                </body></html>"""
+                
+                msg_client = MIMEMultipart()
+                msg_client['Subject'] = t['subject']
+                msg_client['From'] = SMTP_USER
+                msg_client['To'] = email
+                msg_client.attach(MIMEText(html_client, 'html', 'utf-8'))
+                
+                # Email à l'agence (notification lead)
+                html_agence = f"""<html><body style="font-family:Arial;padding:20px;">
+                <h2 style="color:#2E7D32;">📄 Nouveau téléchargement de fiche</h2>
+                <p><strong>Bien:</strong> {bien}</p>
+                <p><strong>Email du lead:</strong> <a href="mailto:{email}">{email}</a></p>
+                <p><strong>Langue:</strong> {lang.upper()}</p>
+                <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
+                <p style="color:#888;font-size:12px;">Lead capturé via fiche technique - Site vitrine ICI Dordogne</p>
+                </body></html>"""
+                
+                msg_agence = MIMEMultipart()
+                msg_agence['Subject'] = f"📄 Lead fiche technique - {email}"
+                msg_agence['From'] = SMTP_USER
+                msg_agence['To'] = EMAIL_TO
+                msg_agence['Cc'] = EMAIL_CC
+                msg_agence.attach(MIMEText(html_agence, 'html', 'utf-8'))
+                
+                # Envoyer les deux emails
+                with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as s:
+                    s.starttls()
+                    s.login(SMTP_USER, SMTP_PASSWORD)
+                    s.sendmail(SMTP_USER, [email], msg_client.as_string())
+                    s.sendmail(SMTP_USER, [EMAIL_TO, EMAIL_CC], msg_agence.as_string())
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok", "message": "Fiche envoyée"}).encode('utf-8'))
                 
             except Exception as e:
                 self.send_response(500)
@@ -793,4 +820,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
