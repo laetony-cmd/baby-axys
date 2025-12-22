@@ -770,7 +770,7 @@ class AxiHandler(BaseHTTPRequestHandler):
                 "service": "Axi ICI Dordogne v5",
                 "status": "ok",
                 "features": ["DPE", "Concurrence", "DVF"],
-                "endpoints": ["/memory", "/status", "/dvf/stats", "/dvf/enrichir", "/run-veille", "/run-veille-concurrence"]
+                "endpoints": ["/memory", "/status", "/dvf/stats", "/dvf/enrichir", "/run-veille", "/test-veille", "/run-veille-concurrence", "/test-veille-concurrence"]
             })
         
         elif path == '/memory':
@@ -824,6 +824,15 @@ Je ne lâche pas.
         elif path == '/run-veille-concurrence':
             result = run_veille_concurrence()
             self.send_json({"status": "ok", **result, "sent_to": EMAIL_TO})
+        
+        elif path == '/test-veille-concurrence':
+            print("[TEST] Veille Concurrence (sans email)")
+            total = 0
+            for agence in AGENCES[:3]:
+                result = scraper_agence(agence)
+                total += result.get('annonces', 0)
+                time.sleep(0.5)
+            self.send_json({"status": "ok", "agences_testees": 3, "annonces": total, "sent_to": "non envoyé"})
         
         elif path == '/test-veille':
             print("[TEST] Veille DPE (sans email)")
