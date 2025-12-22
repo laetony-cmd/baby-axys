@@ -1,23 +1,29 @@
 """
-AXI - SERVICE UNIFIÉ RAILWAY
-==============================
+AXI - SERVICE UNIFIÉ RAILWAY v3
+================================
 Endpoints:
-- GET  /              → Interface chat
-- GET  /memory        → Lire MEMORY.md
-- POST /memory        → Écrire MEMORY.md
-- GET  /briefing      → Contexte complet pour Axis
-- GET  /status        → Health check
-- GET  /run-veille    → Exécute la veille DPE et envoie l'email
-- GET  /test-veille   → Test sans envoi d'email
-- POST /chat          → Envoyer un message à Axi
+- GET  /                    → Interface
+- GET  /memory              → Lire MEMORY.md
+- POST /memory              → Écrire MEMORY.md
+- GET  /briefing            → Contexte complet pour Axis
+- GET  /status              → Health check
+- GET  /run-veille          → Veille DPE + email
+- GET  /test-veille         → Test veille DPE (sans email)
+- GET  /run-veille-concurrence  → Veille concurrentielle + email
+- GET  /test-veille-concurrence → Test veille concurrence (sans email)
+
+Crons:
+- 07h00 Paris: Veille concurrentielle
+- 08h00 Paris: Veille DPE
 
 Auteur: Axis pour Ludo
-Version: 2.0 - 21/12/2025
+Version: 3.0 - 22/12/2025
 """
 
 import os
 import json
 import re
+import hashlib
 import urllib.request
 import urllib.parse
 import smtplib
@@ -27,6 +33,8 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
+from email.mime.base import MIMEBase
+from email import encoders
 
 # Scheduler
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -37,11 +45,9 @@ import pytz
 # CONFIGURATION
 # ============================================================
 
-# Codes postaux ICI Dordogne
 CODES_POSTAUX = ["24510", "24150", "24480", "24260", "24620", "24220", 
                  "24330", "24110", "24520", "24140", "24380", "24750"]
 
-# Email
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 SMTP_USER = "u5050786429@gmail.com"
@@ -49,10 +55,8 @@ SMTP_PASSWORD = "izemquwmmqjdasrk"
 EMAIL_TO = "agence@icidordogne.fr"
 EMAIL_CC = "laetony@gmail.com"
 
-# API
 API_DPE = "https://data.ademe.fr/data-fair/api/v1/datasets/dpe03existant/lines"
 
-# Prix moyens par zone
 PRIX_M2 = {
     "24260": 1800, "24150": 1500, "24480": 1400, "24510": 1600,
     "24620": 1700, "24220": 1500, "24330": 1400, "24110": 1300,
@@ -63,6 +67,11 @@ COULEURS_DPE = {
     'A': '#319834', 'B': '#33a357', 'C': '#cbce00',
     'D': '#f2e600', 'E': '#ebb700', 'F': '#d66f00', 'G': '#c81e01'
 }
+
+HEADERS_WEB = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'}
+
+# Cache pour veille concurrence
+CACHE_CONCURRENCE = {}
 
 
 # ============================================================
@@ -90,16 +99,14 @@ def ajouter_fichier(chemin, contenu):
 # ============================================================
 
 def http_get(url, timeout=30):
-    """GET request simple"""
     try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Axi/2.0'})
+        req = urllib.request.Request(url, headers={'User-Agent': 'Axi/3.0'})
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.loads(r.read().decode('utf-8'))
     except:
         return None
 
 def get_nouveaux_dpe(heures=26):
-    """Récupère les DPE des dernières X heures"""
     date_limite = datetime.now() - timedelta(hours=heures)
     tous_dpe = []
     
@@ -127,13 +134,11 @@ def get_nouveaux_dpe(heures=26):
         except:
             pass
     
-    # Dédupliquer
     dpe_uniques = {d.get("numero_dpe"): d for d in tous_dpe if d.get("numero_dpe")}
     return list(dpe_uniques.values())
 
 
 def get_mairie_info(commune, cp):
-    """Récupère les infos mairie"""
     try:
         url = f"https://geo.api.gouv.fr/communes?nom={urllib.parse.quote(commune)}&codePostal={cp}&fields=code&limit=1"
         data = http_get(url, timeout=10)
@@ -150,7 +155,6 @@ def get_mairie_info(commune, cp):
 
 
 def generer_fiche_html(dpe):
-    """Génère le HTML d'une fiche prospect"""
     adresse = dpe.get('adresse_ban', 'Adresse inconnue')
     commune = dpe.get('nom_commune_ban', '')
     cp = str(dpe.get('code_postal_ban', ''))
@@ -277,7 +281,6 @@ def generer_fiche_html(dpe):
 
 
 def envoyer_email_veille(dpe_list, fiches_html):
-    """Envoie l'email récap + fiches"""
     nb = len(dpe_list)
     nb_p = len([d for d in dpe_list if d.get('etiquette_dpe') in ['F', 'G']])
     
@@ -315,7 +318,6 @@ def envoyer_email_veille(dpe_list, fiches_html):
     msg['Cc'] = EMAIL_CC
     msg.attach(MIMEText(html, 'html', 'utf-8'))
     
-    # Pièces jointes HTML
     for i, (dpe, fiche_html) in enumerate(zip(dpe_list, fiches_html)):
         commune = dpe.get('nom_commune_ban', 'x')[:15].replace(' ', '_')
         filename = f"fiche_{i+1}_{commune}.html"
@@ -348,7 +350,6 @@ def envoyer_email_vide():
 
 
 def executer_veille(envoyer=True):
-    """Exécute la veille complète"""
     dpe_list = get_nouveaux_dpe(heures=26)
     
     if not dpe_list:
@@ -356,10 +357,8 @@ def executer_veille(envoyer=True):
             envoyer_email_vide()
         return {"status": "ok", "count": 0, "message": "Aucun DPE"}
     
-    # Générer les fiches
     fiches_html = [generer_fiche_html(dpe) for dpe in dpe_list]
     
-    # Envoyer
     if envoyer:
         envoyer_email_veille(dpe_list, fiches_html)
     
@@ -373,50 +372,263 @@ def executer_veille(envoyer=True):
     }
 
 
+
+
 # ============================================================
-# INTERFACE CHAT (optionnel, conservé pour compatibilité)
+# VEILLE CONCURRENTIELLE - FONCTIONS
 # ============================================================
 
-def generer_page_html_chat(conversations_html):
+def fetch_text(url, session=None):
+    """Récupère le texte d'une page web"""
+    try:
+        req = urllib.request.Request(url, headers=HEADERS_WEB)
+        import ssl
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        with urllib.request.urlopen(req, timeout=30, context=ctx) as r:
+            html = r.read().decode('utf-8', errors='ignore')
+            # Nettoyage basique HTML -> texte
+            text = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL|re.I)
+            text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL|re.I)
+            text = re.sub(r'<[^>]+>', ' ', text)
+            text = re.sub(r'\s+', ' ', text)
+            return text.replace('\xa0', ' ')
+    except Exception as e:
+        print(f"[CONCURRENCE] Erreur fetch {url[:50]}: {e}")
+        return None
+
+
+def extract_prices(text):
+    """Extrait les prix depuis le texte"""
+    if not text:
+        return []
+    matches = re.findall(r'(\d{1,3}[\s\.]?\d{3})\s*[€E]', text)
+    prices = []
+    for m in matches:
+        clean = m.replace(' ', '').replace('.', '')
+        try:
+            p = int(clean)
+            if 30000 <= p <= 10000000:
+                prices.append(p)
+        except:
+            pass
+    return list(set(prices))
+
+
+def scrape_agences():
+    """Scrape toutes les agences concurrentes"""
+    annonces = []
+    
+    agences = [
+        ("HUMAN Vergt", "https://www.human-immobilier.fr/achat-immobilier-vergt", "Vergt"),
+        ("HUMAN Le Bugue", "https://www.human-immobilier.fr/achat-immobilier-le-bugue", "Le Bugue"),
+        ("HUMAN St-Amand", "https://www.human-immobilier.fr/achat-immobilier-saint-amand-de-vergt", "St-Amand"),
+        ("Valadie", "https://valadie-immobilier.com/fr/biens/a_vendre", "Le Bugue"),
+        ("Laforet", "https://www.laforet.com/agence-immobiliere/perigueux/acheter", "Périgueux"),
+        ("Century 21", "https://www.century21.fr/annonces/f/achat/v-perigueux/", "Périgueux"),
+        ("FD Immo", "https://www.fdimmo24.com/immobilier/catalog/?_f_i=1", "Lalinde"),
+        ("Montet", "https://www.montet-immobilier.com", "Périgueux"),
+        ("La Maison", "https://www.immobilierlamaison.fr/a-vendre/1", "Périgueux"),
+        ("Internat Agency", "https://www.interimmoagency.com/fr/listing-vente.html", "Monpazier"),
+    ]
+    
+    for nom, url, zone in agences:
+        print(f"[CONCURRENCE] -> {nom}")
+        text = fetch_text(url)
+        if text:
+            prices = extract_prices(text)
+            for prix in prices:
+                annonces.append({
+                    'source': nom,
+                    'prix': prix,
+                    'zone': zone,
+                    'url': url,
+                    'date': datetime.now().isoformat()[:10]
+                })
+            print(f"[CONCURRENCE]    {len(prices)} annonces")
+    
+    # Virginie Michelin (multi-pages)
+    print("[CONCURRENCE] -> Virginie Michelin")
+    vm_count = 0
+    for page in [1, 2, 3]:
+        url = f"https://www.virginie-michelin-immobilier.fr/listeAnnonce.php?prix={page}"
+        text = fetch_text(url)
+        if text:
+            prices = extract_prices(text)
+            for prix in prices:
+                annonces.append({'source': 'Virginie Michelin', 'prix': prix, 'zone': 'Villamblard', 'url': url, 'date': datetime.now().isoformat()[:10]})
+            vm_count += len(prices)
+    print(f"[CONCURRENCE]    {vm_count} annonces")
+    
+    # Bayenche (multi-pages)
+    print("[CONCURRENCE] -> Bayenche")
+    bay_count = 0
+    for page in range(1, 6):
+        url = f"https://www.bayencheimmobilier.fr/category/acheter/page/{page}" if page > 1 else "https://www.bayencheimmobilier.fr/category/acheter"
+        text = fetch_text(url)
+        if text:
+            prices = extract_prices(text)
+            for prix in prices:
+                annonces.append({'source': 'Bayenche', 'prix': prix, 'zone': 'Périgueux', 'url': url, 'date': datetime.now().isoformat()[:10]})
+            bay_count += len(prices)
+            if len(prices) < 5:
+                break
+    print(f"[CONCURRENCE]    {bay_count} annonces")
+    
+    # Perigord Noir (multi-pages)
+    print("[CONCURRENCE] -> Perigord Noir")
+    pn_count = 0
+    for page in range(1, 15):
+        url = "https://perigordnoirimmobilier.com/nos-biens-immobiliers" if page == 1 else f"https://perigordnoirimmobilier.com/nos-biens-immobiliers/?page_number={page}"
+        text = fetch_text(url)
+        if text:
+            prices = extract_prices(text)
+            for prix in prices:
+                annonces.append({'source': 'Perigord Noir', 'prix': prix, 'zone': 'Périgord Noir', 'url': url, 'date': datetime.now().isoformat()[:10]})
+            pn_count += len(prices)
+            if len(prices) < 5:
+                break
+    print(f"[CONCURRENCE]    {pn_count} annonces")
+    
+    return annonces
+
+
+def detect_nouvelles_concurrence(annonces):
+    """Détecte les nouvelles annonces vs cache"""
+    global CACHE_CONCURRENCE
+    nouvelles = []
+    
+    for a in annonces:
+        aid = hashlib.md5(f"{a['source']}|{a['prix']}|{a['zone']}".encode()).hexdigest()[:12]
+        if aid not in CACHE_CONCURRENCE:
+            nouvelles.append(a)
+            CACHE_CONCURRENCE[aid] = {'prix': a['prix'], 'date': datetime.now().isoformat()}
+    
+    return nouvelles
+
+
+def envoyer_email_concurrence(annonces, nouvelles):
+    """Envoie l'email de veille concurrentielle"""
+    stats = {}
+    for a in annonces:
+        s = a['source']
+        if s not in stats:
+            stats[s] = []
+        stats[s].append(a['prix'])
+    
+    body = f"""Bonjour,
+
+Veille concurrentielle ICI Dordogne - {datetime.now().strftime('%d/%m/%Y %H:%M')}
+
+📊 RÉSUMÉ
+- Total annonces : {len(annonces)}
+- Nouvelles aujourd'hui : {len(nouvelles)}
+- Agences surveillées : {len(stats)}
+
+📈 PAR AGENCE
+"""
+    
+    for source, prices in sorted(stats.items(), key=lambda x: -len(x[1])):
+        body += f"• {source}: {len(prices)} annonces ({min(prices):,}€ - {max(prices):,}€)\n".replace(',', ' ')
+    
+    if nouvelles:
+        body += f"\n🆕 NOUVELLES ANNONCES ({len(nouvelles)})\n\n"
+        for a in sorted(nouvelles, key=lambda x: x['prix'])[:25]:
+            body += f"• {a['prix']:,}€ - {a['source']} ({a['zone']})\n".replace(',', ' ')
+            body += f"  {a['url']}\n\n"
+    
+    body += """
+--
+Axi - ICI Dordogne
+Je ne lâche pas."""
+    
+    msg = MIMEMultipart()
+    msg['From'] = SMTP_USER
+    msg['To'] = EMAIL_TO
+    msg['Cc'] = EMAIL_CC
+    msg['Subject'] = f"🏠 Veille Concurrence: {len(nouvelles)} nouvelles / {len(annonces)} total"
+    msg.attach(MIMEText(body, 'plain', 'utf-8'))
+    
+    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as s:
+        s.starttls()
+        s.login(SMTP_USER, SMTP_PASSWORD)
+        s.sendmail(SMTP_USER, [EMAIL_TO, EMAIL_CC], msg.as_string())
+
+
+def executer_veille_concurrence(envoyer=True):
+    """Exécute la veille concurrentielle"""
+    print("[CONCURRENCE] Démarrage veille concurrentielle...")
+    
+    annonces = scrape_agences()
+    print(f"[CONCURRENCE] Total: {len(annonces)} annonces")
+    
+    nouvelles = detect_nouvelles_concurrence(annonces)
+    print(f"[CONCURRENCE] Nouvelles: {len(nouvelles)}")
+    
+    if envoyer:
+        envoyer_email_concurrence(annonces, nouvelles)
+        print(f"[CONCURRENCE] Email envoyé à {EMAIL_TO}")
+    
+    return {
+        "status": "ok",
+        "total": len(annonces),
+        "nouvelles": len(nouvelles),
+        "sent_to": EMAIL_TO if envoyer else "non envoyé"
+    }
+
+
+
+
+# ============================================================
+# INTERFACE HTML
+# ============================================================
+
+def get_index_html():
     return f"""<!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
     <title>Axi - ICI Dordogne</title>
     <style>
-        body {{ font-family: Georgia, serif; background: #1a1a2e; color: #eee; padding: 20px; }}
-        h1 {{ color: #e94560; }}
-        .status {{ background: #16213e; padding: 15px; border-radius: 8px; margin: 20px 0; }}
-        .endpoint {{ background: #0f3460; padding: 10px 15px; border-radius: 5px; margin: 5px 0; font-family: monospace; }}
-        a {{ color: #4ade80; }}
+        body {{ font-family: Arial; padding: 40px; max-width: 800px; margin: 0 auto; background: #f5f5f5; }}
+        h1 {{ color: #2E7D32; }}
+        .status {{ background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+        .endpoint {{ background: #e8f5e9; padding: 12px; margin: 8px 0; border-radius: 6px; font-family: monospace; }}
+        .endpoint a {{ color: #1B5E20; }}
+        h2 {{ color: #1B5E20; margin-top: 30px; }}
+        ul {{ line-height: 2; }}
     </style>
 </head>
 <body>
-    <h1>🏠 Axi - Service ICI Dordogne</h1>
+    <h1>🏠 Axi - ICI Dordogne</h1>
     
     <div class="status">
-        <strong>Status:</strong> En ligne<br>
-        <strong>Heure:</strong> {datetime.now().strftime('%d/%m/%Y %H:%M')}
+        <strong>Service:</strong> Actif<br>
+        <strong>Heure:</strong> {datetime.now().strftime('%d/%m/%Y %H:%M')}<br>
+        <strong>Crons:</strong> 07h00 (concurrence) + 08h00 (DPE)
     </div>
     
-    <h2>Endpoints disponibles</h2>
+    <h2>Endpoints</h2>
     
-    <div class="endpoint">GET <a href="/memory">/memory</a> → Lire les consignes</div>
-    <div class="endpoint">POST /memory → Écrire les consignes</div>
-    <div class="endpoint">GET <a href="/briefing">/briefing</a> → Contexte complet pour Axis</div>
-    <div class="endpoint">GET <a href="/status">/status</a> → Health check JSON</div>
-    <div class="endpoint">GET <a href="/test-veille">/test-veille</a> → Test veille DPE (sans email)</div>
-    <div class="endpoint">GET <a href="/run-veille">/run-veille</a> → Exécuter veille DPE + envoyer email</div>
+    <div class="endpoint">GET <a href="/memory">/memory</a> → Consignes</div>
+    <div class="endpoint">GET <a href="/briefing">/briefing</a> → Contexte Axis</div>
+    <div class="endpoint">GET <a href="/status">/status</a> → Health check</div>
     
-    <h2>Configuration veille</h2>
+    <h2>Veille DPE</h2>
+    <div class="endpoint">GET <a href="/test-veille">/test-veille</a> → Test (sans email)</div>
+    <div class="endpoint">GET <a href="/run-veille">/run-veille</a> → Exécuter + email</div>
+    
+    <h2>Veille Concurrence</h2>
+    <div class="endpoint">GET <a href="/test-veille-concurrence">/test-veille-concurrence</a> → Test (sans email)</div>
+    <div class="endpoint">GET <a href="/run-veille-concurrence">/run-veille-concurrence</a> → Exécuter + email</div>
+    
+    <h2>Configuration</h2>
     <ul>
-        <li>Destinataire: {EMAIL_TO}</li>
+        <li>Email: {EMAIL_TO}</li>
         <li>Copie: {EMAIL_CC}</li>
-        <li>Codes postaux: {len(CODES_POSTAUX)}</li>
+        <li>Codes postaux DPE: {len(CODES_POSTAUX)}</li>
     </ul>
-    
-    {conversations_html}
 </body>
 </html>"""
 
@@ -426,6 +638,9 @@ def generer_page_html_chat(conversations_html):
 # ============================================================
 
 class AxiHandler(BaseHTTPRequestHandler):
+    
+    def log_message(self, format, *args):
+        print(f"[HTTP] {args[0]}")
     
     def send_json(self, data, status=200):
         self.send_response(status)
@@ -448,44 +663,43 @@ class AxiHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split('?')[0]
         
-        # === /memory ===
+        if path == "/":
+            self.send_html(get_index_html())
+            return
+        
         if path == "/memory":
-            memory = lire_fichier("MEMORY.md")
-            if not memory:
-                memory = "# MEMORY\n\nAucune consigne."
+            memory = lire_fichier("MEMORY.md") or "# MEMORY\n\nAucune consigne."
             self.send_text(memory)
             return
         
-        # === /briefing ===
         if path == "/briefing":
             memory = lire_fichier("MEMORY.md") or "Aucune consigne."
             briefing = f"""=== BRIEFING AXI ===
 Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 
-=== MEMORY (CONSIGNES PRIORITAIRES) ===
+=== MEMORY ===
 {memory}
 
-=== STATUS SERVICE ===
-- Veille DPE: Prête
+=== STATUS ===
+- Veille DPE: 08h00
+- Veille Concurrence: 07h00
 - Email to: {EMAIL_TO}
-- Codes postaux: {len(CODES_POSTAUX)}
 """
             self.send_text(briefing)
             return
         
-        # === /status ===
         if path == "/status":
             self.send_json({
                 "status": "ok",
                 "time": datetime.now().isoformat(),
-                "service": "Axi ICI Dordogne",
-                "memory_exists": os.path.exists("MEMORY.md"),
+                "service": "Axi ICI Dordogne v3",
+                "crons": ["07:00 concurrence", "08:00 DPE"],
                 "email_to": EMAIL_TO,
                 "codes_postaux": len(CODES_POSTAUX)
             })
             return
         
-        # === /test-veille ===
+        # Veille DPE
         if path == "/test-veille":
             try:
                 result = executer_veille(envoyer=False)
@@ -494,7 +708,6 @@ Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
                 self.send_json({"status": "error", "message": str(e)}, 500)
             return
         
-        # === /run-veille ===
         if path == "/run-veille":
             try:
                 result = executer_veille(envoyer=True)
@@ -503,356 +716,134 @@ Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
                 self.send_json({"status": "error", "message": str(e)}, 500)
             return
         
-        # === / (accueil) ===
-        html = generer_page_html_chat("")
-        self.send_html(html)
+        # Veille Concurrence
+        if path == "/test-veille-concurrence":
+            try:
+                result = executer_veille_concurrence(envoyer=False)
+                self.send_json(result)
+            except Exception as e:
+                self.send_json({"status": "error", "message": str(e)}, 500)
+            return
+        
+        if path == "/run-veille-concurrence":
+            try:
+                result = executer_veille_concurrence(envoyer=True)
+                self.send_json(result)
+            except Exception as e:
+                self.send_json({"status": "error", "message": str(e)}, 500)
+            return
+        
+        # 404
+        self.send_json({"error": "Not found"}, 404)
     
     def do_POST(self):
         path = self.path.split('?')[0]
-        content_length = int(self.headers.get('Content-Length', 0))
-        post_data = self.rfile.read(content_length).decode('utf-8') if content_length > 0 else ""
         
-        # === POST /memory ===
         if path == "/memory":
-            # Supporter form-urlencoded et raw text
-            if 'contenu=' in post_data:
-                params = urllib.parse.parse_qs(post_data)
-                contenu = params.get('contenu', [''])[0]
-            else:
-                contenu = post_data
-            
-            if contenu.strip():
-                ecrire_fichier("MEMORY.md", contenu)
-                self.send_json({"status": "ok", "message": "Memory updated"})
-            else:
-                self.send_json({"status": "error", "message": "Empty content"}, 400)
+            length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(length).decode('utf-8')
+            ecrire_fichier("MEMORY.md", body)
+            self.send_json({"status": "ok", "written": len(body)})
             return
         
-        # === POST /contact ===
-        if path == "/contact":
-            try:
-                data = json.loads(post_data)
-                name = data.get('name', '')
-                email = data.get('email', '')
-                phone = data.get('phone', 'Non renseigné')
-                message = data.get('message', '')
-                bien = data.get('bien', 'Bien non spécifié')
-                
-                # Construire l'email
-                html = f"""<html><body style="font-family:Arial;padding:20px;">
-                <h2 style="color:#2E7D32;">📬 Nouvelle demande de renseignement</h2>
-                <p><strong>Bien concerné:</strong> {bien}</p>
-                <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
-                <p><strong>Nom:</strong> {name}</p>
-                <p><strong>Email:</strong> <a href="mailto:{email}">{email}</a></p>
-                <p><strong>Téléphone:</strong> {phone}</p>
-                <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
-                <p><strong>Message:</strong></p>
-                <p style="background:#f5f5f5;padding:15px;border-radius:8px;">{message}</p>
-                <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
-                <p style="color:#888;font-size:12px;">Envoyé depuis le site vitrine ICI Dordogne</p>
-                </body></html>"""
-                
-                msg = MIMEMultipart()
-                msg['Subject'] = f"📬 Demande de renseignement - {bien}"
-                msg['From'] = SMTP_USER
-                msg['To'] = EMAIL_TO
-                msg['Cc'] = EMAIL_CC
-                msg['Reply-To'] = email
-                msg.attach(MIMEText(html, 'html', 'utf-8'))
-                
-                with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as s:
-                    s.starttls()
-                    s.login(SMTP_USER, SMTP_PASSWORD)
-                    s.sendmail(SMTP_USER, [EMAIL_TO, EMAIL_CC], msg.as_string())
-                
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                self.wfile.write(json.dumps({"status": "ok", "message": "Email sent"}).encode('utf-8'))
-                
-            except Exception as e:
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
-            return
-        
-        # === POST /send-fiche ===
-        if path == "/send-fiche":
-            try:
-                data = json.loads(post_data)
-                email = data.get('email', '')
-                lang = data.get('lang', 'fr')
-                bien = data.get('bien', 'Maison Manzac-sur-Vern')
-                
-                # URLs des PDFs sur le site
-                pdf_urls = {
-                    'fr': 'https://nouveaute-maisonavendre-manzacsurvern.netlify.app/docs/Fiche_Manzac_FR.pdf',
-                    'en': 'https://nouveaute-maisonavendre-manzacsurvern.netlify.app/docs/Fiche_Manzac_EN.pdf',
-                    'nl': 'https://nouveaute-maisonavendre-manzacsurvern.netlify.app/docs/Fiche_Manzac_NL.pdf'
-                }
-                pdf_url = pdf_urls.get(lang, pdf_urls['fr'])
-                
-                # Textes par langue
-                texts = {
-                    'fr': {
-                        'subject': f'📄 Fiche technique - {bien}',
-                        'title': 'Voici votre fiche technique',
-                        'intro': f'Vous avez demandé la fiche technique pour : <strong>{bien}</strong>',
-                        'button': 'Télécharger la fiche PDF',
-                        'contact': 'Une question ? Contactez-nous :',
-                        'signature': 'L\'équipe ICI Dordogne'
-                    },
-                    'en': {
-                        'subject': f'📄 Property details - {bien}',
-                        'title': 'Here is your property sheet',
-                        'intro': f'You requested the property sheet for: <strong>{bien}</strong>',
-                        'button': 'Download PDF sheet',
-                        'contact': 'Any questions? Contact us:',
-                        'signature': 'The ICI Dordogne team'
-                    },
-                    'nl': {
-                        'subject': f'📄 Technische fiche - {bien}',
-                        'title': 'Hier is uw technische fiche',
-                        'intro': f'U heeft de technische fiche aangevraagd voor: <strong>{bien}</strong>',
-                        'button': 'Download PDF fiche',
-                        'contact': 'Vragen? Neem contact op:',
-                        'signature': 'Het team van ICI Dordogne'
-                    }
-                }
-                t = texts.get(lang, texts['fr'])
-                
-                # Email au client
-                html_client = f"""<html><body style="font-family:Arial;padding:20px;background:#f7f7f7;">
-                <div style="max-width:600px;margin:0 auto;background:white;border-radius:10px;overflow:hidden;">
-                    <div style="background:linear-gradient(135deg,#2c5282,#1a365d);padding:25px;text-align:center;">
-                        <h1 style="color:white;margin:0;font-size:22px;">{t['title']}</h1>
-                    </div>
-                    <div style="padding:30px;">
-                        <p style="font-size:16px;color:#333;">{t['intro']}</p>
-                        <div style="text-align:center;margin:30px 0;">
-                            <a href="{pdf_url}" style="display:inline-block;background:#c53030;color:white;padding:15px 30px;text-decoration:none;border-radius:8px;font-weight:bold;font-size:16px;">{t['button']}</a>
-                        </div>
-                        <hr style="border:none;border-top:1px solid #eee;margin:25px 0;">
-                        <p style="color:#666;">{t['contact']}</p>
-                        <p style="color:#333;"><strong>📞 05 53 13 33 33</strong><br>
-                        <a href="mailto:agence@icidordogne.fr" style="color:#2c5282;">agence@icidordogne.fr</a></p>
-                        <p style="margin-top:25px;color:#888;">— {t['signature']}</p>
-                    </div>
-                </div>
-                </body></html>"""
-                
-                msg_client = MIMEMultipart()
-                msg_client['Subject'] = t['subject']
-                msg_client['From'] = SMTP_USER
-                msg_client['To'] = email
-                msg_client.attach(MIMEText(html_client, 'html', 'utf-8'))
-                
-                # Email à l'agence (notification lead)
-                html_agence = f"""<html><body style="font-family:Arial;padding:20px;">
-                <h2 style="color:#2E7D32;">📄 Nouveau téléchargement de fiche</h2>
-                <p><strong>Bien:</strong> {bien}</p>
-                <p><strong>Email du lead:</strong> <a href="mailto:{email}">{email}</a></p>
-                <p><strong>Langue:</strong> {lang.upper()}</p>
-                <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
-                <p style="color:#888;font-size:12px;">Lead capturé via fiche technique - Site vitrine ICI Dordogne</p>
-                </body></html>"""
-                
-                msg_agence = MIMEMultipart()
-                msg_agence['Subject'] = f"📄 Lead fiche technique - {email}"
-                msg_agence['From'] = SMTP_USER
-                msg_agence['To'] = EMAIL_TO
-                msg_agence['Cc'] = EMAIL_CC
-                msg_agence.attach(MIMEText(html_agence, 'html', 'utf-8'))
-                
-                # Envoyer les deux emails
-                with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as s:
-                    s.starttls()
-                    s.login(SMTP_USER, SMTP_PASSWORD)
-                    s.sendmail(SMTP_USER, [email], msg_client.as_string())
-                    s.sendmail(SMTP_USER, [EMAIL_TO, EMAIL_CC], msg_agence.as_string())
-                
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                self.wfile.write(json.dumps({"status": "ok", "message": "Fiche envoyée"}).encode('utf-8'))
-                
-            except Exception as e:
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
-            return
-        
-        # === POST /chat-proxy ===
-        if path == "/chat-proxy":
-            try:
-                data = json.loads(post_data)
-                system_prompt = data.get('system', '')
-                messages = data.get('messages', [])
-                site_id = data.get('site_id', 'default')
-                
-                # Charger le memo du site
-                try:
-                    memos = json.loads(lire_fichier("SITE_MEMOS.json") or "{}")
-                except:
-                    memos = {}
-                site_memo = memos.get(site_id, "")
-                
-                # Détecter #memo dans le dernier message pour ajouter des infos
-                last_msg = messages[-1].get('content', '') if messages else ''
-                if last_msg.strip().startswith('#memo '):
-                    memo_content = last_msg.strip()[6:].strip()
-                    if site_memo:
-                        site_memo += "\n" + memo_content
-                    else:
-                        site_memo = memo_content
-                    memos[site_id] = site_memo
-                    ecrire_fichier("SITE_MEMOS.json", json.dumps(memos, ensure_ascii=False))
-                    # Répondre confirmation
-                    self.send_response(200)
-                    self.send_header('Content-type', 'application/json')
-                    self.send_header('Access-Control-Allow-Origin', '*')
-                    self.end_headers()
-                    self.wfile.write(json.dumps({"content": [{"text": f"✅ Mémo enregistré : {memo_content}"}]}).encode('utf-8'))
-                    return
-                
-                # Ajouter le memo au system prompt
-                if site_memo:
-                    system_prompt += f"\n\nINFORMATIONS MÉMORISÉES:\n{site_memo}"
-                
-                # Appel API Anthropic avec web search
-                api_key = os.environ.get("ANTHROPIC_API_KEY")
-                req_data = json.dumps({
-                    "model": "claude-sonnet-4-20250514",
-                    "max_tokens": 1024,
-                    "system": system_prompt,
-                    "messages": messages,
-                    "tools": [{"type": "web_search_20250305", "name": "web_search", "max_uses": 3}]
-                }).encode('utf-8')
-                
-                req = urllib.request.Request(
-                    "https://api.anthropic.com/v1/messages",
-                    data=req_data,
-                    headers={
-                        'Content-Type': 'application/json',
-                        'x-api-key': api_key,
-                        'anthropic-version': '2023-06-01',
-                        'anthropic-beta': 'web-search-2025-03-05'
-                    }
-                )
-                
-                with urllib.request.urlopen(req, timeout=60) as response:
-                    result = json.loads(response.read().decode('utf-8'))
-                
-                # Extraire le texte de la réponse (ignorer les blocs web_search)
-                text_content = ""
-                for block in result.get("content", []):
-                    if block.get("type") == "text":
-                        text_content += block.get("text", "")
-                
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                self.wfile.write(json.dumps({"content": [{"text": text_content}]}).encode('utf-8'))
-                
-            except Exception as e:
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
-            return
-        
-        self.send_json({"status": "error", "message": "Unknown endpoint"}, 404)
+        self.send_json({"error": "Not found"}, 404)
+
+
+# ============================================================
+# FICHIERS INIT
+# ============================================================
+
+def init_files():
+    if not os.path.exists("MEMORY.md"):
+        ecrire_fichier("MEMORY.md", """# MEMORY - CONSIGNES POUR AXIS
+
+*Dernière mise à jour: """ + datetime.now().strftime('%d/%m/%Y') + """*
+
+## RÈGLES ABSOLUES
+
+### Emails
+- ❌ Jamais d'envoi sans accord explicite de Ludo
+- ✅ Toujours laetony@gmail.com en copie
+
+### Validation
+- ❌ Ne RIEN lancer/exécuter/déployer sans validation Ludo
+
+## VEILLES ACTIVES
+
+### 1. Veille DPE ✅
+- Cron: 08h00 Paris
+- Endpoint: /run-veille
+
+### 2. Veille Concurrence ✅
+- Cron: 07h00 Paris
+- Endpoint: /run-veille-concurrence
+""")
+
+
+# ============================================================
+# SCHEDULER
+# ============================================================
+
+def tache_veille_dpe():
+    print(f"[CRON] {datetime.now()} - Veille DPE")
+    try:
+        executer_veille(envoyer=True)
+    except Exception as e:
+        print(f"[CRON] Erreur DPE: {e}")
+
+def tache_veille_concurrence():
+    print(f"[CRON] {datetime.now()} - Veille Concurrence")
+    try:
+        executer_veille_concurrence(envoyer=True)
+    except Exception as e:
+        print(f"[CRON] Erreur Concurrence: {e}")
+
+def demarrer_scheduler():
+    scheduler = BackgroundScheduler(timezone=pytz.timezone('Europe/Paris'))
     
-    def do_OPTIONS(self):
-        """Handler pour les requêtes CORS preflight"""
-        self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.end_headers()
+    # Veille Concurrence à 07h00
+    scheduler.add_job(
+        tache_veille_concurrence,
+        CronTrigger(hour=7, minute=0, timezone=pytz.timezone('Europe/Paris')),
+        id='veille_concurrence',
+        name='Veille Concurrence 7h00',
+        replace_existing=True
+    )
     
-    def log_message(self, format, *args):
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] {args[0]}")
+    # Veille DPE à 08h00
+    scheduler.add_job(
+        tache_veille_dpe,
+        CronTrigger(hour=8, minute=0, timezone=pytz.timezone('Europe/Paris')),
+        id='veille_dpe',
+        name='Veille DPE 8h00',
+        replace_existing=True
+    )
+    
+    scheduler.start()
+    print("[SCHEDULER] Crons activés:")
+    print("  - 07h00: Veille Concurrence")
+    print("  - 08h00: Veille DPE")
+    return scheduler
 
 
 # ============================================================
 # MAIN
 # ============================================================
 
-def init_files():
-    """Initialise les fichiers si nécessaires"""
-    if not os.path.exists("MEMORY.md"):
-        ecrire_fichier("MEMORY.md", """# MEMORY - CONSIGNES AXIS
-
-## RÈGLES
-- Emails: toujours laetony@gmail.com en copie
-- Validation: ne rien lancer sans accord Ludo
-- Qualité: être critique avant de passer à la suite
-
-## VEILLE DPE
-- Heure: 8h00
-- Destinataire: agence@icidordogne.fr
-- Copie: laetony@gmail.com
-""")
-
-
-# ============================================================
-# SCHEDULER (CRON INTÉGRÉ)
-# ============================================================
-
-def tache_veille_quotidienne():
-    """Tâche quotidienne à 8h00 Paris"""
-    print(f"[{datetime.now().strftime('%d/%m %H:%M')}] Lancement veille quotidienne...")
-    try:
-        result = executer_veille(envoyer=True)
-        print(f"[VEILLE] Résultat: {result}")
-    except Exception as e:
-        print(f"[ERREUR] Veille: {e}")
-
-def demarrer_scheduler():
-    """Démarre le scheduler en arrière-plan"""
-    scheduler = BackgroundScheduler(timezone=pytz.timezone('Europe/Paris'))
-    
-    # Veille DPE tous les jours à 08h00 Paris
-    scheduler.add_job(
-        tache_veille_quotidienne,
-        CronTrigger(hour=8, minute=0, timezone=pytz.timezone('Europe/Paris')),
-        id='veille_dpe_quotidienne',
-        name='Veille DPE 8h00',
-        replace_existing=True
-    )
-    
-    scheduler.start()
-    print("[SCHEDULER] Cron activé - Veille DPE à 8h00 Paris quotidien")
-    return scheduler
-
-
 def main():
     print("=" * 50)
-    print("AXI - SERVICE UNIFIÉ ICI DORDOGNE")
+    print("AXI - SERVICE UNIFIÉ ICI DORDOGNE v3")
     print("=" * 50)
     
     init_files()
-    
-    # Démarrer le scheduler cron
     scheduler = demarrer_scheduler()
     
     port = int(os.environ.get("PORT", 8080))
     serveur = HTTPServer(('0.0.0.0', port), AxiHandler)
     
     print(f"Port: {port}")
-    print(f"Endpoints: /memory, /briefing, /status, /run-veille, /test-veille")
-    print(f"Email to: {EMAIL_TO}")
-    print(f"Cron: Veille DPE à 8h00 Paris")
+    print(f"Email: {EMAIL_TO} (cc: {EMAIL_CC})")
+    print("Endpoints: /run-veille, /run-veille-concurrence")
     print("En attente...")
     
     try:
