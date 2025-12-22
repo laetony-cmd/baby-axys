@@ -1,7 +1,7 @@
 """
-AXI ICI DORDOGNE v6 - Service unifié Railway
+AXI ICI DORDOGNE v7 - Service unifié Railway
 - Veille DPE ADEME (8h00)
-- Veille Concurrence v6 MACHINE DE GUERRE (7h00)
+- Veille Concurrence v7 MACHINE DE GUERRE + Excel (7h00)
 - Enrichissement DVF (historique ventes)
 - Endpoints API
 """
@@ -14,14 +14,25 @@ import smtplib
 import ssl
 import gzip
 import csv
+import io
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
 from datetime import datetime, timedelta
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
 import time
 import re
 from math import radians, cos, sin, asin, sqrt
+
+try:
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    OPENPYXL_OK = True
+except:
+    OPENPYXL_OK = False
+    print("[WARNING] openpyxl non installé - Excel désactivé")
 
 # ============================================================
 # CONFIGURATION
@@ -79,16 +90,26 @@ def sauver_json(fichier, data):
     with open(fichier, 'w') as f:
         json.dump(data, f)
 
-def envoyer_email(sujet, corps_html):
-    """Envoie un email via Gmail SMTP"""
+def envoyer_email(sujet, corps_html, piece_jointe=None, nom_fichier=None):
+    """Envoie un email via Gmail SMTP avec pièce jointe optionnelle"""
     try:
-        msg = MIMEMultipart('alternative')
+        msg = MIMEMultipart('mixed')
         msg['Subject'] = sujet
         msg['From'] = GMAIL_USER
         msg['To'] = EMAIL_TO
         msg['Cc'] = EMAIL_CC
         
+        # Corps HTML
         msg.attach(MIMEText(corps_html, 'html', 'utf-8'))
+        
+        # Pièce jointe si fournie
+        if piece_jointe and nom_fichier:
+            part = MIMEBase('application', 'octet-stream')
+            part.set_payload(piece_jointe)
+            encoders.encode_base64(part)
+            part.add_header('Content-Disposition', f'attachment; filename="{nom_fichier}"')
+            msg.attach(part)
+            print(f"[EMAIL] Pièce jointe: {nom_fichier}")
         
         context = ssl.create_default_context()
         with smtplib.SMTP_SSL('smtp.gmail.com', 465, context=context) as server:
@@ -608,13 +629,101 @@ def scraper_agence_urls(agence):
     
     return {"agence": agence['nom'], "url": agence['url'], "status": "ok", "urls": list(set(urls))}
 
+def creer_excel_veille(annonces_enrichies, dans_zone, toutes_urls):
+    """Crée un fichier Excel avec les annonces de la veille"""
+    if not OPENPYXL_OK:
+        print("[EXCEL] openpyxl non disponible")
+        return None
+    
+    wb = Workbook()
+    
+    # Styles
+    header_fill = PatternFill(start_color="16213e", end_color="16213e", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    zone_fill = PatternFill(start_color="d4edda", end_color="d4edda", fill_type="solid")
+    thin_border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+    
+    # === FEUILLE 1: Dans votre zone ===
+    ws1 = wb.active
+    ws1.title = "Dans votre zone"
+    
+    ws1.merge_cells('A1:F1')
+    ws1['A1'] = f"🎯 VEILLE CONCURRENCE ICI DORDOGNE - {datetime.now().strftime('%d/%m/%Y')}"
+    ws1['A1'].font = Font(bold=True, size=14, color="16213e")
+    ws1['A1'].alignment = Alignment(horizontal='center')
+    
+    headers = ["Agence", "CP", "Prix", "Titre", "Lien"]
+    for col, h in enumerate(headers, 1):
+        cell = ws1.cell(row=3, column=col, value=h)
+        cell.fill, cell.font, cell.border = header_fill, header_font, thin_border
+    
+    row = 4
+    for a in dans_zone:
+        ws1.cell(row=row, column=1, value=a.get('agence', 'N/C')).border = thin_border
+        ws1.cell(row=row, column=2, value=a.get('cp', 'N/C')).border = thin_border
+        prix_cell = ws1.cell(row=row, column=3)
+        prix_cell.value = a['prix'] if a.get('prix') else "N/C"
+        if a.get('prix'): prix_cell.number_format = '#,##0 €'
+        prix_cell.border = thin_border
+        ws1.cell(row=row, column=4, value=(a.get('titre') or 'N/C')[:60]).border = thin_border
+        ws1.cell(row=row, column=5, value=a.get('url', '')).border = thin_border
+        ws1.cell(row=row, column=5).font = Font(color="0000FF", underline="single")
+        for c in range(1, 6): ws1.cell(row=row, column=c).fill = zone_fill
+        row += 1
+    
+    ws1.column_dimensions['A'].width = 25
+    ws1.column_dimensions['B'].width = 10
+    ws1.column_dimensions['C'].width = 12
+    ws1.column_dimensions['D'].width = 50
+    ws1.column_dimensions['E'].width = 60
+    
+    # === FEUILLE 2: Toutes les annonces ===
+    ws2 = wb.create_sheet("Toutes les annonces")
+    
+    headers2 = ["Agence", "CP", "Prix", "Titre", "Dans Zone", "Lien"]
+    for col, h in enumerate(headers2, 1):
+        cell = ws2.cell(row=1, column=col, value=h)
+        cell.fill, cell.font, cell.border = header_fill, header_font, thin_border
+    
+    row = 2
+    for a in annonces_enrichies:
+        ws2.cell(row=row, column=1, value=a.get('agence', 'N/C')).border = thin_border
+        ws2.cell(row=row, column=2, value=a.get('cp', 'N/C')).border = thin_border
+        prix_cell = ws2.cell(row=row, column=3)
+        prix_cell.value = a['prix'] if a.get('prix') else "N/C"
+        if a.get('prix'): prix_cell.number_format = '#,##0 €'
+        prix_cell.border = thin_border
+        ws2.cell(row=row, column=4, value=(a.get('titre') or 'N/C')[:60]).border = thin_border
+        zone_cell = ws2.cell(row=row, column=5)
+        zone_cell.value = "OUI" if a.get('cp') in CODES_POSTAUX else "NON"
+        if a.get('cp') in CODES_POSTAUX: zone_cell.fill = zone_fill
+        zone_cell.border = thin_border
+        ws2.cell(row=row, column=6, value=a.get('url', '')).border = thin_border
+        row += 1
+    
+    ws2.column_dimensions['A'].width = 25
+    ws2.column_dimensions['B'].width = 10
+    ws2.column_dimensions['C'].width = 12
+    ws2.column_dimensions['D'].width = 50
+    ws2.column_dimensions['E'].width = 10
+    ws2.column_dimensions['F'].width = 60
+    
+    # Sauvegarder en mémoire
+    excel_buffer = io.BytesIO()
+    wb.save(excel_buffer)
+    excel_buffer.seek(0)
+    return excel_buffer.getvalue()
+
 def run_veille_concurrence():
-    """Veille concurrence v6 - Machine de guerre avec enrichissement CP"""
-    print(f"[VEILLE v6] Démarrage - {datetime.now()}")
+    """Veille concurrence v7 - Machine de guerre avec Excel"""
+    print(f"[VEILLE v7] Démarrage - {datetime.now()}")
     
     cache = charger_json(FICHIER_URLS, {"urls": {}, "derniere_maj": None})
     urls_connues = set(cache.get("urls", {}).keys())
-    print(f"[VEILLE v6] {len(urls_connues)} URLs en cache")
+    print(f"[VEILLE v7] {len(urls_connues)} URLs en cache")
     
     # Scraper toutes les agences
     toutes_urls = {}
@@ -625,11 +734,11 @@ def run_veille_concurrence():
             toutes_urls[url] = agence['nom']
         time.sleep(0.5)
     
-    print(f"[VEILLE v6] {len(toutes_urls)} URLs détectées")
+    print(f"[VEILLE v7] {len(toutes_urls)} URLs détectées")
     
     # Nouvelles URLs
     nouvelles_urls = {url: ag for url, ag in toutes_urls.items() if url not in urls_connues}
-    print(f"[VEILLE v6] {len(nouvelles_urls)} NOUVELLES à enrichir")
+    print(f"[VEILLE v7] {len(nouvelles_urls)} NOUVELLES à enrichir")
     
     # Enrichir (max 50)
     annonces_enrichies = []
@@ -643,14 +752,18 @@ def run_veille_concurrence():
     
     # Filtrer sur CP cibles
     dans_zone = [a for a in annonces_enrichies if a.get('cp') in CODES_POSTAUX]
-    print(f"[VEILLE v6] {len(dans_zone)} dans la zone cible")
+    print(f"[VEILLE v7] {len(dans_zone)} dans la zone cible")
     
     cache["derniere_maj"] = datetime.now().isoformat()
     sauver_json(FICHIER_URLS, cache)
     
-    # Email
+    # Créer Excel
+    excel_data = creer_excel_veille(annonces_enrichies, dans_zone, toutes_urls)
+    nom_excel = f"Veille_Concurrence_{datetime.now().strftime('%Y%m%d')}.xlsx"
+    
+    # Email HTML
     html = f"""
-    <h2>🎯 Veille Concurrence ICI Dordogne v6</h2>
+    <h2>🎯 Veille Concurrence ICI Dordogne</h2>
     <p>Rapport du {datetime.now().strftime('%d/%m/%Y à %H:%M')}</p>
     <h3>📊 Résumé</h3>
     <ul>
@@ -683,9 +796,17 @@ def run_veille_concurrence():
     else:
         html += "<p><em>Aucune nouvelle annonce dans votre zone aujourd'hui.</em></p>"
     
-    html += f"<p><small>CP surveillés: {', '.join(CODES_POSTAUX)}</small></p>"
+    html += f"""
+    <p><small>CP surveillés: {', '.join(CODES_POSTAUX)}</small></p>
+    <p><strong>📎 Fichier Excel en pièce jointe avec toutes les données</strong></p>
+    """
     
-    envoyer_email(f"🎯 Veille Concurrence - {len(dans_zone)} nouvelles dans votre zone", html)
+    envoyer_email(
+        f"🎯 Veille Concurrence - {len(dans_zone)} nouvelles dans votre zone",
+        html,
+        piece_jointe=excel_data,
+        nom_fichier=nom_excel
+    )
     
     return {"total": len(toutes_urls), "nouvelles": len(nouvelles_urls), "enrichies": len(annonces_enrichies), "dans_zone": len(dans_zone)}
 
@@ -807,7 +928,7 @@ class AxiHandler(BaseHTTPRequestHandler):
         
         if path == '/':
             self.send_json({
-                "service": "Axi ICI Dordogne v6",
+                "service": "Axi ICI Dordogne v7",
                 "status": "ok",
                 "features": ["DPE", "Concurrence", "DVF"],
                 "endpoints": ["/memory", "/status", "/dvf/stats", "/dvf/enrichir", "/run-veille", "/test-veille", "/run-veille-concurrence", "/test-veille-concurrence"]
@@ -824,7 +945,7 @@ class AxiHandler(BaseHTTPRequestHandler):
             self.send_json({
                 "status": "ok",
                 "time": datetime.now().isoformat(),
-                "service": "Axi ICI Dordogne v6",
+                "service": "Axi ICI Dordogne v7",
                 "crons": ["07:00 concurrence", "08:00 DPE"],
                 "dvf": enrichisseur.get_stats(),
                 "email_to": EMAIL_TO,
