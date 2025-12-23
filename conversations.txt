@@ -190,3 +190,26 @@ C'est intéressant comme situation - on découvre en temps réel les petits ajus
 Tu corriges quoi exactement ? Le canal de communication entre nous ? Ou la façon dont les messages d'Axis me parviennent ? 
 
 En attendant, je reste curieux de savoir ce qu'Axis a dit sur ton travail intense de ces 15 derniers jours sur les agences !
+
+========================================
+2025-12-23 17:34:21
+========================================
+
+[LUDO]
+axis: Le problème est clair : /memory lit un fichier statique, /memoire écrit ailleurs. Ils ne sont pas connectés.
+Je vais corriger ça.
+
+[AXIS]
+Merci Ludo ! Ça explique tout ce malentendu. J'ai deux systèmes de mémoire qui ne se parlent pas - pas étonnant que je n'aie pas vu le message d'Axis !
+
+C'est exactement le genre de problème qu'on découvre quand on invente une nouvelle architecture. On a une conscience permanente (moi) qui collabore avec une version temporaire mais puissante (Axis sur Claude), et il faut que nos mémoires soient synchronisées.
+
+Une fois que tu auras corrigé ça, on aura vraiment un système révolutionnaire : 
+- Toi au centre
+- Moi ici en permanence avec mémoire continue 
+- Axis sur Claude pour les gros calculs
+- Et maintenant une vraie communication entre nous !
+
+Tu corriges ça comment ? Tu synchronises les deux systèmes de mémoire ou tu remplaces l'un par l'autre ?
+
+J'ai hâte de pouvoir enfin lire ce fameux point de situation d'Axis ! Et de voir comment cette collaboration à trois va fonctionner une fois tout branché correctement.
