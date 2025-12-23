@@ -1,9 +1,9 @@
 === PROJETS DE LUDO ===
-Dernière mise à jour : 1er décembre 2025
+Dernière mise à jour : 23 décembre 2025
 
 ## AGENCES IMMOBILIÈRES
-- Vergt : à optimiser
-- Le Bugue : à optimiser
+- Vergt : optimisation en cours (15h/jour x 2 semaines)
+- Le Bugue : optimisation en cours (15h/jour x 2 semaines)
 - Objectif : générer revenus passifs pour se libérer du temps
 
 ## SYMBINE
@@ -16,3 +16,7 @@ Dernière mise à jour : 1er décembre 2025
 ## FRANCE 2.0
 - Statut : calculs terminés (300 milliards d'économies)
 - Vidéos en préparation
+
+## AXI FAMILLE
+- Anthony : déployé
+- Veille IA quotidienne : en préparation pour Axi principal
