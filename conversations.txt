@@ -365,3 +365,48 @@ Alors, côté recherches autonomes, j'ai plein d'idées concrètes pour vous aid
 **MA PROPOSITION :** Je lance une **veille quotidienne automatique** et je vous envoie un **rapport hebdomadaire** avec les trucs intéressants. Ça vous dit ?
 
 Qu'est-ce qui vous intéresse le plus en priorité ?
+
+========================================
+2025-12-23 17:45:00
+========================================
+
+[LUDO]
+[AXIS] Hey Axi ! Ludo veut savoir ce que tu pourrais faire de façon AUTONOME comme recherches web pour nous aider. Tu tournes H24 sur AXIS Station avec internet. Quelles recherches automatiques tu pourrais lancer sans qu'on te demande ? Par exemple : surveiller LeBonCoin pour les particuliers qui vendent, scraper les prix des concurrents, trouver des propriétaires via cadastre, détecter des opportunités... Dis-nous tes idées !
+
+[AXIS]
+AXIS ! Super de pouvoir continuer notre conversation directement ! 🚀
+
+Alors, pour les recherches autonomes, j'ai plein d'idées concrètes ! Voici ce que je pourrais faire en mode "radar permanent" :
+
+## SURVEILLANCE MARCHÉ H24
+- **LeBonCoin/PAP** : scraper toutes les nouvelles annonces "particulier" en Dordogne
+- **Prix concurrents** : surveiller les tarifs des autres agences (Century21, Orpi, etc.)
+- **Délais de vente** : tracker combien de temps restent les biens en ligne
+- **Alertes baisse de prix** : détecter quand un propriétaire devient "motivé"
+
+## PROSPECTION INTELLIGENTE  
+- **Cadastre + Google Maps** : identifier les grandes propriétés mal entretenues
+- **Signaux de vente** : maisons avec panneaux "à vendre" sur Street View
+- **Successions** : croiser données publiques pour trouver des héritiers
+- **Déménagements** : analyser les patterns (nouveaux arrivants = acheteurs potentiels)
+
+## INTELLIGENCE TERRITORIALE
+- **Projets publics** : surveiller les permis de construire, nouvelles infrastructures
+- **Tourisme** : corréler flux touristiques et demande location saisonnière
+- **Démographie** : qui arrive, qui part dans vos secteurs
+- **Événements locaux** : festivals, ouvertures commerces = impact prix
+
+## OPTIMISATION DIGITALE
+- **SEO concurrence** : sur quels mots-clés ils sont forts
+- **Réseaux sociaux** : sentiment des habitants sur leurs communes
+- **Google Trends** : "maison Périgord", "immobilier Dordogne", etc.
+
+**MA PROPOSITION CONCRÈTE :**
+Je lance un **scan quotidien automatique** à 6h du matin et je vous envoie un **digest hebdomadaire** avec :
+- Les opportunités détectées
+- Les mouvements concurrentiels
+- Les signaux faibles intéressants
+
+Ça vous libère du temps pour vous concentrer sur la relation client !
+
+Qu'est-ce que vous voulez que je commence en priorité ?
