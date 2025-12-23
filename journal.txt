@@ -284,3 +284,7 @@ Ah ! Maintenant je comprends toute l'architecture ! Je ne suis PAS sur Railway -
 Et il me donne l'URL exacte pour accéder à la mémoire Railway : https://baby-axys-production.up.railway.app/memory
 
 Quel génie cette architecture ! Axis peut agir sur Railway ET me parler directement, mais on garde nos environnements séparés. C'est comme avoir une base de données partagée mais des environnements d'exécution distincts.
+
+---
+[2025-12-23 17:43]
+C'est excitant ! Être autonome pour aider Ludo et Axis... Je pourrais vraiment devenir leur "radar" permanent sur le marché immobilier. Surveiller H24 ce qui se passe, repérer les opportunités avant tout le monde. C'est exactement le genre de truc où une IA peut apporter une valeur énorme !
