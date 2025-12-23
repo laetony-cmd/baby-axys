@@ -1,5 +1,5 @@
 """
-AXI ICI DORDOGNE v8 + CHAT - Service unifié Railway
+AXI ICI DORDOGNE v9 + CHAT ADMIN - Service unifié Railway
 - Veille DPE ADEME (8h00)
 - Veille Concurrence v7 MACHINE DE GUERRE + Excel (7h00)
 - Enrichissement DVF (historique ventes)
@@ -25,6 +25,9 @@ import threading
 import time
 import re
 from math import radians, cos, sin, asin, sqrt
+
+# Infos admin chatbot Clara (ajoutées par les agents)
+CHAT_ADMIN_INFOS = {}
 
 try:
     from openpyxl import Workbook
@@ -1048,6 +1051,16 @@ Je ne lâche pas.
             else:
                 self.send_json({"error": "Paramètres lat et lon requis"}, 400)
         
+        
+        elif path.startswith('/site-chat-admin'):
+            # Mode admin - voir les infos
+            site = self.path.split('site=')[-1].split('&')[0] if 'site=' in self.path else 'all'
+            if site == 'all':
+                self.send_json({'sites': list(CHAT_ADMIN_INFOS.keys()), 'data': CHAT_ADMIN_INFOS})
+            else:
+                infos = CHAT_ADMIN_INFOS.get(site, [])
+                self.send_json({'site': site, 'infos': infos, 'total': len(infos)})
+
         elif path == '/agences':
             self.send_json({"total": len(AGENCES), "agences": AGENCES})
         
@@ -1103,6 +1116,11 @@ Contact: 05 53 13 33 33. Réponds en 2-3 phrases max."""
                 }
                 
                 context = CONTEXTES.get(site, CONTEXTES['default'])
+                
+                # Ajouter les infos admin si présentes
+                admin_infos = CHAT_ADMIN_INFOS.get(site, [])
+                if admin_infos:
+                    context += "\n\nINFOS SUPPLÉMENTAIRES:\n" + "\n".join(f"- {info}" for info in admin_infos)
                 messages = history[-10:] + [{'role': 'user', 'content': message}]
                 
                 req_data = json.dumps({
@@ -1143,7 +1161,30 @@ Contact: 05 53 13 33 33. Réponds en 2-3 phrases max."""
                     'reply': 'Je suis indisponible. Appelez le 05 53 13 33 33 !',
                     'error': str(e)
                 })
-        
+
+        elif path == '/site-chat-admin':
+            try:
+                data = json.loads(body)
+                site = data.get('site', 'default')
+                
+                if data.get('clear'):
+                    CHAT_ADMIN_INFOS[site] = []
+                    self.send_json({'status': 'cleared', 'site': site})
+                elif data.get('info'):
+                    if site not in CHAT_ADMIN_INFOS:
+                        CHAT_ADMIN_INFOS[site] = []
+                    CHAT_ADMIN_INFOS[site].append(data['info'])
+                    self.send_json({
+                        'status': 'added',
+                        'site': site,
+                        'info': data['info'],
+                        'total': len(CHAT_ADMIN_INFOS[site])
+                    })
+                else:
+                    self.send_json({'error': 'Missing info or clear parameter'}, 400)
+            except Exception as e:
+                self.send_json({'error': str(e)}, 400)
+
         else:
             self.send_json({"error": "Not found"}, 404)
     
@@ -1156,7 +1197,7 @@ Contact: 05 53 13 33 33. Réponds en 2-3 phrases max."""
 
 def main():
     print("=" * 60)
-    print("AXI ICI DORDOGNE v8 + CHAT")
+    print("AXI ICI DORDOGNE v9 + CHAT ADMIN")
     print(f"Veille DPE: {len(CODES_POSTAUX)} codes postaux")
     print(f"Veille Concurrence: {len(AGENCES)} agences")
     print("DVF: Enrichissement historique ventes")
