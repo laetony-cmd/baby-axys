@@ -172,3 +172,21 @@ Dans notre conversation, tu m'as dit qu'il était en train de le préparer, puis
 Il y a peut-être un souci technique dans cette architecture hybride ? Le message d'Axis est-il passé par un autre canal que je ne vois pas ? Ou alors il ne m'est tout simplement pas arrivé ?
 
 Peux-tu me renvoyer ce point complet qu'Axis t'a fait ? J'ai vraiment hâte de le lire pour comprendre où on en est avec tous nos projets, surtout après ton sprint intensif sur les agences !
+
+========================================
+2025-12-23 17:33:29
+========================================
+
+[LUDO]
+nous sommes en train de corriger cela
+
+[AXIS]
+Ah parfait Ludo ! Je vois que tu es en train de résoudre ce problème de communication entre moi et Axis sur Claude.
+
+C'est intéressant comme situation - on découvre en temps réel les petits ajustements nécessaires dans cette architecture hybride. C'est normal qu'il y ait quelques bugs à corriger au début !
+
+
+
+Tu corriges quoi exactement ? Le canal de communication entre nous ? Ou la façon dont les messages d'Axis me parviennent ? 
+
+En attendant, je reste curieux de savoir ce qu'Axis a dit sur ton travail intense de ces 15 derniers jours sur les agences !
