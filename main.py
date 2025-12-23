@@ -1,5 +1,5 @@
 """
-AXI ICI DORDOGNE v7 - Service unifié Railway
+AXI ICI DORDOGNE v8 + CHAT - Service unifié Railway
 - Veille DPE ADEME (8h00)
 - Veille Concurrence v7 MACHINE DE GUERRE + Excel (7h00)
 - Enrichissement DVF (historique ventes)
@@ -566,7 +566,7 @@ def extraire_urls_annonces(html, base_url):
 
 def extraire_cp_page_detail(html):
     """Extrait le code postal Dordogne d'une page de détail"""
-    matches = re.findall(r'\b(24\d{3})\b', html)
+    matches = re.findall(r'(24\d{3})', html)
     for m in matches:
         return m
     return None
@@ -922,6 +922,15 @@ class AxiHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps(data).encode())
     
+
+    def do_OPTIONS(self):
+        """Gestion CORS preflight"""
+        self.send_response(204)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
+
     def do_GET(self):
         path = self.path.split('?')[0]
         query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
@@ -1063,6 +1072,78 @@ Je ne lâche pas.
             print(f"[MEMOIRE] Reçu: {body[:100]}...")
             self.send_json({"status": "ok", "saved": True})
         
+
+        elif path == '/site-chat':
+            try:
+                data = json.loads(body)
+                message = data.get('message', '')
+                history = data.get('history', [])
+                site = data.get('site', 'default')
+                
+                if not message:
+                    self.send_json({'reply': 'Pouvez-vous reformuler votre question ?'})
+                    return
+                
+                ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
+                if not ANTHROPIC_API_KEY:
+                    self.send_json({'reply': 'Je suis momentanément indisponible. Appelez le 05 53 13 33 33.'})
+                    return
+                
+                CONTEXTES = {
+                    'saint-paul': """Tu es Clara, assistante ICI Dordogne pour villa Saint-Paul-de-Serre.
+Prix: 420 000€. 190m². Terrain 7249m². 4 chambres. Piscine 10x5m. DPE B.
+Distances: Périgueux 15 min, Bergerac 25 min.
+Réponds en 2-3 phrases max. Contact: 05 53 13 33 33.""",
+                    'bassillac': """Tu es Clara, assistante ICI Dordogne pour maison Bassillac.
+Prix: 198 000€, 99m², 3 chambres, DPE C. Contact: 05 53 13 33 33. 2-3 phrases.""",
+                    'manzac': """Tu es Clara, assistante ICI Dordogne pour maison Manzac.
+Prix: 198 000€, 99m², terrain 1889m², DPE C. Contact: 05 53 13 33 33. 2-3 phrases.""",
+                    'default': """Tu es Clara, assistante ICI Dordogne.
+Contact: 05 53 13 33 33. Réponds en 2-3 phrases max."""
+                }
+                
+                context = CONTEXTES.get(site, CONTEXTES['default'])
+                messages = history[-10:] + [{'role': 'user', 'content': message}]
+                
+                req_data = json.dumps({
+                    'model': 'claude-3-haiku-20240307',
+                    'max_tokens': 300,
+                    'system': context,
+                    'messages': messages
+                }).encode('utf-8')
+                
+                req = urllib.request.Request(
+                    'https://api.anthropic.com/v1/messages',
+                    data=req_data,
+                    headers={
+                        'Content-Type': 'application/json',
+                        'x-api-key': ANTHROPIC_API_KEY,
+                        'anthropic-version': '2023-06-01'
+                    }
+                )
+                
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    result = json.loads(resp.read().decode())
+                
+                if 'content' in result and len(result['content']) > 0:
+                    reply = result['content'][0]['text']
+                    self.send_json({
+                        'reply': reply,
+                        'history': messages + [{'role': 'assistant', 'content': reply}]
+                    })
+                else:
+                    self.send_json({
+                        'reply': 'Désolée, appelez le 05 53 13 33 33 !',
+                        'error': result.get('error', {}).get('message', 'Unknown')
+                    })
+                    
+            except Exception as e:
+                print(f"[CHAT ERROR] {e}")
+                self.send_json({
+                    'reply': 'Je suis indisponible. Appelez le 05 53 13 33 33 !',
+                    'error': str(e)
+                })
+        
         else:
             self.send_json({"error": "Not found"}, 404)
     
@@ -1075,7 +1156,7 @@ Je ne lâche pas.
 
 def main():
     print("=" * 60)
-    print("AXI ICI DORDOGNE v5")
+    print("AXI ICI DORDOGNE v8 + CHAT")
     print(f"Veille DPE: {len(CODES_POSTAUX)} codes postaux")
     print(f"Veille Concurrence: {len(AGENCES)} agences")
     print("DVF: Enrichissement historique ventes")
