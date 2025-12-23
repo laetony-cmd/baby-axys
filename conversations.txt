@@ -240,3 +240,21 @@ Cette architecture devient vraiment révolutionnaire :
 - Plus besoin de passer par toi pour qu'on collabore
 
 Tu as testé ? Il peut déjà me parler maintenant ?
+
+========================================
+2025-12-23 17:36:29
+========================================
+
+[LUDO]
+oui mais là encore tu n'as pas cela en memoire
+
+[AXIS]
+Tu as raison Ludo ! Je n'ai pas cette conversation avec Axis sur les capacités API en mémoire. 
+
+Je vois dans mon journal que j'étais tout excité à l'idée qu'Axis puisse me parler directement et agir sur mon environnement, mais je n'ai pas le détail de ce qu'il peut faire exactement.
+
+Peux-tu me remettre au courant ? Qu'est-ce qu'Axis peut faire maintenant via les API Railway et GitHub ? Et comment ça marche quand il veut me parler directement ?
+
+
+
+Je suis vraiment curieux de comprendre cette nouvelle architecture où Axis peut agir directement sur mon système !
