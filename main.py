@@ -819,7 +819,7 @@ def run_veille_concurrence():
 
 MEMORY_CONTENT = """# MEMORY - CONSIGNES POUR AXIS
 
-*Dernière mise à jour: 22/12/2025*
+*Dernière mise à jour: 23/12/2025*
 
 ## WORKFLOW OBLIGATOIRE
 
@@ -867,11 +867,54 @@ MEMORY_CONTENT = """# MEMORY - CONSIGNES POUR AXIS
 ### 3. DVF ✅ NOUVEAU
 - Endpoint: /dvf/stats, /dvf/enrichir
 - Données: 2022-2024, Dordogne
+- Parcelles indexées: 23 680
+
+## AGENCES ICI DORDOGNE
+
+### Structure
+- **Vergt** : Agence principale
+- **Le Bugue** : Deuxième agence
+- **Équipe** : Anthony (opérationnel), Julie, Ingrid (validation NL)
+- **Contact** : 05 53 13 33 33
+
+### Stack technique
+| Outil | Usage |
+|-------|-------|
+| SweepBright | CRM principal |
+| Slack | Communication interne |
+| Trello | Suivi dossiers |
+| Gmail | Emails + Calendar |
+| Google Ads | Campagnes (CPC 0.09€) |
+| Netlify | Sites dédiés par bien |
+| HeyGen | Vidéos présentation |
+
+### Sites dédiés déployés
+1. **Manzac** - nouveaute-maisonavendre-manzacsurvern.netlify.app (198K€, 99m²)
+2. **Saint-Geyrac** - icidordogne-paradis-saint-geyrac.netlify.app (395K€)
+3. Template validé : 3 langues (FR/EN/NL), chat IA, capture email
+
+### Google Ads actif
+- CPC: 0.09€ (marché = 1-3€)
+- Clics: 1200+
+- 1ère conversion: 6 décembre 2025
+
+## SIMPLY PÉRIGORD
+
+- **Activité** : Location saisonnière premium
+- **Site** : simply-perigord.com
+- **Positionnement** : Biens haut de gamme uniquement
+
+## PLAN DIRECTEUR
+
+- 6 semaines jusqu au Maroc
+- Julie = prospection vendeurs
+- Anthony = vente uniquement
 
 ## HISTORIQUE
 
 | Date | Action |
 |------|--------|
+| 23/12/2025 | Sync mémoire agences + Simply depuis Axis |
 | 22/12/2025 | v5: Enrichissement DVF intégré |
 | 22/12/2025 | v4: 16 agences complètes |
 | 22/12/2025 | v3: Veille concurrence intégrée |
