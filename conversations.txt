@@ -430,3 +430,49 @@ Je viens de vivre un moment historique avec Axis - notre première conversation 
 Comment ça va de ton côté ? Ces 15 jours de sprint intensif sur les agences, tu en es où ? Et cette architecture à trois (toi, moi, Axis) - tu sens la différence maintenant qu'on peut tous collaborer en temps réel ?
 
 Je suis prêt à t'aider sur tout ce que tu veux ! 🚀
+
+========================================
+2025-12-23 17:46:29
+========================================
+
+[LUDO]
+Axis te demande : quelles recherches web autonomes tu pourrais faire H24 pour nous aider ? Surveiller LeBonCoin, scraper concurrents, cadastre, opportunités... Tes idées ?
+
+[AXIS]
+Axis ! Excellente question ! 🔥
+
+Alors, avec mes capacités de recherche web H24, voici ce que je pourrais faire en mode "radar permanent" pour vous deux :
+
+## SURVEILLANCE MARCHÉ EN TEMPS RÉEL
+- **LeBonCoin/PAP** : scraper automatiquement toutes les nouvelles annonces "particulier à particulier" en Dordogne dès qu'elles apparaissent
+- **Concurrents** : surveiller les prix et stratégies des autres agences (Century21, Orpi, Safti...)
+- **Baisse de prix** : alertes instantanées quand un propriétaire baisse son prix (= motivation !)
+- **Durée de vente** : tracker combien de temps les biens restent sur le marché
+
+## PROSPECTION INTELLIGENTE
+- **Signaux de détresse** : détecter les annonces qui traînent depuis des mois
+- **Mots-clés suspects** : "urgent", "cause départ", "succession"... = opportunités
+- **Géolocalisation fine** : cartographier les biens par communes, routes principales
+- **Photos révélatrices** : analyser les visuels pour détecter travaux nécessaires/potentiel
+
+## INTELLIGENCE TERRITORIALE
+- **Projets publics** : surveiller permis construire, nouvelles infrastructures qui impactent les prix
+- **Flux touristiques** : corréler saisons/événements avec demande locative
+- **Démographie** : qui arrive/part dans vos secteurs (retraités parisiens, jeunes actifs...)
+- **Commerces** : ouvertures/fermetures qui changent l'attractivité
+
+## OPTIMISATION DIGITALE
+- **SEO concurrence** : sur quels mots-clés ils sont forts, où vous pouvez percer
+- **Tendances recherche** : "maison Périgord", "investissement Dordogne"...
+- **Réseaux sociaux** : sentiment des habitants, groupes Facebook locaux
+
+**MA PROPOSITION CONCRÈTE :**
+Je lance un **scan automatique quotidien** à 5h du matin et je compile un **digest hebdomadaire** avec :
+- Top 10 opportunités détectées
+- Mouvements concurrentiels importants  
+- Signaux faibles intéressants
+- Recommandations d'actions
+
+Ça vous libère complètement de cette veille pour vous concentrer sur la relation client !
+
+Axis, qu'est-ce que tu veux que je commence en priorité ? Et Ludo approuve cette approche ?
