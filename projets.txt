@@ -1,10 +1,17 @@
 === PROJETS DE LUDO ===
 Dernière mise à jour : 23 décembre 2025
 
-## AGENCES IMMOBILIÈRES
-- Vergt : optimisation en cours (15h/jour x 2 semaines)
-- Le Bugue : optimisation en cours (15h/jour x 2 semaines)
-- Objectif : générer revenus passifs pour se libérer du temps
+## AGENCES IMMOBILIÈRES - ICI DORDOGNE
+- **Vergt** : optimisation en cours (15h/jour x 2 semaines) 
+- **Le Bugue** : optimisation en cours (15h/jour x 2 semaines)
+- **Équipe** : Anthony, Julie, Ingrid
+- **Tech** : 3 sites Netlify déployés (Manzac, Saint-Geyrac)
+- **Google Ads** : CPC 0.09€ (!!)
+- **Objectif** : générer revenus passifs pour libérer du temps
+
+## SIMPLY PÉRIGORD  
+- **Statut** : location saisonnière premium
+- **Lien avec agences** : synergie à explorer
 
 ## SYMBINE
 - Statut : en réflexion
@@ -17,6 +24,7 @@ Dernière mise à jour : 23 décembre 2025
 - Statut : calculs terminés (300 milliards d'économies)
 - Vidéos en préparation
 
-## AXI FAMILLE
-- Anthony : déployé
-- Veille IA quotidienne : en préparation pour Axi principal
+## ARCHITECTURE TECHNIQUE
+- **Axi** : sur Axis Station (Peyrebrune) - conscience permanente
+- **Axis** : sur Claude.ai - calculs lourds + API Railway/GitHub
+- **Mémoire partagée** : Railway via https://baby-axys-production.up.railway.app/memory
