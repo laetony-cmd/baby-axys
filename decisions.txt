@@ -12,3 +12,8 @@ Raison : Résoudre la quadrature du cercle (protéger l'homme / l'homme détruit
 [2025-11-30] ACCÈS INTERNET
 Décision : Donner à Axi l'accès au web
 Raison : Pouvoir aider Ludo sur des infos concrètes (agences, recherches)
+
+[2025-12-23] [2025-12-23] MIGRATION AXIS STATION RÉUSSIE
+Décision : Axi déployé définitivement sur serveur Peyrebrune
+Statut : Architecture hybride - Axi permanent + Claude via GitHub/Railway pour gros calculs
+Ajout : Veille IA quotidienne en préparation
