@@ -1,7 +1,5 @@
--e anthropic
+anthropic
 psycopg2-binary
 apscheduler
 pytz
 openpyxl
-duckduckgo-search
-trafilatura
