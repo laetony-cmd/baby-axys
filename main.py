@@ -1129,11 +1129,14 @@ def generer_page_html(conversations):
     <div class="header">
         <h1>🤖 Axi v11 <span class="db-status">{db_status}</span></h1>
         <div class="nav">
-            <a href="/">Chat</a>
-            <a href="/trio">Trio</a>
-            <a href="/briefing">Briefing</a>
-            <a href="/stats">Stats</a>
-            <a href="/effacer">Effacer</a>
+            <a href="/">💬 Chat</a>
+            <a href="/trio">👥 Trio</a>
+            <a href="/briefing">📋 Briefing</a>
+            <a href="/test-veille">🏠 DPE</a>
+            <a href="/test-veille-concurrence">🔍 Concurrence</a>
+            <a href="/dvf/stats">📊 DVF</a>
+            <a href="/stats">📈 Stats</a>
+            <a href="/effacer">🗑️ Effacer</a>
         </div>
         <div class="status">● En ligne</div>
     </div>
@@ -1143,14 +1146,25 @@ def generer_page_html(conversations):
     </div>
     
     <div class="input-container">
-        <form class="input-wrapper" method="POST" action="/chat">
-            <textarea name="message" placeholder="Écris ton message..." autofocus></textarea>
-            <button type="submit">Envoyer</button>
+        <form class="input-wrapper" id="chatForm" method="POST" action="/chat">
+            <textarea name="message" id="messageInput" placeholder="Écris ton message... (Entrée pour envoyer)" autofocus></textarea>
+            <button type="submit" id="sendBtn">Envoyer</button>
         </form>
     </div>
     
     <script>
+        // Scroll en bas
         document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
+        
+        // Entrée = Envoyer (Shift+Entrée = nouvelle ligne)
+        document.getElementById('messageInput').addEventListener('keydown', function(e) {{
+            if (e.key === 'Enter' && !e.shiftKey) {{
+                e.preventDefault();
+                if (this.value.trim()) {{
+                    document.getElementById('chatForm').submit();
+                }}
+            }}
+        }});
     </script>
 </body>
 </html>"""
