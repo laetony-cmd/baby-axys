@@ -1,17 +1,7 @@
-# AXI V2 - Dépendances Python
-
-# API Claude
-anthropic>=0.18.0
-
-# PostgreSQL
-psycopg2-binary>=2.9.9
-
-# Scheduler (crons veilles)
-APScheduler>=3.10.0
-pytz>=2024.1
-
-# Excel (rapports veilles)
-openpyxl>=3.1.0
-
-# Optionnel - Si déploiement Docker
-gunicorn>=21.0.0
+-e anthropic
+psycopg2-binary
+apscheduler
+pytz
+openpyxl
+duckduckgo-search
+trafilatura
