@@ -1098,7 +1098,7 @@ MEMORY_CONTENT = """# MEMORY - CONSIGNES POUR AXIS
 # ============================================================
 
 def generer_page_html(conversations):
-    """Génère la page HTML de l'interface chat"""
+    """Génère la page HTML de l'interface chat (Version AJAX Robuste)"""
     db_status = "🟢 PostgreSQL" if DB_OK else "🟠 Fichiers"
     
     return f"""<!DOCTYPE html>
@@ -1109,27 +1109,36 @@ def generer_page_html(conversations):
     <title>Axi v11 - ICI Dordogne</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; display: flex; flex-direction: column; }}
-        .header {{ background: #16213e; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #0f3460; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #eee; height: 100vh; display: flex; flex-direction: column; }}
+        .header {{ background: #16213e; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #0f3460; flex-shrink: 0; }}
         .header h1 {{ font-size: 1.5rem; color: #e94560; }}
         .header .status {{ font-size: 0.9rem; color: #4ecca3; }}
-        .chat-container {{ flex: 1; overflow-y: auto; padding: 20px; max-width: 900px; margin: 0 auto; width: 100%; }}
+        
+        /* Zone de chat scrollable */
+        .chat-container {{ flex: 1; overflow-y: auto; padding: 20px; max-width: 900px; margin: 0 auto; width: 100%; scroll-behavior: smooth; }}
+        
         .message {{ margin-bottom: 20px; padding: 15px; border-radius: 12px; }}
         .message.user {{ background: #0f3460; margin-left: 20%; }}
         .message.assistant {{ background: #16213e; margin-right: 10%; border-left: 3px solid #e94560; }}
         .message.axis {{ background: #1a3a1a; margin-right: 10%; border-left: 3px solid #4ecca3; }}
         .message .role {{ font-size: 0.8rem; color: #888; margin-bottom: 5px; }}
         .message .content {{ line-height: 1.6; white-space: pre-wrap; }}
-        .input-container {{ background: #16213e; padding: 20px; border-top: 1px solid #0f3460; }}
-        .input-wrapper {{ max-width: 900px; margin: 0 auto; display: flex; gap: 10px; }}
-        textarea {{ flex: 1; background: #0f3460; border: none; padding: 15px; border-radius: 8px; color: #eee; font-size: 1rem; resize: none; min-height: 60px; }}
-        textarea:focus {{ outline: 2px solid #e94560; }}
-        button {{ background: #e94560; color: white; border: none; padding: 15px 30px; border-radius: 8px; cursor: pointer; font-size: 1rem; transition: background 0.2s; }}
+        
+        .input-container {{ background: #16213e; padding: 20px; border-top: 1px solid #0f3460; flex-shrink: 0; }}
+        .input-wrapper {{ max-width: 900px; margin: 0 auto; display: flex; gap: 10px; position: relative; }}
+        
+        textarea {{ flex: 1; background: #0f3460; border: none; padding: 15px; border-radius: 8px; color: #eee; font-size: 1rem; resize: none; min-height: 60px; outline: none; }}
+        textarea:focus {{ box-shadow: 0 0 0 2px #e94560; }}
+        textarea:disabled {{ opacity: 0.5; cursor: not-allowed; }}
+        
+        button {{ background: #e94560; color: white; border: none; padding: 0 30px; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: bold; transition: background 0.2s; white-space: nowrap; }}
         button:hover {{ background: #ff6b6b; }}
-        .nav {{ display: flex; gap: 10px; }}
+        button:disabled {{ background: #555; cursor: wait; }}
+        
+        .nav {{ display: flex; gap: 10px; flex-wrap: wrap; }}
         .nav a {{ color: #4ecca3; text-decoration: none; padding: 5px 10px; border-radius: 4px; }}
         .nav a:hover {{ background: #0f3460; }}
-        .db-status {{ font-size: 0.8rem; margin-left: 10px; }}
+        .db-status {{ font-size: 0.8rem; margin-left: 10px; color: #888; }}
     </style>
 </head>
 <body>
@@ -1143,7 +1152,7 @@ def generer_page_html(conversations):
             <a href="/test-veille-concurrence">🔍 Concurrence</a>
             <a href="/dvf/stats">📊 DVF</a>
             <a href="/stats">📈 Stats</a>
-            <a href="/effacer">🗑️ Effacer</a>
+            <a href="/effacer" onclick="return confirm('Effacer la mémoire conversation ?')">🗑️ Effacer</a>
         </div>
         <div class="status">● En ligne</div>
     </div>
@@ -1153,23 +1162,74 @@ def generer_page_html(conversations):
     </div>
     
     <div class="input-container">
-        <form class="input-wrapper" id="chatForm" method="POST" action="/chat">
-            <textarea name="message" id="messageInput" placeholder="Écris ton message... (Entrée pour envoyer)" autofocus></textarea>
-            <button type="submit" id="sendBtn">Envoyer</button>
-        </form>
+        <div class="input-wrapper">
+            <textarea id="messageInput" placeholder="Écris ton message... (Entrée pour envoyer)" autofocus></textarea>
+            <button id="sendBtn" onclick="sendMessage()">Envoyer</button>
+        </div>
     </div>
     
     <script>
-        // Scroll en bas
-        document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
-        
-        // Entrée = Envoyer (Shift+Entrée = nouvelle ligne)
+        // Scroll automatique en bas au chargement
+        const chatBox = document.getElementById('chat');
+        chatBox.scrollTop = chatBox.scrollHeight;
+
+        // Gestionnaire d'envoi AJAX
+        async function sendMessage() {{
+            const input = document.getElementById('messageInput');
+            const btn = document.getElementById('sendBtn');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            // 1. UI Feedback IMMÉDIAT
+            input.disabled = true;
+            btn.disabled = true;
+            btn.innerText = "⏳";
+            input.style.opacity = "0.5";
+
+            // 2. Envoi des données en format Form-Data
+            try {{
+                const formData = new URLSearchParams();
+                formData.append('message', message);
+
+                const response = await fetch('/chat', {{
+                    method: 'POST',
+                    headers: {{
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    }},
+                    body: formData
+                }});
+
+                // 3. Une fois fini, on recharge pour voir la réponse
+                if (response.ok || response.redirected) {{
+                    window.location.reload(); 
+                }} else {{
+                    alert("Erreur serveur : " + response.status);
+                    resetUI();
+                }}
+
+            }} catch (error) {{
+                console.error('Erreur:', error);
+                alert("Erreur de connexion. Vérifie Railway.");
+                resetUI();
+            }}
+        }}
+
+        function resetUI() {{
+            const input = document.getElementById('messageInput');
+            const btn = document.getElementById('sendBtn');
+            input.disabled = false;
+            btn.disabled = false;
+            btn.innerText = "Envoyer";
+            input.style.opacity = "1";
+            input.focus();
+        }}
+
+        // Gestion de la touche Entrée
         document.getElementById('messageInput').addEventListener('keydown', function(e) {{
             if (e.key === 'Enter' && !e.shiftKey) {{
                 e.preventDefault();
-                if (this.value.trim()) {{
-                    document.getElementById('chatForm').submit();
-                }}
+                sendMessage();
             }}
         }});
     </script>
