@@ -28,6 +28,9 @@ RUN pip install --no-cache-dir \
     duckduckgo-search \
     trafilatura
 
+# COPIER LES FICHIERS SOURCE
+COPY . .
+
 # Port exposé
 EXPOSE 8080
 
