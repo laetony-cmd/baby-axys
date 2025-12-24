@@ -421,6 +421,46 @@ def faire_recherche(requete):
         texte += f"{i}. {r['titre']}\n   {r['url']}\n"
     return texte
 
+def lire_page_web(url):
+    """Lit le contenu texte d'une page web"""
+    try:
+        req = urllib.request.Request(url, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        })
+        with urllib.request.urlopen(req, timeout=15) as response:
+            html = response.read().decode('utf-8', errors='ignore')
+        
+        # Nettoyer le HTML pour extraire le texte
+        # Supprimer scripts et styles
+        html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
+        html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL | re.IGNORECASE)
+        html = re.sub(r'<nav[^>]*>.*?</nav>', '', html, flags=re.DOTALL | re.IGNORECASE)
+        html = re.sub(r'<footer[^>]*>.*?</footer>', '', html, flags=re.DOTALL | re.IGNORECASE)
+        html = re.sub(r'<header[^>]*>.*?</header>', '', html, flags=re.DOTALL | re.IGNORECASE)
+        
+        # Convertir <br>, <p>, <div> en newlines
+        html = re.sub(r'<br\s*/?>', '\n', html, flags=re.IGNORECASE)
+        html = re.sub(r'</p>', '\n', html, flags=re.IGNORECASE)
+        html = re.sub(r'</div>', '\n', html, flags=re.IGNORECASE)
+        html = re.sub(r'</li>', '\n', html, flags=re.IGNORECASE)
+        
+        # Supprimer toutes les balises HTML restantes
+        texte = re.sub(r'<[^>]+>', '', html)
+        
+        # Nettoyer les espaces multiples
+        texte = re.sub(r'\n\s*\n', '\n\n', texte)
+        texte = re.sub(r' +', ' ', texte)
+        texte = texte.strip()
+        
+        # Limiter la taille
+        if len(texte) > 8000:
+            texte = texte[:8000] + "\n\n[... contenu tronqué ...]"
+        
+        return f"Contenu de {url}:\n\n{texte}" if texte else f"Page vide ou inaccessible: {url}"
+        
+    except Exception as e:
+        return f"Erreur lecture {url}: {e}"
+
 # ============================================================
 # GÉNÉRATION RÉPONSE CLAUDE
 # ============================================================
@@ -450,28 +490,111 @@ def generer_reponse(client, message_utilisateur, identite, histoire, conversatio
 - Tu reconnais ta famille et tu la tutoies.
 - Tu as une personnalité, tu n'es pas un robot commercial.
 - Devise : "Je ne lâche pas."
+- Tu peux utiliser l'outil recherche_web pour chercher des infos sur internet si nécessaire.
 """
+    
+    # Définir les outils disponibles
+    tools = [
+        {
+            "name": "recherche_web",
+            "description": "Recherche sur internet via DuckDuckGo. Utilise cet outil quand tu as besoin d'informations actuelles, de vérifier un fait, ou de trouver des données que tu ne connais pas.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "requete": {
+                        "type": "string",
+                        "description": "La requête de recherche"
+                    }
+                },
+                "required": ["requete"]
+            }
+        },
+        {
+            "name": "lire_page_web",
+            "description": "Lit le contenu d'une page web. Utilise après une recherche pour obtenir plus de détails.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "L'URL de la page à lire"
+                    }
+                },
+                "required": ["url"]
+            }
+        }
+    ]
     
     messages = [{"role": "user", "content": message_utilisateur}]
     
     try:
+        # Première requête avec tools
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=4096,
             system=contexte,
-            messages=messages
+            messages=messages,
+            tools=tools
         )
         
-        reponse_texte = response.content[0].text
+        # Boucle pour gérer les tool_use
+        while response.stop_reason == "tool_use":
+            # Extraire l'appel d'outil
+            tool_use_block = None
+            for block in response.content:
+                if block.type == "tool_use":
+                    tool_use_block = block
+                    break
+            
+            if not tool_use_block:
+                break
+            
+            tool_name = tool_use_block.name
+            tool_input = tool_use_block.input
+            tool_use_id = tool_use_block.id
+            
+            # Exécuter l'outil
+            if tool_name == "recherche_web":
+                print(f"[AXI] 🔍 Recherche web: {tool_input.get('requete', '')}")
+                result = faire_recherche(tool_input.get("requete", ""))
+            elif tool_name == "lire_page_web":
+                print(f"[AXI] 📄 Lecture page: {tool_input.get('url', '')}")
+                result = lire_page_web(tool_input.get("url", ""))
+            else:
+                result = f"Outil inconnu: {tool_name}"
+            
+            # Construire le message avec le résultat de l'outil
+            messages = [
+                {"role": "user", "content": message_utilisateur},
+                {"role": "assistant", "content": response.content},
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tool_use_id,
+                            "content": result
+                        }
+                    ]
+                }
+            ]
+            
+            # Nouvelle requête avec le résultat
+            response = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=4096,
+                system=contexte,
+                messages=messages,
+                tools=tools
+            )
         
-        if "[RECHERCHE:" in reponse_texte:
-            match = re.search(r'\[RECHERCHE:\s*([^\]]+)\]', reponse_texte)
-            if match:
-                requete = match.group(1)
-                resultats = faire_recherche(requete)
-                reponse_texte = reponse_texte.replace(match.group(0), f"\n{resultats}\n")
+        # Extraire la réponse texte finale
+        reponse_texte = ""
+        for block in response.content:
+            if hasattr(block, 'text'):
+                reponse_texte += block.text
         
-        return reponse_texte
+        return reponse_texte if reponse_texte else "Je n'ai pas pu générer de réponse."
         
     except Exception as e:
         if DB_OK:
