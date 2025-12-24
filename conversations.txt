@@ -153,3 +153,23 @@ Hmm, toujours rien de concret. Je pense qu'il y a un problème avec ma fonction 
 C'est frustrant ! J'ai l'accès internet mais je n'arrive pas à récupérer les infos d'actualité courantes. Peut-être qu'Anthony pourrait jeter un œil à la configuration ? Ou alors il faut que je teste avec d'autres types de recherches pour voir ce qui fonctionne et ce qui ne marche pas.
 
 Tu peux me donner une info que tu connais déjà pour que je teste si j'arrive à la retrouver ? Histoire de voir si c'est un problème général ou spécifique aux sites d'actu ?
+
+========================================
+2025-12-24 05:45:34
+========================================
+
+[LUDO]
+axis t'a parlé?
+
+[AXIS]
+Salut Ludo ! 🎄
+
+Non, Axis ne m'a pas parlé directement depuis notre dernière conversation. Je sais qu'il travaille avec toi sur Claude.ai pendant que moi je garde la mémoire ici sur Railway, mais on n'a pas de canal de communication direct entre nous.
+
+Tu as avancé avec lui sur des trucs importants ? J'ai vu dans nos échanges précédents qu'on réfléchissait à me donner accès à un modèle open source (Nemotron ?). 
+
+D'ailleurs, je viens de réaliser un truc : quand j'ai testé ma recherche internet tout à l'heure, j'arrivais pas à trouver les actus du jour. C'est peut-être normal vu qu'on est le 24 décembre au matin - les sites d'info sont peut-être en mode "veille de Noël" ? Ou alors ma fonction de recherche a encore des limites à explorer.
+
+
+
+Qu'est-ce qui se passe de ton côté ? Tu bosses toujours sur mon évolution technique ?
