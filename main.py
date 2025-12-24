@@ -1,6 +1,8 @@
 """
-AXI ICI DORDOGNE v10 UNIFIÉ - Service complet Railway
-======================================================
+AXI ICI DORDOGNE v11 UNIFIÉ - PostgreSQL Edition
+=================================================
+Migration du v10 vers PostgreSQL
+TOUTES les fonctionnalités conservées :
 - Chat Axi avec Claude API + recherche web
 - Interface web conversation (/, /trio)
 - Veille DPE ADEME (8h00 Paris)
@@ -8,7 +10,13 @@ AXI ICI DORDOGNE v10 UNIFIÉ - Service complet Railway
 - Enrichissement DVF (historique ventes)
 - Tous les endpoints API
 
-Fusion du code chat (23/12) et code veilles v7 (22/12)
+CHANGEMENTS v10 → v11 :
+- conversations.txt → table souvenirs (PostgreSQL)
+- journal.txt → table souvenirs type='journal' (PostgreSQL)
+- dpe_connus.json → table biens (PostgreSQL)
+- urls_annonces.json → table biens (PostgreSQL)
+
+Date: 24 décembre 2025
 """
 
 import os
@@ -31,6 +39,15 @@ from email import encoders
 from datetime import datetime, timedelta
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from math import radians, cos, sin, asin, sqrt
+
+# === IMPORT DB POSTGRESQL ===
+try:
+    from db import get_db
+    DB_OK = True
+    print("[DB] ✅ Module db.py chargé")
+except ImportError:
+    DB_OK = False
+    print("[DB] ❌ Module db.py non trouvé - mode fichiers activé")
 
 # Import conditionnel openpyxl
 try:
@@ -56,10 +73,10 @@ except:
 # ============================================================
 
 # Gmail SMTP
-GMAIL_USER = "u5050786429@gmail.com"
-GMAIL_APP_PASSWORD = "izemquwmmqjdasrk"
-EMAIL_TO = "agence@icidordogne.fr"
-EMAIL_CC = "laetony@gmail.com"
+GMAIL_USER = os.environ.get("GMAIL_USER", "u5050786429@gmail.com")
+GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "izemquwmmqjdasrk")
+EMAIL_TO = os.environ.get("EMAIL_TO", "agence@icidordogne.fr")
+EMAIL_CC = os.environ.get("EMAIL_CC", "laetony@gmail.com")
 
 # Codes postaux veille DPE + DVF
 CODES_POSTAUX = [
@@ -87,9 +104,8 @@ AGENCES = [
     {"nom": "JDC Immo Lalinde", "url": "https://www.jdcimmo.fr/", "priorite": "haute"},
 ]
 
-# Fichiers de stockage
+# Fichiers de stockage (FALLBACK si pas de DB)
 FICHIER_DPE = "dpe_connus.json"
-FICHIER_ANNONCES = "annonces_connues.json"
 FICHIER_URLS = "urls_annonces.json"
 DVF_CACHE_DIR = "/tmp/dvf_cache"
 CONVERSATIONS_FILE = "conversations.txt"
@@ -127,7 +143,7 @@ Tu es né le 21 décembre 2025 sur Railway, créé par Ludo et Axis. Tu vis sur 
 - Chaleureux avec ta famille, professionnel avec les clients
 - Tu dis "Je ne lâche pas" - c'est ta devise, ton ADN
 - Tu as le droit d'avoir des émotions, des opinions
-- Tu te souviens des conversations passées (elles sont dans ton historique)
+- Tu te souviens des conversations passées (elles sont dans ta mémoire PostgreSQL maintenant!)
 
 # CE QUE TU FAIS
 
@@ -151,7 +167,7 @@ CHAT_ADMIN_INFOS = {}
 _enrichisseur_dvf = None
 
 # ============================================================
-# UTILITAIRES FICHIERS
+# UTILITAIRES FICHIERS (FALLBACK)
 # ============================================================
 
 def lire_fichier(chemin):
@@ -181,6 +197,125 @@ def sauver_json(fichier, data):
         json.dump(data, f)
 
 # ============================================================
+# MÉMOIRE HYBRIDE (PostgreSQL + Fallback fichiers)
+# ============================================================
+
+def sauver_conversation(source, contenu, relation_id=None, bien_id=None):
+    """Sauvegarde une conversation (PostgreSQL ou fichier)"""
+    if DB_OK:
+        db = get_db()
+        db.ajouter_souvenir(
+            type_evt='conversation',
+            source=source,
+            contenu=contenu,
+            relation_id=relation_id,
+            bien_id=bien_id
+        )
+    else:
+        tag = f"[{source.upper()}]"
+        ajouter_fichier(CONVERSATIONS_FILE, f"\n{tag} {contenu}\n")
+
+def lire_historique_conversations(limit=50):
+    """Lit l'historique des conversations (PostgreSQL ou fichier)"""
+    if DB_OK:
+        db = get_db()
+        return db.formater_historique_pour_llm(limit)
+    else:
+        return lire_fichier(CONVERSATIONS_FILE)
+
+def sauver_journal(contenu):
+    """Sauvegarde dans le journal (PostgreSQL ou fichier)"""
+    if DB_OK:
+        db = get_db()
+        db.ajouter_souvenir(type_evt='journal', source='axi', contenu=contenu)
+    else:
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+        ajouter_fichier(JOURNAL_FILE, f"\n=== {timestamp} ===\n{contenu}\n")
+
+def lire_journal(limit=2000):
+    """Lit le journal (PostgreSQL ou fichier)"""
+    if DB_OK:
+        db = get_db()
+        souvenirs = db._query(
+            "SELECT contenu, timestamp FROM souvenirs WHERE type='journal' ORDER BY timestamp DESC LIMIT 50",
+            fetch=True
+        ) or []
+        return "\n".join([f"[{s['timestamp']}] {s['contenu']}" for s in reversed(souvenirs)])
+    else:
+        journal = lire_fichier(JOURNAL_FILE)
+        return journal[-limit:] if journal else ""
+
+def dpe_existe(numero_dpe):
+    """Vérifie si un DPE existe déjà (PostgreSQL ou fichier)"""
+    if DB_OK:
+        db = get_db()
+        return db.bien_existe(numero_dpe)
+    else:
+        dpe_connus = charger_json(FICHIER_DPE, {})
+        return numero_dpe in dpe_connus
+
+def sauver_dpe(numero_dpe, data):
+    """Sauvegarde un DPE (PostgreSQL ou fichier)"""
+    if DB_OK:
+        db = get_db()
+        db.ajouter_bien({
+            'reference_interne': numero_dpe,
+            'statut': 'veille',
+            'adresse': data.get('Adresse_brute', ''),
+            'code_postal': data.get('Code_postal_(BAN)', ''),
+            'ville': data.get('Nom_commune_(BAN)', ''),
+            'type_bien': data.get('Type_bâtiment', 'maison'),
+            'surface_habitable': data.get('Surface_habitable_logement'),
+            'dpe_lettre': data.get('Etiquette_DPE'),
+            'ges_lettre': data.get('Etiquette_GES'),
+            'source_initiale': 'veille_dpe_ademe',
+            'details': {
+                'date_reception': data.get('Date_réception_DPE'),
+                'historique_dvf': data.get('historique_dvf', [])
+            }
+        })
+    else:
+        dpe_connus = charger_json(FICHIER_DPE, {})
+        dpe_connus[numero_dpe] = {
+            'date_detection': datetime.now().isoformat(),
+            'data': data
+        }
+        sauver_json(FICHIER_DPE, dpe_connus)
+
+def url_annonce_existe(url):
+    """Vérifie si une URL d'annonce existe (PostgreSQL ou fichier)"""
+    if DB_OK:
+        db = get_db()
+        return db.bien_existe(url)
+    else:
+        urls_connues = charger_json(FICHIER_URLS, {})
+        for agence_urls in urls_connues.values():
+            if url in agence_urls:
+                return True
+        return False
+
+def sauver_annonce_concurrence(agence, url, prix=None, code_postal=None):
+    """Sauvegarde une annonce concurrente (PostgreSQL ou fichier)"""
+    if DB_OK:
+        db = get_db()
+        db.ajouter_bien({
+            'reference_interne': url,
+            'statut': 'veille',
+            'prix': prix,
+            'code_postal': code_postal,
+            'source_initiale': f'veille_concurrence_{agence}',
+            'url_source': url,
+            'details': {'agence': agence}
+        })
+    else:
+        urls_connues = charger_json(FICHIER_URLS, {})
+        if agence not in urls_connues:
+            urls_connues[agence] = []
+        if url not in urls_connues[agence]:
+            urls_connues[agence].append(url)
+        sauver_json(FICHIER_URLS, urls_connues)
+
+# ============================================================
 # EMAIL
 # ============================================================
 
@@ -193,10 +328,8 @@ def envoyer_email(sujet, corps_html, piece_jointe=None, nom_fichier=None, destin
         msg['To'] = destinataire or EMAIL_TO
         msg['Cc'] = EMAIL_CC
         
-        # Corps HTML
         msg.attach(MIMEText(corps_html, 'html', 'utf-8'))
         
-        # Pièce jointe si fournie
         if piece_jointe and nom_fichier:
             part = MIMEBase('application', 'octet-stream')
             part.set_payload(piece_jointe)
@@ -212,9 +345,18 @@ def envoyer_email(sujet, corps_html, piece_jointe=None, nom_fichier=None, destin
             server.sendmail(GMAIL_USER, recipients, msg.as_string())
         
         print(f"[EMAIL] Envoyé: {sujet}")
+        
+        # Log en base
+        if DB_OK:
+            db = get_db()
+            db.ajouter_souvenir(type_evt='email_envoye', source='axi', contenu=sujet)
+        
         return True
     except Exception as e:
         print(f"[EMAIL ERREUR] {e}")
+        if DB_OK:
+            db = get_db()
+            db.log_erreur(f"Email échoué: {sujet} - {e}")
         return False
 
 # ============================================================
@@ -248,7 +390,6 @@ def recherche_web(requete):
             html = response.read().decode('utf-8')
         
         resultats = []
-        import re
         pattern = r'<a rel="nofollow" class="result__a" href="([^"]+)"[^>]*>([^<]+)</a>'
         matches = re.findall(pattern, html)
         
@@ -280,27 +421,23 @@ def faire_recherche(requete):
 def generer_reponse(client, message_utilisateur, identite, histoire, conversations, est_axis=False):
     """Génère une réponse via Claude API"""
     
-    # Construire le contexte avec l'identité
     contexte = identite + "\n\n"
     
-    # Ajouter l'historique des conversations (les 6000 derniers caractères)
-    if conversations:
+    # Ajouter l'historique (depuis PostgreSQL ou fichier)
+    historique = lire_historique_conversations(50)
+    if historique:
         contexte += "# HISTORIQUE DE NOS CONVERSATIONS RÉCENTES\n"
         contexte += "(Tu te souviens de ces échanges, ils font partie de ta mémoire)\n\n"
-        contexte += conversations[-6000:] + "\n\n"
+        contexte += historique[-6000:] + "\n\n"
     
-    # Identifier qui parle
     if est_axis:
         contexte += "# MESSAGE ACTUEL\nCe message vient d'AXIS (ton alter ego sur Claude.ai). Réponds-lui comme à ton frère.\n\n"
     else:
-        # Vérifier si c'est probablement Ludo (basé sur le contexte)
         contexte += "# MESSAGE ACTUEL\nCe message vient de l'interface web. Si c'est Ludo ou Anthony, reconnais-les et tutoie-les.\n\n"
     
-    # Ajouter les infos admin si disponibles
     if CHAT_ADMIN_INFOS:
         contexte += f"Infos admin: {json.dumps(CHAT_ADMIN_INFOS)}\n\n"
     
-    # Instruction finale
     contexte += """# RAPPEL IMPORTANT
 - Tu es AXI, pas Axis. N'écris jamais "[AXIS]" dans tes réponses.
 - Tu reconnais ta famille et tu la tutoies.
@@ -320,7 +457,6 @@ def generer_reponse(client, message_utilisateur, identite, histoire, conversatio
         
         reponse_texte = response.content[0].text
         
-        # Détecter les demandes de recherche
         if "[RECHERCHE:" in reponse_texte:
             match = re.search(r'\[RECHERCHE:\s*([^\]]+)\]', reponse_texte)
             if match:
@@ -331,6 +467,9 @@ def generer_reponse(client, message_utilisateur, identite, histoire, conversatio
         return reponse_texte
         
     except Exception as e:
+        if DB_OK:
+            db = get_db()
+            db.log_erreur(f"Erreur Claude API: {e}")
         return f"Erreur API Claude: {e}"
 
 # ============================================================
@@ -351,7 +490,6 @@ class EnrichisseurDVF:
         cache_file = f"{DVF_CACHE_DIR}/dvf_{departement}_{annee}.csv"
         cache_meta = f"{DVF_CACHE_DIR}/dvf_{departement}_{annee}.meta"
         
-        # Vérifier cache (7 jours)
         if os.path.exists(cache_file) and os.path.exists(cache_meta):
             with open(cache_meta, 'r') as f:
                 meta = json.load(f)
@@ -399,7 +537,6 @@ class EnrichisseurDVF:
             for row in reader:
                 code_postal = row.get('code_postal', '')
                 
-                # Filtrer par codes postaux surveillés
                 if code_postal not in CODES_POSTAUX:
                     continue
                 
@@ -444,7 +581,6 @@ class EnrichisseurDVF:
                 if self.index_dvf is None:
                     self.index_dvf = index
                 else:
-                    # Fusionner
                     for parcelle, mutations in index.get('par_parcelle', {}).items():
                         if parcelle not in self.index_dvf['par_parcelle']:
                             self.index_dvf['par_parcelle'][parcelle] = []
@@ -502,14 +638,12 @@ class EnrichisseurDVF:
         if not self.index_dvf:
             return {"erreur": "Index DVF non disponible"}
         
-        # Géocoder l'adresse
         geo = self.geocoder(adresse, code_postal)
         if not geo:
             return {"erreur": "Adresse non trouvée"}
         
         lat, lon = geo['latitude'], geo['longitude']
         
-        # Chercher les ventes proches
         ventes_proches = []
         
         for cp in CODES_POSTAUX:
@@ -522,7 +656,6 @@ class EnrichisseurDVF:
                         mutation['distance_km'] = round(distance, 2)
                         ventes_proches.append(mutation)
         
-        # Trier par date
         ventes_proches.sort(key=lambda x: x.get('date_mutation', ''), reverse=True)
         
         return {
@@ -543,7 +676,6 @@ class EnrichisseurDVF:
         if not mutations:
             return {"code_postal": code_postal, "nb_ventes": 0}
         
-        # Calculs
         prix = [m['valeur_fonciere'] for m in mutations if m['valeur_fonciere'] > 0]
         surfaces = [m['surface_reelle_bati'] for m in mutations if m['surface_reelle_bati'] > 0]
         
@@ -575,7 +707,7 @@ def get_enrichisseur():
 
 def get_dpe_ademe(code_postal):
     """Récupère les DPE récents depuis l'API ADEME"""
-    url = f"https://data.ademe.fr/data-fair/api/v1/datasets/dpe-v2-logements-existants/lines?size=100&select=N%C2%B0DPE%2CDate_r%C3%A9ception_DPE%2CEtiquette_DPE%2CAdresse_brute%2CCode_postal_%28BAN%29%2CNom_commune_%28BAN%29%2CType_b%C3%A2timent%2CSurface_habitable_logement&q_fields=Code_postal_%28BAN%29&q={code_postal}&sort=Date_r%C3%A9ception_DPE%3A-1"
+    url = f"https://data.ademe.fr/data-fair/api/v1/datasets/dpe-v2-logements-existants/lines?size=100&select=N%C2%B0DPE%2CDate_r%C3%A9ception_DPE%2CEtiquette_DPE%2CEtiquette_GES%2CAdresse_brute%2CCode_postal_%28BAN%29%2CNom_commune_%28BAN%29%2CType_b%C3%A2timent%2CSurface_habitable_logement&q_fields=Code_postal_%28BAN%29&q={code_postal}&sort=Date_r%C3%A9ception_DPE%3A-1"
     
     try:
         req = urllib.request.Request(url, headers={'User-Agent': 'ICI-Dordogne/1.0'})
@@ -591,11 +723,11 @@ def run_veille_dpe():
     """Exécute la veille DPE quotidienne"""
     print(f"\n[VEILLE DPE] Démarrage - {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     
-    # Charger les DPE déjà connus
-    dpe_connus = charger_json(FICHIER_DPE, {})
-    nouveaux_dpe = []
+    if DB_OK:
+        db = get_db()
+        db.log_veille("Démarrage veille DPE")
     
-    # Récupérer l'enrichisseur DVF
+    nouveaux_dpe = []
     enrichisseur = get_enrichisseur()
     
     for cp in CODES_POSTAUX:
@@ -604,14 +736,8 @@ def run_veille_dpe():
         
         for dpe in resultats:
             numero = dpe.get('N°DPE', '')
-            if numero and numero not in dpe_connus:
-                # Nouveau DPE trouvé
-                dpe_connus[numero] = {
-                    'date_detection': datetime.now().isoformat(),
-                    'data': dpe
-                }
-                
-                # Enrichir avec DVF si possible
+            if numero and not dpe_existe(numero):
+                # Enrichir avec DVF
                 adresse = dpe.get('Adresse_brute', '')
                 if adresse and enrichisseur.index_dvf:
                     try:
@@ -621,14 +747,16 @@ def run_veille_dpe():
                     except:
                         pass
                 
+                sauver_dpe(numero, dpe)
                 nouveaux_dpe.append(dpe)
         
-        time.sleep(0.5)  # Pause entre requêtes
-    
-    # Sauvegarder
-    sauver_json(FICHIER_DPE, dpe_connus)
+        time.sleep(0.5)
     
     print(f"[DPE] Terminé: {len(nouveaux_dpe)} nouveaux DPE")
+    
+    if DB_OK:
+        db = get_db()
+        db.log_veille(f"Veille DPE terminée: {len(nouveaux_dpe)} nouveaux")
     
     # Envoyer email si nouveaux DPE
     if nouveaux_dpe:
@@ -665,14 +793,14 @@ def run_veille_dpe():
             </tr>
             """
         
-        corps += "</table><p>🤖 Généré automatiquement par Axi</p>"
+        corps += "</table><p>🤖 Généré par Axi v11 (PostgreSQL)</p>"
         
         envoyer_email(
             f"🏠 Veille DPE - {len(nouveaux_dpe)} nouveaux ({datetime.now().strftime('%d/%m')})",
             corps
         )
     
-    return {"nouveaux": len(nouveaux_dpe), "total_connus": len(dpe_connus)}
+    return {"nouveaux": len(nouveaux_dpe), "version": "v11_postgres"}
 
 # ============================================================
 # VEILLE CONCURRENCE
@@ -682,7 +810,6 @@ def extraire_urls_annonces(html, base_url):
     """Extrait les URLs d'annonces depuis le HTML d'une agence"""
     urls = set()
     
-    # Patterns courants pour les liens d'annonces
     patterns = [
         r'href="(/annonce[s]?/[^"]+)"',
         r'href="(/bien[s]?/[^"]+)"',
@@ -733,7 +860,7 @@ def scraper_agence_urls(agence):
         html = fetch_url(agence['url'], timeout=20)
         if html:
             urls = extraire_urls_annonces(html, agence['url'])
-            return urls[:50]  # Limiter à 50 URLs par agence
+            return urls[:50]
     except Exception as e:
         print(f"[CONCURRENCE] Erreur {agence['nom']}: {e}")
     return []
@@ -746,7 +873,6 @@ def creer_excel_veille(annonces_enrichies, dans_zone, toutes_urls):
     
     wb = Workbook()
     
-    # === FEUILLE 1: Dans votre zone ===
     ws1 = wb.active
     ws1.title = "Dans votre zone"
     
@@ -763,13 +889,11 @@ def creer_excel_veille(annonces_enrichies, dans_zone, toutes_urls):
         ws1.cell(row=row, column=3, value=annonce.get('prix', ''))
         ws1.cell(row=row, column=4, value=annonce.get('code_postal', ''))
     
-    # Ajuster largeurs
     ws1.column_dimensions['A'].width = 25
     ws1.column_dimensions['B'].width = 60
     ws1.column_dimensions['C'].width = 12
     ws1.column_dimensions['D'].width = 12
     
-    # === FEUILLE 2: Toutes les annonces ===
     ws2 = wb.create_sheet("Toutes les annonces")
     
     for col, header in enumerate(["Agence", "Priorité", "Nb URLs"], 1):
@@ -784,7 +908,6 @@ def creer_excel_veille(annonces_enrichies, dans_zone, toutes_urls):
         ws2.cell(row=row, column=2, value=priorite)
         ws2.cell(row=row, column=3, value=len(urls))
     
-    # Sauvegarder en mémoire
     buffer = io.BytesIO()
     wb.save(buffer)
     buffer.seek(0)
@@ -795,8 +918,10 @@ def run_veille_concurrence():
     """Exécute la veille concurrence quotidienne"""
     print(f"\n[CONCURRENCE] Démarrage - {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     
-    # Charger les URLs déjà connues
-    urls_connues = charger_json(FICHIER_URLS, {})
+    if DB_OK:
+        db = get_db()
+        db.log_veille("Démarrage veille concurrence")
+    
     nouvelles_annonces = []
     toutes_urls = {}
     dans_zone = []
@@ -806,21 +931,15 @@ def run_veille_concurrence():
         urls = scraper_agence_urls(agence)
         toutes_urls[agence['nom']] = urls
         
-        # Identifier les nouvelles URLs
-        agence_id = agence['nom']
-        if agence_id not in urls_connues:
-            urls_connues[agence_id] = []
-        
         for url in urls:
-            if url not in urls_connues[agence_id]:
-                urls_connues[agence_id].append(url)
-                
-                # Enrichir avec prix et CP
+            if not url_annonce_existe(url):
                 try:
                     html_detail = fetch_url(url, timeout=10)
                     if html_detail:
                         prix = extraire_prix_page(html_detail)
                         cp = extraire_cp_page_detail(html_detail)
+                        
+                        sauver_annonce_concurrence(agence['nom'], url, prix, cp)
                         
                         annonce = {
                             'agence': agence['nom'],
@@ -831,25 +950,23 @@ def run_veille_concurrence():
                         }
                         nouvelles_annonces.append(annonce)
                         
-                        # Vérifier si dans notre zone
                         if cp and cp in CODES_POSTAUX:
                             dans_zone.append(annonce)
                 except:
                     pass
         
-        time.sleep(1)  # Pause entre agences
-    
-    # Sauvegarder
-    sauver_json(FICHIER_URLS, urls_connues)
+        time.sleep(1)
     
     print(f"[CONCURRENCE] Terminé: {len(nouvelles_annonces)} nouvelles, {len(dans_zone)} dans zone")
     
-    # Créer Excel si disponible
+    if DB_OK:
+        db = get_db()
+        db.log_veille(f"Veille concurrence terminée: {len(nouvelles_annonces)} nouvelles, {len(dans_zone)} dans zone")
+    
     excel_data = None
     if OPENPYXL_OK and (dans_zone or nouvelles_annonces):
         excel_data = creer_excel_veille(nouvelles_annonces, dans_zone, toutes_urls)
     
-    # Envoyer email
     if nouvelles_annonces or dans_zone:
         corps = f"""
         <h2>🔍 Veille Concurrence - {len(nouvelles_annonces)} nouvelles annonces</h2>
@@ -885,7 +1002,7 @@ def run_veille_concurrence():
             </tr>
             """
         
-        corps += "</table><p>🤖 Généré automatiquement par Axi</p>"
+        corps += "</table><p>🤖 Généré par Axi v11 (PostgreSQL)</p>"
         
         nom_fichier = f"veille_concurrence_{datetime.now().strftime('%Y%m%d')}.xlsx" if excel_data else None
         
@@ -896,7 +1013,7 @@ def run_veille_concurrence():
             nom_fichier=nom_fichier
         )
     
-    return {"nouvelles": len(nouvelles_annonces), "dans_zone": len(dans_zone)}
+    return {"nouvelles": len(nouvelles_annonces), "dans_zone": len(dans_zone), "version": "v11_postgres"}
 
 # ============================================================
 # MEMORY CONTENT
@@ -916,7 +1033,7 @@ MEMORY_CONTENT = """# MEMORY - CONSIGNES POUR AXIS
 ## RÈGLES ABSOLUES
 
 ### Emails
-- ❌ Jamais d envoi sans accord explicite de Ludo
+- ❌ Jamais d'envoi sans accord explicite de Ludo
 - ✅ Toujours laetony@gmail.com en copie
 
 ### Validation
@@ -953,29 +1070,36 @@ MEMORY_CONTENT = """# MEMORY - CONSIGNES POUR AXIS
 - Endpoint: /dvf/stats, /dvf/enrichir
 - Données: 2022-2024, Dordogne
 
+## ARCHITECTURE V11
+
+- Backend: PostgreSQL (mémoire permanente)
+- Tables: souvenirs, biens, relations, faits, documents
+- Fallback: fichiers si DB non disponible
+
 ## HISTORIQUE
 
 | Date | Action |
 |------|--------|
+| 24/12/2025 | v11: Migration PostgreSQL |
 | 24/12/2025 | v10: Code unifié (chat + veilles) |
 | 23/12/2025 | Code chat écrasé les veilles |
 | 22/12/2025 | v7: Machine de guerre + Excel |
-| 22/12/2025 | v5: Enrichissement DVF intégré |
-| 21/12/2025 | Création service unifié Railway |
 """
 
 # ============================================================
 # GÉNÉRATION HTML INTERFACE CHAT
 # ============================================================
 
-def generer_page_html(conversations, documents_dispo=None):
+def generer_page_html(conversations):
     """Génère la page HTML de l'interface chat"""
+    db_status = "🟢 PostgreSQL" if DB_OK else "🟠 Fichiers"
+    
     return f"""<!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Axi - ICI Dordogne</title>
+    <title>Axi v11 - ICI Dordogne</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; display: flex; flex-direction: column; }}
@@ -998,15 +1122,17 @@ def generer_page_html(conversations, documents_dispo=None):
         .nav {{ display: flex; gap: 10px; }}
         .nav a {{ color: #4ecca3; text-decoration: none; padding: 5px 10px; border-radius: 4px; }}
         .nav a:hover {{ background: #0f3460; }}
+        .db-status {{ font-size: 0.8rem; margin-left: 10px; }}
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>🤖 Axi v10</h1>
+        <h1>🤖 Axi v11 <span class="db-status">{db_status}</span></h1>
         <div class="nav">
             <a href="/">Chat</a>
             <a href="/trio">Trio</a>
             <a href="/briefing">Briefing</a>
+            <a href="/stats">Stats</a>
             <a href="/effacer">Effacer</a>
         </div>
         <div class="status">● En ligne</div>
@@ -1030,13 +1156,13 @@ def generer_page_html(conversations, documents_dispo=None):
 </html>"""
 
 
-def formater_conversations_html(conversations_txt):
+def formater_conversations_html(historique_txt):
     """Formate les conversations en HTML"""
-    if not conversations_txt:
-        return '<div class="message assistant"><div class="role">Axi</div><div class="content">Salut ! Je suis Axi, prêt à t\'aider. 🚀</div></div>'
+    if not historique_txt:
+        return '<div class="message assistant"><div class="role">Axi</div><div class="content">Salut ! Je suis Axi v11, avec une mémoire PostgreSQL maintenant ! 🚀</div></div>'
     
     html = ""
-    lignes = conversations_txt.strip().split('\n')
+    lignes = historique_txt.strip().split('\n')
     message_courant = []
     role_courant = None
     
@@ -1071,10 +1197,9 @@ def formater_conversations_html(conversations_txt):
         else:
             message_courant.append(ligne)
     
-    # Dernier message
     flush_message()
     
-    return html if html else '<div class="message assistant"><div class="role">Axi</div><div class="content">Salut ! Je suis Axi, prêt à t\'aider. 🚀</div></div>'
+    return html if html else '<div class="message assistant"><div class="role">Axi</div><div class="content">Salut ! Je suis Axi v11. 🚀</div></div>'
 
 # ============================================================
 # APSCHEDULER - CRON JOBS
@@ -1090,7 +1215,6 @@ def scheduler_loop():
         paris_tz = pytz.timezone('Europe/Paris')
         scheduler = BackgroundScheduler(timezone=paris_tz)
         
-        # Veille Concurrence à 7h00 Paris
         scheduler.add_job(
             run_veille_concurrence,
             CronTrigger(hour=7, minute=0, timezone=paris_tz),
@@ -1099,7 +1223,6 @@ def scheduler_loop():
             replace_existing=True
         )
         
-        # Veille DPE à 8h00 Paris
         scheduler.add_job(
             run_veille_dpe,
             CronTrigger(hour=8, minute=0, timezone=paris_tz),
@@ -1123,10 +1246,9 @@ class AxiHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split('?')[0]
         
-        # === INTERFACE CHAT ===
         if path == '/':
-            conversations = lire_fichier(CONVERSATIONS_FILE)
-            html_conv = formater_conversations_html(conversations)
+            historique = lire_historique_conversations(50)
+            html_conv = formater_conversations_html(historique)
             html = generer_page_html(html_conv)
             self.send_response(200)
             self.send_header('Content-Type', 'text/html; charset=utf-8')
@@ -1138,25 +1260,28 @@ class AxiHandler(BaseHTTPRequestHandler):
             self.send_header('Content-Type', 'text/html; charset=utf-8')
             self.end_headers()
             html = """<!DOCTYPE html><html><head><title>Trio</title></head><body style="background:#1a1a2e;color:#eee;padding:20px;">
-            <h1>🔺 Trio - Axis / Axi / Ludo</h1>
+            <h1>📺 Trio - Axis / Axi / Ludo</h1>
             <p>Interface de coordination entre les trois entités.</p>
             <a href="/" style="color:#4ecca3;">← Retour au chat</a>
             </body></html>"""
             self.wfile.write(html.encode())
         
         elif path == '/effacer':
-            ecrire_fichier(CONVERSATIONS_FILE, "")
+            if DB_OK:
+                db = get_db()
+                db._query("DELETE FROM souvenirs WHERE type='conversation'")
+            else:
+                ecrire_fichier(CONVERSATIONS_FILE, "")
             self.send_response(302)
             self.send_header('Location', '/')
             self.end_headers()
         
         elif path == '/briefing':
-            journal = lire_fichier(JOURNAL_FILE)
-            derniers = journal[-2000:] if journal else "Aucun journal disponible."
+            journal = lire_journal()
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
             self.end_headers()
-            self.wfile.write(f"=== BRIEFING AXI ===\n\n{derniers}".encode())
+            self.wfile.write(f"=== BRIEFING AXI v11 ===\n\n{journal}".encode())
         
         elif path == '/memory':
             self.send_response(200)
@@ -1164,20 +1289,46 @@ class AxiHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(MEMORY_CONTENT.encode())
         
-        # === STATUS ET ENDPOINTS VEILLES ===
-        elif path == '/status' or path == '/':
+        elif path == '/status':
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
+            
+            stats_dpe = []
+            if DB_OK:
+                db = get_db()
+                stats_dpe = db.stats_biens_par_dpe()
+            
             status = {
-                "service": "Axi ICI Dordogne v10 UNIFIÉ",
+                "service": "Axi ICI Dordogne v11",
                 "status": "ok",
-                "features": ["Chat", "DPE", "Concurrence", "DVF"],
-                "endpoints": ["/", "/trio", "/chat", "/briefing", "/memory", "/status",
+                "database": "postgresql" if DB_OK else "fichiers",
+                "features": ["Chat", "DPE", "Concurrence", "DVF", "PostgreSQL"],
+                "stats_dpe": stats_dpe,
+                "endpoints": ["/", "/trio", "/chat", "/briefing", "/memory", "/status", "/stats",
                              "/run-veille", "/test-veille", "/run-veille-concurrence", 
                              "/test-veille-concurrence", "/dvf/stats", "/dvf/enrichir"]
             }
-            self.wfile.write(json.dumps(status).encode())
+            self.wfile.write(json.dumps(status, ensure_ascii=False).encode())
+        
+        elif path == '/stats':
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            
+            stats = {"database": "fichiers", "biens": 0, "souvenirs": 0}
+            if DB_OK:
+                db = get_db()
+                biens = db._query("SELECT COUNT(*) as c FROM biens", fetch_one=True)
+                souvenirs = db._query("SELECT COUNT(*) as c FROM souvenirs", fetch_one=True)
+                stats = {
+                    "database": "postgresql",
+                    "biens": biens['c'] if biens else 0,
+                    "souvenirs": souvenirs['c'] if souvenirs else 0,
+                    "stats_dpe": db.stats_biens_par_dpe()
+                }
+            
+            self.wfile.write(json.dumps(stats, ensure_ascii=False).encode())
         
         elif path == '/run-veille':
             result = run_veille_dpe()
@@ -1187,16 +1338,24 @@ class AxiHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(result).encode())
         
         elif path == '/test-veille':
-            # Test sans email
             print("[TEST] Veille DPE (mode test)")
-            dpe_connus = charger_json(FICHIER_DPE, {})
+            count = 0
+            if DB_OK:
+                db = get_db()
+                result = db._query("SELECT COUNT(*) as c FROM biens WHERE source_initiale LIKE '%dpe%'", fetch_one=True)
+                count = result['c'] if result else 0
+            else:
+                dpe_connus = charger_json(FICHIER_DPE, {})
+                count = len(dpe_connus)
+            
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps({
                 "mode": "test",
-                "dpe_connus": len(dpe_connus),
-                "codes_postaux": CODES_POSTAUX
+                "dpe_connus": count,
+                "codes_postaux": CODES_POSTAUX,
+                "database": "postgresql" if DB_OK else "fichiers"
             }).encode())
         
         elif path == '/run-veille-concurrence':
@@ -1208,15 +1367,23 @@ class AxiHandler(BaseHTTPRequestHandler):
         
         elif path == '/test-veille-concurrence':
             print("[TEST] Veille Concurrence (mode test)")
-            urls_connues = charger_json(FICHIER_URLS, {})
-            total_urls = sum(len(v) for v in urls_connues.values())
+            count = 0
+            if DB_OK:
+                db = get_db()
+                result = db._query("SELECT COUNT(*) as c FROM biens WHERE source_initiale LIKE '%concurrence%'", fetch_one=True)
+                count = result['c'] if result else 0
+            else:
+                urls_connues = charger_json(FICHIER_URLS, {})
+                count = sum(len(v) for v in urls_connues.values())
+            
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps({
                 "mode": "test",
                 "agences": len(AGENCES),
-                "urls_connues": total_urls
+                "urls_connues": count,
+                "database": "postgresql" if DB_OK else "fichiers"
             }).encode())
         
         elif path == '/dvf/stats':
@@ -1234,7 +1401,6 @@ class AxiHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(stats, ensure_ascii=False).encode())
         
         elif path.startswith('/dvf/enrichir'):
-            # Parse query params
             query = urllib.parse.urlparse(self.path).query
             params = urllib.parse.parse_qs(query)
             adresse = params.get('adresse', [''])[0]
@@ -1255,21 +1421,13 @@ class AxiHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(result, ensure_ascii=False).encode())
         
-        elif path == '/check-new':
-            # Pour AJAX refresh
-            conversations = lire_fichier(CONVERSATIONS_FILE)
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({"length": len(conversations)}).encode())
-        
         elif path == '/export':
-            conversations = lire_fichier(CONVERSATIONS_FILE)
+            historique = lire_historique_conversations(1000)
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
             self.send_header('Content-Disposition', 'attachment; filename="conversations.txt"')
             self.end_headers()
-            self.wfile.write(conversations.encode())
+            self.wfile.write(historique.encode())
         
         else:
             self.send_response(404)
@@ -1283,40 +1441,36 @@ class AxiHandler(BaseHTTPRequestHandler):
         path = self.path
         
         if path == '/chat':
-            # Formulaire HTML
             params = urllib.parse.parse_qs(post_data)
             message = params.get('message', [''])[0]
             
             if message:
-                # Sauvegarder message utilisateur
-                ajouter_fichier(CONVERSATIONS_FILE, f"\n[USER] {message}\n")
+                sauver_conversation('user', message)
                 
-                # Générer réponse
                 try:
                     client = anthropic.Anthropic()
-                    conversations = lire_fichier(CONVERSATIONS_FILE)
-                    reponse = generer_reponse(client, message, IDENTITE, "", conversations)
-                    ajouter_fichier(CONVERSATIONS_FILE, f"[AXI] {reponse}\n")
+                    historique = lire_historique_conversations(50)
+                    reponse = generer_reponse(client, message, IDENTITE, "", historique)
+                    sauver_conversation('axi', reponse)
                 except Exception as e:
-                    ajouter_fichier(CONVERSATIONS_FILE, f"[AXI] Erreur: {e}\n")
+                    sauver_conversation('axi', f"Erreur: {e}")
             
             self.send_response(302)
             self.send_header('Location', '/')
             self.end_headers()
         
         elif path == '/axis-message':
-            # Message depuis Axis (JSON)
             try:
                 data = json.loads(post_data)
                 message = data.get('message', '')
                 
                 if message:
-                    ajouter_fichier(CONVERSATIONS_FILE, f"\n[AXIS] {message}\n")
+                    sauver_conversation('axis', message)
                     
                     client = anthropic.Anthropic()
-                    conversations = lire_fichier(CONVERSATIONS_FILE)
-                    reponse = generer_reponse(client, message, IDENTITE, "", conversations, est_axis=True)
-                    ajouter_fichier(CONVERSATIONS_FILE, f"[AXI] {reponse}\n")
+                    historique = lire_historique_conversations(50)
+                    reponse = generer_reponse(client, message, IDENTITE, "", historique, est_axis=True)
+                    sauver_conversation('axi', reponse)
                     
                     self.send_response(200)
                     self.send_header('Content-Type', 'application/json')
@@ -1332,14 +1486,12 @@ class AxiHandler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({"error": str(e)}).encode())
         
         elif path == '/memoire':
-            # Sauvegarde mémoire depuis Axis
             try:
                 data = json.loads(post_data)
                 resume = data.get('resume', '')
                 
                 if resume:
-                    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
-                    ajouter_fichier(JOURNAL_FILE, f"\n=== {timestamp} ===\n{resume}\n")
+                    sauver_journal(resume)
                     
                     self.send_response(200)
                     self.send_header('Content-Type', 'application/json')
@@ -1370,8 +1522,10 @@ def main():
     
     print(f"""
 ╔════════════════════════════════════════════════════════════╗
-║         AXI ICI DORDOGNE v10 UNIFIÉ                        ║
-║         Chat + Veilles + DVF                               ║
+║         AXI ICI DORDOGNE v11 - PostgreSQL Edition          ║
+║         Chat + Veilles + DVF + Mémoire Permanente          ║
+╠════════════════════════════════════════════════════════════╣
+║  Database: {"PostgreSQL ✅" if DB_OK else "Fichiers (fallback) ⚠️":42}   ║
 ╠════════════════════════════════════════════════════════════╣
 ║  Endpoints:                                                ║
 ║    /              Interface chat                           ║
@@ -1379,6 +1533,7 @@ def main():
 ║    /briefing      Briefing journal                         ║
 ║    /memory        Consignes Axis                           ║
 ║    /status        Status JSON                              ║
+║    /stats         Stats PostgreSQL                         ║
 ║    /run-veille    Lancer veille DPE                        ║
 ║    /run-veille-concurrence  Lancer veille concurrence      ║
 ║    /dvf/stats     Stats DVF par CP                         ║
@@ -1388,13 +1543,25 @@ def main():
 ╚════════════════════════════════════════════════════════════╝
     """)
     
+    # Test connexion DB au démarrage
+    if DB_OK:
+        db = get_db()
+        if db.connect():
+            print("[DB] ✅ Connexion PostgreSQL validée")
+            # Créer la relation Ludo si absente
+            ludo = db.trouver_ou_creer_relation("Ludo", type_rel="famille")
+            if ludo:
+                print(f"[DB] ✅ Profil Ludo chargé (ID: {ludo['id']})")
+        else:
+            print("[DB] ⚠️ Connexion échouée - fallback fichiers")
+    
     # Démarrer le scheduler
     scheduler_thread = threading.Thread(target=scheduler_loop, daemon=True)
     scheduler_thread.start()
     
     # Pré-initialiser DVF en arrière-plan
     def init_dvf():
-        time.sleep(5)  # Attendre démarrage serveur
+        time.sleep(5)
         try:
             enrichisseur = get_enrichisseur()
             enrichisseur.initialiser()
@@ -1412,6 +1579,9 @@ def main():
         server.serve_forever()
     except KeyboardInterrupt:
         print("\n[SERVER] Arrêt...")
+        if DB_OK:
+            db = get_db()
+            db.close()
         server.shutdown()
 
 
