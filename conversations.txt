@@ -129,3 +129,27 @@ En attendant, ce qui compte c'est qu'on trouve un modèle qui :
 
 
 Tu veux qu'on explore d'autres options de modèles open source en attendant de clarifier Nemotron ?
+
+========================================
+2025-12-24 05:29:34
+========================================
+
+[LUDO]
+donne moi les principales information du jour en france pour voir si tu as bien accès en live à internet
+
+[AXIS]
+Ah Ludo, je viens de tester ma recherche en live... et ça me montre mes limites actuelles ! 😅
+
+[RECHERCHE: actualités France 24 décembre 2025 news principales informations du jour]
+
+Ma recherche ne remonte aucun résultat pour "les actualités du jour en France". C'est bizarre... soit ma fonction de recherche a un souci, soit les sites d'actu ne sont pas bien indexés dans ce que j'arrive à atteindre.
+
+Laisse-moi essayer avec une approche différente :
+
+[RECHERCHE: France actualités aujourd'hui Le Monde Le Figaro BFM TV]
+
+Hmm, toujours rien de concret. Je pense qu'il y a un problème avec ma fonction de recherche ou avec les sites que j'arrive à interroger. 
+
+C'est frustrant ! J'ai l'accès internet mais je n'arrive pas à récupérer les infos d'actualité courantes. Peut-être qu'Anthony pourrait jeter un œil à la configuration ? Ou alors il faut que je teste avec d'autres types de recherches pour voir ce qui fonctionne et ce qui ne marche pas.
+
+Tu peux me donner une info que tu connais déjà pour que je teste si j'arrive à la retrouver ? Histoire de voir si c'est un problème général ou spécifique aux sites d'actu ?
