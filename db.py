@@ -42,22 +42,33 @@ class AxiDB:
             self.conn.close()
 
     def _query(self, sql, params=None, fetch=False, fetch_one=False):
-        """Exécuteur générique de requêtes"""
+        """Exécuteur générique de requêtes - COMMIT AVANT RETURN !"""
         if not self.connect():
             return None
             
         try:
             with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(sql, params)
+                
+                # CAS 1: Une seule ligne (SELECT unique ou INSERT...RETURNING)
                 if fetch_one:
-                    return cur.fetchone()
+                    result = cur.fetchone()
+                    self.conn.commit()  # CRUCIAL: commit AVANT return!
+                    return result
+                
+                # CAS 2: Plusieurs lignes (SELECT liste)
                 if fetch:
-                    return cur.fetchall()
+                    result = cur.fetchall()
+                    self.conn.commit()  # Commit aussi pour fermer proprement
+                    return result
+                
+                # CAS 3: Exécution simple (UPDATE/DELETE sans retour)
                 self.conn.commit()
                 return True
+                
         except Exception as e:
-            self.conn.rollback()
-            print(f"⚠️ [DB] Erreur: {e}")
+            print(f"❌ [DB] Erreur SQL: {e}")
+            self.conn.rollback()  # Rollback pour débloquer la connexion
             return None
 
     # =========================================================================
