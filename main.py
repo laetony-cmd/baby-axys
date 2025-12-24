@@ -1,20 +1,14 @@
 """
-AXI ICI DORDOGNE v11 UNIFIÉ - PostgreSQL Edition
-=================================================
-Migration du v10 vers PostgreSQL
+AXI ICI DORDOGNE v11.5 "Vision Claire" - PostgreSQL Edition
+============================================================
+Accès Internet complet avec DuckDuckGo + Trafilatura
 TOUTES les fonctionnalités conservées :
-- Chat Axi avec Claude API + recherche web
-- Interface web conversation (/, /trio)
+- Chat Axi avec Claude API + recherche web VRAIE
+- Interface web conversation style Claude.ai
 - Veille DPE ADEME (8h00 Paris)
 - Veille Concurrence 16 agences (7h00 Paris)
 - Enrichissement DVF (historique ventes)
 - Tous les endpoints API
-
-CHANGEMENTS v10 → v11 :
-- conversations.txt → table souvenirs (PostgreSQL)
-- journal.txt → table souvenirs type='journal' (PostgreSQL)
-- dpe_connus.json → table biens (PostgreSQL)
-- urls_annonces.json → table biens (PostgreSQL)
 
 Date: 24 décembre 2025
 """
@@ -39,6 +33,16 @@ from email import encoders
 from datetime import datetime, timedelta
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from math import radians, cos, sin, asin, sqrt
+
+# === IMPORT INTERNET (V2 - DuckDuckGo + Trafilatura) ===
+INTERNET_OK = False
+try:
+    from duckduckgo_search import DDGS
+    import trafilatura
+    INTERNET_OK = True
+    print("[INTERNET] ✅ DuckDuckGo + Trafilatura OK")
+except ImportError:
+    print("[INTERNET] ⚠️ Modules non installés - pip install duckduckgo-search trafilatura")
 
 # === IMPORT DB POSTGRESQL ===
 DB_OK = False
@@ -383,11 +387,34 @@ def fetch_url(url, timeout=15):
         return None
 
 # ============================================================
-# RECHERCHE WEB (DuckDuckGo)
+# MODULE INTERNET V2 (DuckDuckGo + Trafilatura)
 # ============================================================
 
-def recherche_web(requete):
-    """Recherche web via DuckDuckGo HTML"""
+def recherche_web(requete, max_results=5):
+    """Recherche web robuste via API DuckDuckGo"""
+    print(f"[INTERNET] 🔍 Recherche : {requete}")
+    
+    if not INTERNET_OK:
+        # Fallback vers l'ancienne méthode
+        return recherche_web_fallback(requete)
+    
+    try:
+        results = []
+        with DDGS() as ddgs:
+            ddg_gen = ddgs.text(requete, region='fr-fr', safesearch='off', max_results=max_results)
+            for r in ddg_gen:
+                results.append({
+                    "titre": r.get('title', ''),
+                    "url": r.get('href', ''),
+                    "resume": r.get('body', '')
+                })
+        return results
+    except Exception as e:
+        print(f"[RECHERCHE ERREUR] {e}")
+        return recherche_web_fallback(requete)
+
+def recherche_web_fallback(requete):
+    """Fallback: Recherche via DuckDuckGo HTML (si libs non installées)"""
     try:
         url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(requete)}"
         req = urllib.request.Request(url, headers={
@@ -403,11 +430,11 @@ def recherche_web(requete):
         for url, titre in matches[:5]:
             if url.startswith('//duckduckgo.com/l/?uddg='):
                 url = urllib.parse.unquote(url.split('uddg=')[1].split('&')[0])
-            resultats.append({"titre": titre.strip(), "url": url})
+            resultats.append({"titre": titre.strip(), "url": url, "resume": ""})
         
         return resultats
     except Exception as e:
-        print(f"[RECHERCHE ERREUR] {e}")
+        print(f"[RECHERCHE FALLBACK ERREUR] {e}")
         return []
 
 def faire_recherche(requete):
@@ -416,13 +443,41 @@ def faire_recherche(requete):
     if not resultats:
         return f"Aucun résultat trouvé pour: {requete}"
     
-    texte = f"Résultats pour '{requete}':\n"
+    texte = f"🔎 RÉSULTATS WEB POUR '{requete}' :\n\n"
     for i, r in enumerate(resultats, 1):
-        texte += f"{i}. {r['titre']}\n   {r['url']}\n"
+        texte += f"{i}. {r['titre']}\n"
+        texte += f"   URL: {r['url']}\n"
+        if r.get('resume'):
+            texte += f"   Résumé: {r['resume']}\n"
+        texte += "\n"
     return texte
 
 def lire_page_web(url):
-    """Lit le contenu texte d'une page web"""
+    """Lit et nettoie le contenu d'une page web (Mode Lecture)"""
+    print(f"[INTERNET] 📄 Lecture : {url}")
+    
+    if not INTERNET_OK:
+        return lire_page_web_fallback(url)
+    
+    try:
+        downloaded = trafilatura.fetch_url(url)
+        if downloaded is None:
+            return "Erreur : Impossible d'accéder à la page (403/404 ou protection)."
+        
+        text = trafilatura.extract(downloaded, include_comments=False, include_tables=True)
+        if not text:
+            return "Page téléchargée mais aucun texte lisible extrait."
+        
+        # Limiter à 5000 caractères pour ne pas exploser le contexte
+        if len(text) > 5000:
+            text = text[:5000] + "\n\n[... contenu tronqué ...]"
+        
+        return f"📄 CONTENU DE {url}:\n\n{text}"
+    except Exception as e:
+        return f"Erreur de lecture : {e}"
+
+def lire_page_web_fallback(url):
+    """Fallback: Lecture basique via urllib (si trafilatura non installé)"""
     try:
         req = urllib.request.Request(url, headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -430,34 +485,16 @@ def lire_page_web(url):
         with urllib.request.urlopen(req, timeout=15) as response:
             html = response.read().decode('utf-8', errors='ignore')
         
-        # Nettoyer le HTML pour extraire le texte
-        # Supprimer scripts et styles
+        # Nettoyage basique
         html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
         html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL | re.IGNORECASE)
-        html = re.sub(r'<nav[^>]*>.*?</nav>', '', html, flags=re.DOTALL | re.IGNORECASE)
-        html = re.sub(r'<footer[^>]*>.*?</footer>', '', html, flags=re.DOTALL | re.IGNORECASE)
-        html = re.sub(r'<header[^>]*>.*?</header>', '', html, flags=re.DOTALL | re.IGNORECASE)
+        html = re.sub(r'<[^>]+>', ' ', html)
+        texte = re.sub(r'\s+', ' ', html).strip()
         
-        # Convertir <br>, <p>, <div> en newlines
-        html = re.sub(r'<br\s*/?>', '\n', html, flags=re.IGNORECASE)
-        html = re.sub(r'</p>', '\n', html, flags=re.IGNORECASE)
-        html = re.sub(r'</div>', '\n', html, flags=re.IGNORECASE)
-        html = re.sub(r'</li>', '\n', html, flags=re.IGNORECASE)
+        if len(texte) > 5000:
+            texte = texte[:5000] + "..."
         
-        # Supprimer toutes les balises HTML restantes
-        texte = re.sub(r'<[^>]+>', '', html)
-        
-        # Nettoyer les espaces multiples
-        texte = re.sub(r'\n\s*\n', '\n\n', texte)
-        texte = re.sub(r' +', ' ', texte)
-        texte = texte.strip()
-        
-        # Limiter la taille
-        if len(texte) > 8000:
-            texte = texte[:8000] + "\n\n[... contenu tronqué ...]"
-        
-        return f"Contenu de {url}:\n\n{texte}" if texte else f"Page vide ou inaccessible: {url}"
-        
+        return f"📄 CONTENU DE {url}:\n\n{texte}"
     except Exception as e:
         return f"Erreur lecture {url}: {e}"
 
