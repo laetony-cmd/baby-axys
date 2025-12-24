@@ -859,6 +859,17 @@ Je suis Axi, compagnon de Ludo. Je ne lâche pas."""
             self.end_headers()
             self.wfile.write(briefing.encode('utf-8'))
         
+        elif self.path == '/memory':
+            # Endpoint pour Axis - consignes mémoire (MEMORY.md)
+            contenu = lire_fichier("MEMORY.md")
+            if not contenu:
+                contenu = "# MEMORY - Fichier non trouvé\n\nLe fichier MEMORY.md n'existe pas encore."
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'text/plain; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(contenu.encode('utf-8'))
+        
         else:
             self.send_response(404)
             self.end_headers()
