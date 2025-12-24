@@ -41,13 +41,20 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from math import radians, cos, sin, asin, sqrt
 
 # === IMPORT DB POSTGRESQL ===
+DB_OK = False
 try:
     from db import get_db
-    DB_OK = True
-    print("[DB] ✅ Module db.py chargé")
+    # Tester la vraie connexion
+    db = get_db()
+    if db.connect():
+        DB_OK = True
+        print("[DB] ✅ PostgreSQL connecté")
+    else:
+        print("[DB] ⚠️ PostgreSQL non disponible - mode fichiers activé")
 except ImportError:
-    DB_OK = False
     print("[DB] ❌ Module db.py non trouvé - mode fichiers activé")
+except Exception as e:
+    print(f"[DB] ⚠️ Erreur connexion PostgreSQL: {e} - mode fichiers activé")
 
 # Import conditionnel openpyxl
 try:
