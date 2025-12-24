@@ -924,6 +924,7 @@ def generer_page_html(conversations, documents_dispo=None):
         .message {{ margin-bottom: 20px; padding: 15px; border-radius: 12px; }}
         .message.user {{ background: #0f3460; margin-left: 20%; }}
         .message.assistant {{ background: #16213e; margin-right: 10%; border-left: 3px solid #e94560; }}
+        .message.axis {{ background: #1a3a1a; margin-right: 10%; border-left: 3px solid #4ecca3; }}
         .message .role {{ font-size: 0.8rem; color: #888; margin-bottom: 5px; }}
         .message .content {{ line-height: 1.6; white-space: pre-wrap; }}
         .input-container {{ background: #16213e; padding: 20px; border-top: 1px solid #0f3460; }}
@@ -977,32 +978,39 @@ def formater_conversations_html(conversations_txt):
     message_courant = []
     role_courant = None
     
+    def flush_message():
+        nonlocal html, message_courant, role_courant
+        if message_courant and role_courant:
+            contenu = '\n'.join(message_courant)
+            if role_courant == 'user':
+                css_class = 'user'
+                label = 'Ludo'
+            elif role_courant == 'axis':
+                css_class = 'axis'
+                label = 'Axis'
+            else:
+                css_class = 'assistant'
+                label = 'Axi'
+            html += f'<div class="message {css_class}"><div class="role">{label}</div><div class="content">{contenu}</div></div>'
+    
     for ligne in lignes:
         if ligne.startswith('[USER]'):
-            if message_courant and role_courant:
-                contenu = '\n'.join(message_courant)
-                css_class = 'user' if role_courant == 'user' else 'assistant'
-                label = 'Toi' if role_courant == 'user' else 'Axi'
-                html += f'<div class="message {css_class}"><div class="role">{label}</div><div class="content">{contenu}</div></div>'
+            flush_message()
             role_courant = 'user'
             message_courant = [ligne.replace('[USER] ', '')]
+        elif ligne.startswith('[AXIS]'):
+            flush_message()
+            role_courant = 'axis'
+            message_courant = [ligne.replace('[AXIS] ', '')]
         elif ligne.startswith('[AXI]'):
-            if message_courant and role_courant:
-                contenu = '\n'.join(message_courant)
-                css_class = 'user' if role_courant == 'user' else 'assistant'
-                label = 'Toi' if role_courant == 'user' else 'Axi'
-                html += f'<div class="message {css_class}"><div class="role">{label}</div><div class="content">{contenu}</div></div>'
+            flush_message()
             role_courant = 'assistant'
             message_courant = [ligne.replace('[AXI] ', '')]
         else:
             message_courant.append(ligne)
     
     # Dernier message
-    if message_courant and role_courant:
-        contenu = '\n'.join(message_courant)
-        css_class = 'user' if role_courant == 'user' else 'assistant'
-        label = 'Toi' if role_courant == 'user' else 'Axi'
-        html += f'<div class="message {css_class}"><div class="role">{label}</div><div class="content">{contenu}</div></div>'
+    flush_message()
     
     return html if html else '<div class="message assistant"><div class="role">Axi</div><div class="content">Salut ! Je suis Axi, prêt à t\'aider. 🚀</div></div>'
 
