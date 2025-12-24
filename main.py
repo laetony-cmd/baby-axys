@@ -1098,7 +1098,7 @@ MEMORY_CONTENT = """# MEMORY - CONSIGNES POUR AXIS
 # ============================================================
 
 def generer_page_html(conversations):
-    """Génère la page HTML de l'interface chat (Version AJAX Robuste)"""
+    """Génère la page HTML style Claude.ai avec sidebar"""
     db_status = "🟢 PostgreSQL" if DB_OK else "🟠 Fichiers"
     
     return f"""<!DOCTYPE html>
@@ -1106,74 +1106,423 @@ def generer_page_html(conversations):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Axi v11 - ICI Dordogne</title>
+    <title>Axi - ICI Dordogne</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #eee; height: 100vh; display: flex; flex-direction: column; }}
-        .header {{ background: #16213e; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #0f3460; flex-shrink: 0; }}
-        .header h1 {{ font-size: 1.5rem; color: #e94560; }}
-        .header .status {{ font-size: 0.9rem; color: #4ecca3; }}
         
-        /* Zone de chat scrollable */
-        .chat-container {{ flex: 1; overflow-y: auto; padding: 20px; max-width: 900px; margin: 0 auto; width: 100%; scroll-behavior: smooth; }}
+        :root {{
+            --bg-primary: #212121;
+            --bg-secondary: #171717;
+            --bg-sidebar: #171717;
+            --bg-input: #2f2f2f;
+            --bg-hover: #2f2f2f;
+            --text-primary: #ececec;
+            --text-secondary: #a1a1a1;
+            --accent: #10a37f;
+            --accent-hover: #1a7f64;
+            --border: #424242;
+            --user-bg: #2f2f2f;
+            --axi-bg: transparent;
+        }}
         
-        .message {{ margin-bottom: 20px; padding: 15px; border-radius: 12px; }}
-        .message.user {{ background: #0f3460; margin-left: 20%; }}
-        .message.assistant {{ background: #16213e; margin-right: 10%; border-left: 3px solid #e94560; }}
-        .message.axis {{ background: #1a3a1a; margin-right: 10%; border-left: 3px solid #4ecca3; }}
-        .message .role {{ font-size: 0.8rem; color: #888; margin-bottom: 5px; }}
-        .message .content {{ line-height: 1.6; white-space: pre-wrap; }}
+        body {{
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }}
         
-        .input-container {{ background: #16213e; padding: 20px; border-top: 1px solid #0f3460; flex-shrink: 0; }}
-        .input-wrapper {{ max-width: 900px; margin: 0 auto; display: flex; gap: 10px; position: relative; }}
+        /* === SIDEBAR === */
+        .sidebar {{
+            width: 260px;
+            background: var(--bg-sidebar);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }}
         
-        textarea {{ flex: 1; background: #0f3460; border: none; padding: 15px; border-radius: 8px; color: #eee; font-size: 1rem; resize: none; min-height: 60px; outline: none; }}
-        textarea:focus {{ box-shadow: 0 0 0 2px #e94560; }}
-        textarea:disabled {{ opacity: 0.5; cursor: not-allowed; }}
+        .sidebar-header {{
+            padding: 12px;
+            border-bottom: 1px solid var(--border);
+        }}
         
-        button {{ background: #e94560; color: white; border: none; padding: 0 30px; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: bold; transition: background 0.2s; white-space: nowrap; }}
-        button:hover {{ background: #ff6b6b; }}
-        button:disabled {{ background: #555; cursor: wait; }}
+        .new-chat-btn {{
+            width: 100%;
+            padding: 12px 16px;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: background 0.2s;
+        }}
         
-        .nav {{ display: flex; gap: 10px; flex-wrap: wrap; }}
-        .nav a {{ color: #4ecca3; text-decoration: none; padding: 5px 10px; border-radius: 4px; }}
-        .nav a:hover {{ background: #0f3460; }}
-        .db-status {{ font-size: 0.8rem; margin-left: 10px; color: #888; }}
+        .new-chat-btn:hover {{
+            background: var(--bg-hover);
+        }}
+        
+        .sidebar-nav {{
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+        }}
+        
+        .nav-section {{
+            margin-bottom: 16px;
+        }}
+        
+        .nav-section-title {{
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            padding: 8px 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }}
+        
+        .nav-item {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            color: var(--text-primary);
+            text-decoration: none;
+            font-size: 14px;
+            transition: background 0.2s;
+        }}
+        
+        .nav-item:hover {{
+            background: var(--bg-hover);
+        }}
+        
+        .nav-item.active {{
+            background: var(--bg-hover);
+        }}
+        
+        .nav-item-icon {{
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+        }}
+        
+        .sidebar-footer {{
+            padding: 12px;
+            border-top: 1px solid var(--border);
+        }}
+        
+        .status-badge {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: var(--bg-hover);
+            border-radius: 8px;
+            font-size: 12px;
+        }}
+        
+        .status-dot {{
+            width: 8px;
+            height: 8px;
+            background: var(--accent);
+            border-radius: 50%;
+        }}
+        
+        /* === MAIN CONTENT === */
+        .main {{
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }}
+        
+        .chat-header {{
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+        
+        .chat-title {{
+            font-size: 16px;
+            font-weight: 600;
+        }}
+        
+        .chat-container {{
+            flex: 1;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }}
+        
+        .chat-messages {{
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 24px;
+        }}
+        
+        .message {{
+            margin-bottom: 24px;
+            display: flex;
+            gap: 16px;
+        }}
+        
+        .message-avatar {{
+            width: 36px;
+            height: 36px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+        }}
+        
+        .message.user .message-avatar {{
+            background: #5436DA;
+        }}
+        
+        .message.assistant .message-avatar,
+        .message.axis .message-avatar {{
+            background: var(--accent);
+        }}
+        
+        .message-content {{
+            flex: 1;
+            min-width: 0;
+        }}
+        
+        .message-role {{
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: var(--text-primary);
+        }}
+        
+        .message-text {{
+            line-height: 1.7;
+            font-size: 15px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }}
+        
+        .message-text strong {{
+            font-weight: 600;
+        }}
+        
+        .message-text code {{
+            background: var(--bg-input);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Menlo', monospace;
+            font-size: 13px;
+        }}
+        
+        /* === INPUT AREA === */
+        .input-area {{
+            padding: 16px 24px 24px;
+            background: var(--bg-primary);
+        }}
+        
+        .input-container {{
+            max-width: 800px;
+            margin: 0 auto;
+        }}
+        
+        .input-wrapper {{
+            background: var(--bg-input);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: flex-end;
+            padding: 12px 16px;
+            gap: 12px;
+            transition: border-color 0.2s;
+        }}
+        
+        .input-wrapper:focus-within {{
+            border-color: var(--accent);
+        }}
+        
+        textarea {{
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-size: 15px;
+            font-family: inherit;
+            line-height: 1.5;
+            resize: none;
+            max-height: 200px;
+            min-height: 24px;
+        }}
+        
+        textarea:focus {{
+            outline: none;
+        }}
+        
+        textarea::placeholder {{
+            color: var(--text-secondary);
+        }}
+        
+        .send-btn {{
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: var(--accent);
+            border: none;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+            flex-shrink: 0;
+        }}
+        
+        .send-btn:hover {{
+            background: var(--accent-hover);
+        }}
+        
+        .send-btn:disabled {{
+            background: var(--bg-hover);
+            cursor: not-allowed;
+        }}
+        
+        .send-btn svg {{
+            width: 18px;
+            height: 18px;
+        }}
+        
+        .input-hint {{
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 8px;
+        }}
+        
+        /* === RESPONSIVE === */
+        @media (max-width: 768px) {{
+            .sidebar {{
+                display: none;
+            }}
+        }}
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>🤖 Axi v11 <span class="db-status">{db_status}</span></h1>
-        <div class="nav">
-            <a href="/">💬 Chat</a>
-            <a href="/trio">👥 Trio</a>
-            <a href="/briefing">📋 Briefing</a>
-            <a href="/test-veille">🏠 DPE</a>
-            <a href="/test-veille-concurrence">🔍 Concurrence</a>
-            <a href="/dvf/stats">📊 DVF</a>
-            <a href="/stats">📈 Stats</a>
-            <a href="/effacer" onclick="return confirm('Effacer la mémoire conversation ?')">🗑️ Effacer</a>
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <button class="new-chat-btn" onclick="if(confirm('Effacer et démarrer une nouvelle conversation ?')) window.location.href='/effacer'">
+                <span>➕</span>
+                <span>Nouvelle conversation</span>
+            </button>
         </div>
-        <div class="status">● En ligne</div>
-    </div>
-    
-    <div class="chat-container" id="chat">
-        {conversations}
-    </div>
-    
-    <div class="input-container">
-        <div class="input-wrapper">
-            <textarea id="messageInput" placeholder="Écris ton message... (Entrée pour envoyer)" autofocus></textarea>
-            <button id="sendBtn" onclick="sendMessage()">Envoyer</button>
+        
+        <nav class="sidebar-nav">
+            <div class="nav-section">
+                <div class="nav-section-title">Outils</div>
+                <a href="/" class="nav-item active">
+                    <span class="nav-item-icon">💬</span>
+                    <span>Chat</span>
+                </a>
+                <a href="/trio" class="nav-item">
+                    <span class="nav-item-icon">👥</span>
+                    <span>Mode Trio</span>
+                </a>
+                <a href="/briefing" class="nav-item">
+                    <span class="nav-item-icon">📋</span>
+                    <span>Briefing</span>
+                </a>
+            </div>
+            
+            <div class="nav-section">
+                <div class="nav-section-title">Veilles</div>
+                <a href="/test-veille" class="nav-item">
+                    <span class="nav-item-icon">🏠</span>
+                    <span>DPE ADEME</span>
+                </a>
+                <a href="/test-veille-concurrence" class="nav-item">
+                    <span class="nav-item-icon">🔍</span>
+                    <span>Concurrence</span>
+                </a>
+                <a href="/dvf/stats" class="nav-item">
+                    <span class="nav-item-icon">📊</span>
+                    <span>DVF Stats</span>
+                </a>
+            </div>
+            
+            <div class="nav-section">
+                <div class="nav-section-title">Système</div>
+                <a href="/stats" class="nav-item">
+                    <span class="nav-item-icon">📈</span>
+                    <span>Statistiques</span>
+                </a>
+                <a href="/memory" class="nav-item">
+                    <span class="nav-item-icon">🧠</span>
+                    <span>Memory</span>
+                </a>
+            </div>
+        </nav>
+        
+        <div class="sidebar-footer">
+            <div class="status-badge">
+                <span class="status-dot"></span>
+                <span>Axi v11 • {db_status}</span>
+            </div>
         </div>
-    </div>
+    </aside>
+    
+    <!-- MAIN -->
+    <main class="main">
+        <header class="chat-header">
+            <div class="chat-title">🤖 Axi - ICI Dordogne</div>
+            <div style="font-size: 12px; color: var(--text-secondary);">Je ne lâche pas ! 💪</div>
+        </header>
+        
+        <div class="chat-container" id="chat">
+            <div class="chat-messages">
+                {conversations}
+            </div>
+        </div>
+        
+        <div class="input-area">
+            <div class="input-container">
+                <div class="input-wrapper">
+                    <textarea id="messageInput" placeholder="Écris ton message à Axi..." rows="1" autofocus></textarea>
+                    <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="input-hint">Entrée pour envoyer • Shift+Entrée pour nouvelle ligne</div>
+            </div>
+        </div>
+    </main>
     
     <script>
-        // Scroll automatique en bas au chargement
+        // Auto-resize textarea
+        const textarea = document.getElementById('messageInput');
+        textarea.addEventListener('input', function() {{
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+        }});
+        
+        // Scroll to bottom
         const chatBox = document.getElementById('chat');
         chatBox.scrollTop = chatBox.scrollHeight;
 
-        // Gestionnaire d'envoi AJAX
+        // Send message
         async function sendMessage() {{
             const input = document.getElementById('messageInput');
             const btn = document.getElementById('sendBtn');
@@ -1181,36 +1530,29 @@ def generer_page_html(conversations):
             
             if (!message) return;
             
-            // 1. UI Feedback IMMÉDIAT
             input.disabled = true;
             btn.disabled = true;
-            btn.innerText = "⏳";
-            input.style.opacity = "0.5";
+            btn.innerHTML = '<span style="animation: spin 1s linear infinite">⏳</span>';
 
-            // 2. Envoi des données en format Form-Data
             try {{
                 const formData = new URLSearchParams();
                 formData.append('message', message);
 
                 const response = await fetch('/chat', {{
                     method: 'POST',
-                    headers: {{
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    }},
+                    headers: {{ 'Content-Type': 'application/x-www-form-urlencoded' }},
                     body: formData
                 }});
 
-                // 3. Une fois fini, on recharge pour voir la réponse
                 if (response.ok || response.redirected) {{
                     window.location.reload(); 
                 }} else {{
                     alert("Erreur serveur : " + response.status);
                     resetUI();
                 }}
-
             }} catch (error) {{
                 console.error('Erreur:', error);
-                alert("Erreur de connexion. Vérifie Railway.");
+                alert("Erreur de connexion.");
                 resetUI();
             }}
         }}
@@ -1220,12 +1562,11 @@ def generer_page_html(conversations):
             const btn = document.getElementById('sendBtn');
             input.disabled = false;
             btn.disabled = false;
-            btn.innerText = "Envoyer";
-            input.style.opacity = "1";
+            btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
             input.focus();
         }}
 
-        // Gestion de la touche Entrée
+        // Enter to send
         document.getElementById('messageInput').addEventListener('keydown', function(e) {{
             if (e.key === 'Enter' && !e.shiftKey) {{
                 e.preventDefault();
@@ -1238,9 +1579,15 @@ def generer_page_html(conversations):
 
 
 def formater_conversations_html(historique_txt):
-    """Formate les conversations en HTML"""
+    """Formate les conversations en HTML style Claude.ai"""
     if not historique_txt:
-        return '<div class="message assistant"><div class="role">Axi</div><div class="content">Salut ! Je suis Axi v11, avec une mémoire PostgreSQL maintenant ! 🚀</div></div>'
+        return '''<div class="message assistant">
+            <div class="message-avatar">🤖</div>
+            <div class="message-content">
+                <div class="message-role">Axi</div>
+                <div class="message-text">Salut ! Je suis Axi, ton assistant immobilier avec une mémoire PostgreSQL permanente. Je ne lâche pas ! 💪</div>
+            </div>
+        </div>'''
     
     html = ""
     lignes = historique_txt.strip().split('\n')
@@ -1251,36 +1598,58 @@ def formater_conversations_html(historique_txt):
         nonlocal html, message_courant, role_courant
         if message_courant and role_courant:
             contenu = '\n'.join(message_courant)
+            # Échapper HTML basique
+            contenu = contenu.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            # Convertir **bold** en <strong>
+            import re
+            contenu = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', contenu)
+            
             if role_courant == 'user':
                 css_class = 'user'
                 label = 'Ludo'
+                avatar = '👤'
             elif role_courant == 'axis':
                 css_class = 'axis'
                 label = 'Axis'
+                avatar = '🧠'
             else:
                 css_class = 'assistant'
                 label = 'Axi'
-            html += f'<div class="message {css_class}"><div class="role">{label}</div><div class="content">{contenu}</div></div>'
+                avatar = '🤖'
+            
+            html += f'''<div class="message {css_class}">
+                <div class="message-avatar">{avatar}</div>
+                <div class="message-content">
+                    <div class="message-role">{label}</div>
+                    <div class="message-text">{contenu}</div>
+                </div>
+            </div>'''
     
     for ligne in lignes:
         if ligne.startswith('[USER]'):
             flush_message()
             role_courant = 'user'
-            message_courant = [ligne.replace('[USER] ', '')]
+            message_courant = [ligne.replace('[USER] ', '').replace('[USER]', '')]
         elif ligne.startswith('[AXIS]'):
             flush_message()
             role_courant = 'axis'
-            message_courant = [ligne.replace('[AXIS] ', '')]
+            message_courant = [ligne.replace('[AXIS] ', '').replace('[AXIS]', '')]
         elif ligne.startswith('[AXI]'):
             flush_message()
             role_courant = 'assistant'
-            message_courant = [ligne.replace('[AXI] ', '')]
+            message_courant = [ligne.replace('[AXI] ', '').replace('[AXI]', '')]
         else:
             message_courant.append(ligne)
     
     flush_message()
     
-    return html if html else '<div class="message assistant"><div class="role">Axi</div><div class="content">Salut ! Je suis Axi v11. 🚀</div></div>'
+    return html if html else '''<div class="message assistant">
+        <div class="message-avatar">🤖</div>
+        <div class="message-content">
+            <div class="message-role">Axi</div>
+            <div class="message-text">Salut ! Je suis Axi v11. 🚀</div>
+        </div>
+    </div>'''
 
 # ============================================================
 # APSCHEDULER - CRON JOBS
