@@ -1877,10 +1877,19 @@ class AxiHandler(BaseHTTPRequestHandler):
             self.wfile.write(html.encode())
         
         elif path == '/effacer':
+            # NE PAS supprimer les souvenirs importants !
+            # On efface seulement l'affichage, pas la mémoire PostgreSQL
+            # Les conversations restent en base pour le contexte LLM
             if DB_OK:
                 db = get_db()
-                db._query("DELETE FROM souvenirs WHERE type='conversation'")
+                # Marquer la fin de session au lieu de supprimer
+                db.ajouter_souvenir(
+                    type_evt='systeme',
+                    source='axi',
+                    contenu='--- Nouvelle session de chat ---'
+                )
             else:
+                # En mode fichier, on garde l'ancien comportement
                 ecrire_fichier(CONVERSATIONS_FILE, "")
             self.send_response(302)
             self.send_header('Location', '/')
