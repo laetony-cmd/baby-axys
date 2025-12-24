@@ -1,6 +1,6 @@
 """
-AXI DATABASE LAYER - Version V4 Corrigée
-Compatible avec init_schema_v4_final.sql
+AXI DATABASE LAYER - Version V5 avec Sessions
+Compatible avec init_schema_v4_final.sql + migration session_id
 """
 
 import psycopg2
@@ -17,6 +17,9 @@ DB_CONFIG = {
     "host": os.environ.get("AXI_DB_HOST", "localhost"),
     "port": os.environ.get("AXI_DB_PORT", "5432")
 }
+
+# Types de souvenirs PERMANENTS (jamais filtrés par session)
+TYPES_PERMANENTS = ['famille', 'projet_immo', 'fait', 'identite', 'config', 'systeme']
 
 class AxiDB:
     def __init__(self):
@@ -58,61 +61,146 @@ class AxiDB:
             return None
 
     # =========================================================================
-    # 🧠 SOUVENIRS (Mémoire / Conversations / Logs)
+    # 🧠 SOUVENIRS (Mémoire / Conversations / Logs) - AVEC SESSIONS
     # =========================================================================
 
-    def ajouter_souvenir(self, type_evt, source, contenu, relation_id=None, bien_id=None, metadata=None):
+    def ajouter_souvenir(self, type_evt, source, contenu, session_id=None, relation_id=None, bien_id=None, metadata=None):
         """
         Enregistre un souvenir (conversation, log, erreur, etc.)
+        NOUVEAU: session_id pour cloisonner les conversations
         """
         sql = """
-            INSERT INTO souvenirs (type, source, contenu, relation_id, bien_id, metadata, timestamp)
-            VALUES (%s, %s, %s, %s, %s, %s, NOW())
+            INSERT INTO souvenirs (type, source, contenu, session_id, relation_id, bien_id, metadata, timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
             RETURNING id;
         """
         meta_json = json.dumps(metadata, ensure_ascii=False) if metadata else None
-        result = self._query(sql, (type_evt, source, contenu, relation_id, bien_id, meta_json), fetch_one=True)
+        result = self._query(sql, (type_evt, source, contenu, session_id, relation_id, bien_id, meta_json), fetch_one=True)
         return result['id'] if result else None
 
-    def recuperer_contexte_chat(self, limit=50):
-        """Récupère l'historique récent des conversations"""
-        sql = """
-            SELECT source, contenu, timestamp 
+    def recuperer_contexte_chat(self, session_id=None, limit=50):
+        """
+        Récupère l'historique des conversations pour une session
+        NOUVEAU: Filtre par session_id si fourni
+        """
+        if session_id:
+            sql = """
+                SELECT source, contenu, timestamp, session_id
+                FROM souvenirs 
+                WHERE type = 'conversation' AND session_id = %s
+                ORDER BY timestamp DESC 
+                LIMIT %s;
+            """
+            rows = self._query(sql, (session_id, limit), fetch=True)
+        else:
+            # Fallback: toutes les conversations récentes
+            sql = """
+                SELECT source, contenu, timestamp, session_id
+                FROM souvenirs 
+                WHERE type = 'conversation' 
+                ORDER BY timestamp DESC 
+                LIMIT %s;
+            """
+            rows = self._query(sql, (limit,), fetch=True)
+        
+        return sorted(rows, key=lambda x: x['timestamp']) if rows else []
+
+    def recuperer_souvenirs_permanents(self, limit=100):
+        """
+        Récupère les souvenirs permanents (famille, projets, faits...)
+        Ces souvenirs ne sont JAMAIS filtrés par session
+        """
+        types_str = ','.join([f"'{t}'" for t in TYPES_PERMANENTS])
+        sql = f"""
+            SELECT source, contenu, type, timestamp
             FROM souvenirs 
-            WHERE type = 'conversation' 
+            WHERE type IN ({types_str})
             ORDER BY timestamp DESC 
             LIMIT %s;
         """
-        rows = self._query(sql, (limit,), fetch=True)
-        return sorted(rows, key=lambda x: x['timestamp']) if rows else []
+        return self._query(sql, (limit,), fetch=True) or []
 
-    def formater_historique_pour_llm(self, limit=50):
+    def formater_historique_pour_llm(self, session_id=None, limit=50):
         """
         Formate l'historique en string pour le prompt Claude/Mistral
-        Retourne le format attendu par main.py
-        """
-        conversations = self.recuperer_contexte_chat(limit)
-        if not conversations:
-            return ""
         
+        LOGIQUE CRITIQUE (Gemini):
+        - Conversations de la SESSION COURANTE uniquement
+        - PLUS les souvenirs PERMANENTS (famille, projets, etc.)
+        """
         lignes = []
-        for conv in conversations:
-            source = conv['source'].upper()
-            if source == 'LUDO':
-                tag = '[USER]'
-            elif source == 'AXIS':
-                tag = '[AXIS]'
-            elif source == 'AXI':
-                tag = '[AXI]'
-            else:
-                tag = f'[{source}]'
-            lignes.append(f"{tag} {conv['contenu']}")
+        
+        # 1. SOUVENIRS PERMANENTS (toujours inclus, quelle que soit la session)
+        permanents = self.recuperer_souvenirs_permanents(limit=30)
+        if permanents:
+            lignes.append("=== MÉMOIRE PERMANENTE ===")
+            for p in permanents:
+                lignes.append(f"[{p['type'].upper()}] {p['contenu']}")
+            lignes.append("=== FIN MÉMOIRE PERMANENTE ===")
+            lignes.append("")
+        
+        # 2. CONVERSATIONS DE LA SESSION COURANTE
+        conversations = self.recuperer_contexte_chat(session_id, limit)
+        if conversations:
+            if session_id:
+                lignes.append(f"=== SESSION {session_id} ===")
+            for conv in conversations:
+                source = conv['source'].upper()
+                if source == 'LUDO':
+                    tag = '[USER]'
+                elif source == 'AXIS':
+                    tag = '[AXIS]'
+                elif source == 'AXI':
+                    tag = '[AXI]'
+                else:
+                    tag = f'[{source}]'
+                lignes.append(f"{tag} {conv['contenu']}")
         
         return "\n".join(lignes)
 
+    def lister_sessions(self, limit=50):
+        """
+        Liste toutes les sessions avec stats
+        Retourne: [{session_id, debut, fin, nb_messages}, ...]
+        """
+        sql = """
+            SELECT 
+                session_id,
+                MIN(timestamp) as debut,
+                MAX(timestamp) as fin,
+                COUNT(*) as nb_messages
+            FROM souvenirs 
+            WHERE type = 'conversation' AND session_id IS NOT NULL
+            GROUP BY session_id 
+            ORDER BY debut DESC 
+            LIMIT %s;
+        """
+        return self._query(sql, (limit,), fetch=True) or []
+
+    def charger_session(self, session_id):
+        """
+        Charge une session spécifique (pour reprendre une ancienne conversation)
+        """
+        sql = """
+            SELECT source, contenu, timestamp
+            FROM souvenirs 
+            WHERE type = 'conversation' AND session_id = %s
+            ORDER BY timestamp ASC;
+        """
+        return self._query(sql, (session_id,), fetch=True) or []
+
+    def ajouter_souvenir_permanent(self, type_souvenir, contenu, source='axi', metadata=None):
+        """
+        Raccourci pour ajouter un souvenir permanent (sans session_id)
+        Types: 'famille', 'projet_immo', 'fait', 'identite', 'config'
+        """
+        if type_souvenir not in TYPES_PERMANENTS:
+            print(f"⚠️ [DB] Type '{type_souvenir}' n'est pas un type permanent")
+        return self.ajouter_souvenir(type_souvenir, source, contenu, session_id=None, metadata=metadata)
+
     def log_systeme(self, message, metadata=None):
-        """Raccourci pour logs système"""
-        return self.ajouter_souvenir('systeme', 'axi', message, metadata=metadata)
+        """Raccourci pour logs système (permanent)"""
+        return self.ajouter_souvenir('systeme', 'axi', message, session_id=None, metadata=metadata)
 
     def log_erreur(self, message, metadata=None):
         """Raccourci pour logs d'erreur"""
@@ -333,14 +421,11 @@ if __name__ == "__main__":
     if db.connect():
         print("✅ Connexion OK")
         
-        # Test écriture
-        test_id = db.ajouter_souvenir('test', 'script', 'Test de connexion db.py')
-        if test_id:
-            print(f"✅ Écriture OK (souvenir #{test_id})")
-        
-        # Test lecture
-        stats = db.stats_biens_par_dpe()
-        print(f"📊 Stats DPE: {stats}")
+        # Test sessions
+        sessions = db.lister_sessions(10)
+        print(f"📋 Sessions existantes: {len(sessions)}")
+        for s in sessions[:3]:
+            print(f"   - {s['session_id']}: {s['nb_messages']} messages")
         
         db.close()
     else:
