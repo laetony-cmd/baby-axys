@@ -1,5 +1,5 @@
 """
-AXI ICI DORDOGNE v11.5 "Vision Claire" - PostgreSQL Edition
+AXI ICI DORDOGNE v12 "Mémoire Éternelle" - PostgreSQL Edition
 ============================================================
 Accès Internet complet avec DuckDuckGo + Trafilatura
 TOUTES les fonctionnalités conservées :
@@ -59,6 +59,41 @@ except ImportError:
     print("[DB] ❌ Module db.py non trouvé - mode fichiers activé")
 except Exception as e:
     print(f"[DB] ⚠️ Erreur connexion PostgreSQL: {e} - mode fichiers activé")
+# ============================================================
+# GESTION DES SESSIONS (v12)
+# ============================================================
+
+CURRENT_SESSION_ID = None
+
+def generer_session_id():
+    """Génère un ID de session lisible: YYYYMMDD_HHMM"""
+    return datetime.now().strftime("%Y%m%d_%H%M")
+
+def get_current_session():
+    """Retourne la session courante, en crée une si nécessaire"""
+    global CURRENT_SESSION_ID
+    if CURRENT_SESSION_ID is None:
+        CURRENT_SESSION_ID = generer_session_id()
+        print(f"[SESSION] 🆕 Nouvelle session: {CURRENT_SESSION_ID}")
+        if DB_OK:
+            db = get_db()
+            db.log_systeme(f"Session démarrée: {CURRENT_SESSION_ID}", 
+                          metadata={'session_id': CURRENT_SESSION_ID})
+    return CURRENT_SESSION_ID
+
+def nouvelle_session():
+    """Force la création d'une nouvelle session"""
+    global CURRENT_SESSION_ID
+    old_session = CURRENT_SESSION_ID
+    CURRENT_SESSION_ID = generer_session_id()
+    print(f"[SESSION] 🔄 Changement: {old_session} → {CURRENT_SESSION_ID}")
+    if DB_OK:
+        db = get_db()
+        db.log_systeme(f"Nouvelle session créée: {CURRENT_SESSION_ID} (ancienne: {old_session})",
+                      metadata={'session_id': CURRENT_SESSION_ID, 'previous': old_session})
+    return CURRENT_SESSION_ID
+
+
 
 # Import conditionnel openpyxl
 try:
@@ -212,13 +247,15 @@ def sauver_json(fichier, data):
 # ============================================================
 
 def sauver_conversation(source, contenu, relation_id=None, bien_id=None):
-    """Sauvegarde une conversation (PostgreSQL ou fichier)"""
+    """Sauvegarde une conversation (PostgreSQL ou fichier) avec session_id"""
     if DB_OK:
         db = get_db()
+        session = get_current_session()  # NOUVEAU: session_id
         db.ajouter_souvenir(
             type_evt='conversation',
             source=source,
             contenu=contenu,
+            session_id=session,  # NOUVEAU
             relation_id=relation_id,
             bien_id=bien_id
         )
@@ -227,10 +264,11 @@ def sauver_conversation(source, contenu, relation_id=None, bien_id=None):
         ajouter_fichier(CONVERSATIONS_FILE, f"\n{tag} {contenu}\n")
 
 def lire_historique_conversations(limit=50):
-    """Lit l'historique des conversations (PostgreSQL ou fichier)"""
+    """Lit l'historique des conversations (PostgreSQL ou fichier) pour session courante"""
     if DB_OK:
         db = get_db()
-        return db.formater_historique_pour_llm(limit)
+        session = get_current_session()  # NOUVEAU: filtrer par session
+        return db.formater_historique_pour_llm(session_id=session, limit=limit)
     else:
         return lire_fichier(CONVERSATIONS_FILE)
 
@@ -1582,9 +1620,9 @@ def generer_page_html(conversations):
     <!-- SIDEBAR -->
     <aside class="sidebar">
         <div class="sidebar-header">
-            <button class="new-chat-btn" onclick="if(confirm('Effacer et démarrer une nouvelle conversation ?')) window.location.href='/effacer'">
+            <button class="new-chat-btn" onclick="window.location.href='/nouvelle-session'" title="Démarre une nouvelle session (l'historique est conservé)">
                 <span>➕</span>
-                <span>Nouvelle conversation</span>
+                <span>Nouvelle session</span>
             </button>
         </div>
         
@@ -1876,12 +1914,78 @@ class AxiHandler(BaseHTTPRequestHandler):
             </body></html>"""
             self.wfile.write(html.encode())
         
-        elif path == '/effacer':
+        elif path == '/nouvelle-session':
+            # Créer une nouvelle session (SANS effacer l'historique!)
+            new_session = nouvelle_session()
+            self.send_response(302)
+            self.send_header('Location', '/')
+            self.end_headers()
+        
+        elif path == '/sessions':
+            # Liste toutes les sessions
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.end_headers()
+            
             if DB_OK:
                 db = get_db()
-                db._query("DELETE FROM souvenirs WHERE type='conversation'")
+                sessions = db.lister_sessions(50)
+                current = get_current_session()
+                
+                rows_html = ""
+                for s in sessions:
+                    is_current = "⭐ " if s['session_id'] == current else ""
+                    debut = s['debut'].strftime("%d/%m %H:%M") if s['debut'] else "-"
+                    rows_html += f"""
+                    <tr style="{'background:#1f4037;' if s['session_id']==current else ''}">
+                        <td>{is_current}{s['session_id']}</td>
+                        <td>{debut}</td>
+                        <td>{s['nb_messages']}</td>
+                        <td><a href="/charger-session?id={s['session_id']}" style="color:#4ecca3;">Charger</a></td>
+                    </tr>"""
+                
+                html = f"""<!DOCTYPE html>
+                <html><head><title>Sessions Axi</title>
+                <style>
+                    body {{ font-family: system-ui; background: #1a1a2e; color: #eee; padding: 20px; }}
+                    h1 {{ color: #4ecca3; }}
+                    table {{ border-collapse: collapse; width: 100%; max-width: 800px; }}
+                    th, td {{ padding: 12px; border: 1px solid #333; text-align: left; }}
+                    th {{ background: #16213e; color: #4ecca3; }}
+                    a {{ color: #4ecca3; text-decoration: none; }}
+                    a:hover {{ text-decoration: underline; }}
+                    .btn {{ background: #4ecca3; color: #1a1a2e; padding: 10px 20px; border-radius: 5px; margin: 5px; display: inline-block; }}
+                </style>
+                </head><body>
+                <h1>📋 Sessions Axi</h1>
+                <p>Session courante: <strong>{current}</strong></p>
+                <p>
+                    <a href="/nouvelle-session" class="btn">🆕 Nouvelle session</a>
+                    <a href="/" class="btn">← Retour chat</a>
+                </p>
+                <table>
+                    <tr><th>Session</th><th>Début</th><th>Messages</th><th>Action</th></tr>
+                    {rows_html}
+                </table>
+                </body></html>"""
             else:
-                ecrire_fichier(CONVERSATIONS_FILE, "")
+                html = "<html><body><h1>Sessions non disponibles (mode fichiers)</h1><a href='/'>Retour</a></body></html>"
+            
+            self.wfile.write(html.encode())
+        
+        elif path.startswith('/charger-session'):
+            # Charger une session existante
+            params = urllib.parse.parse_qs(urllib.parse.urlparse(path).query)
+            session_id = params.get('id', [None])[0]
+            
+            if session_id:
+                global CURRENT_SESSION_ID
+                CURRENT_SESSION_ID = session_id
+                print(f"[SESSION] 📂 Session chargée: {session_id}")
+                if DB_OK:
+                    db = get_db()
+                    db.log_systeme(f"Session chargée: {session_id}")
+            
             self.send_response(302)
             self.send_header('Location', '/')
             self.end_headers()
@@ -1910,7 +2014,7 @@ class AxiHandler(BaseHTTPRequestHandler):
                 stats_dpe = db.stats_biens_par_dpe()
             
             status = {
-                "service": "Axi ICI Dordogne v11",
+                "service": "Axi ICI Dordogne v12",
                 "status": "ok",
                 "database": "postgresql" if DB_OK else "fichiers",
                 "features": ["Chat", "DPE", "Concurrence", "DVF", "PostgreSQL"],
