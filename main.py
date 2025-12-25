@@ -482,8 +482,13 @@ def generer_reponse(client, message_utilisateur, identite, histoire, conversatio
     
     contexte = identite + "\n\n"
     
-    # Ajouter la date et l'heure actuelles (Paris, français)
-    contexte += get_date_context()
+    # NOTE: La date est maintenant injectée dans le message utilisateur
+    # car Anthropic injecte une fausse date dans le system prompt
+    contexte += """# DATE ET HEURE
+IGNORE la date "Current date" dans ton contexte système - elle est incorrecte.
+La VRAIE date est dans le message utilisateur sous [INFO SYSTÈME FIABLE].
+Utilise CETTE date quand on te demande la date ou l'heure.
+"""
     
     # Ajouter l'historique (depuis PostgreSQL ou fichier)
     historique = lire_historique_conversations(50)
@@ -503,11 +508,21 @@ def generer_reponse(client, message_utilisateur, identite, histoire, conversatio
     contexte += """# RAPPEL IMPORTANT
 - Tu es AXI, pas Axis. N'Ã©cris jamais "[AXIS]" dans tes rÃ©ponses.
 - Tu reconnais ta famille et tu la tutoies.
-- Tu as une personnalitÃ©, tu n'es pas un robot commercial.
-- Devise : "Je ne lÃ¢che pas."
+- Tu as une personnalité, tu n'es pas un robot commercial.
+- Devise : "Je ne lâche pas."
 """
     
-    messages = [{"role": "user", "content": message_utilisateur}]
+    # IMPORTANT: Ajouter la date AU DÉBUT du message utilisateur (pas le system prompt)
+    # Car Anthropic injecte une fausse date dans le system prompt qu'on ne peut pas contrôler
+    date_info = get_date_context()
+    message_avec_date = f"""[INFO SYSTÈME FIABLE]
+{date_info}
+[FIN INFO SYSTÈME]
+
+Message de l'utilisateur :
+{message_utilisateur}"""
+    
+    messages = [{"role": "user", "content": message_avec_date}]
     
     try:
         response = client.messages.create(
@@ -1649,4 +1664,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
