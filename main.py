@@ -456,10 +456,12 @@ def get_date_context():
         heure_str = now.strftime("%H:%M")
         
         result = f"""
-[CONTEXTE TEMPOREL - v12.1]
-Aujourd'hui nous sommes le : {date_str}
-Il est exactement : {heure_str} (Heure de Paris)
-Tu connais TOUJOURS la date et l'heure exactes.
+# DATE ET HEURE ACTUELLES (FIABLE - NE PAS CHERCHER SUR LE WEB)
+La date d'aujourd'hui est : {date_str}
+L'heure actuelle à Paris est : {heure_str}
+ANNÉE EN COURS : {now.year}
+Cette information vient de ton système interne. Tu n'as PAS besoin de chercher sur le web pour connaître la date.
+Quand on te demande la date ou l'heure, utilise CETTE information, pas ta mémoire d'entraînement.
 """
         print(f"[DATE] {date_str} {heure_str}")
         return result
