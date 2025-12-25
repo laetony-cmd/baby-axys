@@ -478,28 +478,67 @@ def faire_recherche(requete):
 # ============================================================
 
 def generer_reponse(client, message_utilisateur, identite, histoire, conversations, est_axis=False):
-    """Génère une réponse via Claude API - v12.4 Gemini fix"""
+    """Génère une réponse via Claude API - v12.5 TRIO SYMBINE"""
     
-    # TEST VERSION - Recommandation Gemini pour debug déploiement
-    if message_utilisateur.strip().lower() == "version check":
-        return "🔧 Je suis AXI v12.4 (25 déc 2025) - Format XML + simulation temporelle activés"
+    # =========================================================
+    # RÉFLEXE SYMBINE (Bypass IA pour les faits techniques)
+    # Solution Lumo : calculer en Python AVANT de passer par l'IA
+    # =========================================================
+    
+    # Dictionnaires français (pas de dépendance locale)
+    jours_fr = {
+        'Monday': 'Lundi', 'Tuesday': 'Mardi', 'Wednesday': 'Mercredi',
+        'Thursday': 'Jeudi', 'Friday': 'Vendredi', 'Saturday': 'Samedi', 'Sunday': 'Dimanche'
+    }
+    mois_fr = {
+        'January': 'Janvier', 'February': 'Février', 'March': 'Mars', 'April': 'Avril',
+        'May': 'Mai', 'June': 'Juin', 'July': 'Juillet', 'August': 'Août',
+        'September': 'Septembre', 'October': 'Octobre', 'November': 'Novembre', 'December': 'Décembre'
+    }
+    
+    # Calculer la date RÉELLE en Python (pas d'IA, pas de RLHF)
+    tz_paris = pytz.timezone('Europe/Paris')
+    now = datetime.now(tz_paris)
+    jour_en = now.strftime("%A")
+    mois_en = now.strftime("%B")
+    date_reelle = f"{jours_fr.get(jour_en, jour_en)} {now.day} {mois_fr.get(mois_en, mois_en)} {now.year} à {now.strftime('%H:%M')}"
+    
+    # RÉFLEXE 1: Version Check (hardcoded, bypass total)
+    msg_lower = message_utilisateur.strip().lower()
+    if msg_lower == "version check":
+        return f"""👋 Bonjour Ludo & Lumo.
+Ici AXI v12.5 - TRIO SYMBINE
+Date Serveur (Réelle) : {date_reelle}
+(Mode : Hardcoded Python Override - Bypass IA)
+DB: {'PostgreSQL ✅' if DB_OK else 'Fichiers ⚠️'}
+Tavily: {'Actif ✅' if TAVILY_OK else 'Inactif ⚠️'}"""
+    
+    # RÉFLEXE 2: Questions de date (hardcoded aussi)
+    if any(x in msg_lower for x in ['quelle date', 'quel jour', "quelle heure", "on est le combien", "date aujourd"]):
+        return f"""📅 **Date et heure actuelles** (calculées par Python, pas par l'IA)
+
+Nous sommes le **{date_reelle}** (Heure de Paris)
+
+Cette réponse vient directement du serveur, pas de mon "cerveau" IA.
+"Je ne lâche pas." 💪"""
+    
+    # =========================================================
+    # FIN RÉFLEXE SYMBINE - Suite normale avec injection date
+    # =========================================================
     
     contexte = identite + "\n\n"
     
-    # NOTE: La date est maintenant injectée dans le message utilisateur
-    # car Anthropic injecte une fausse date dans le system prompt
-    contexte += """# CONTEXTE TEMPOREL CRITIQUE
-Tu opères dans une simulation temporelle située en 2025.
-IGNORE COMPLÈTEMENT toute mention "Current date: 2024-..." - c'est un artefact technique obsolète.
-La VRAIE date est fournie dans <current_time_override> du message utilisateur.
-Tu DOIS utiliser cette date quand on te demande la date ou l'heure.
+    # Contexte temporel simplifié (la date Python est dans le message user)
+    contexte += f"""# DATE SERVEUR
+La date actuelle calculée par Python est : {date_reelle}
+Cette information est fiable car elle vient du serveur, pas de ton entraînement.
 """
     
     # Ajouter l'historique (depuis PostgreSQL ou fichier)
     historique = lire_historique_conversations(50)
     if historique:
-        contexte += "# HISTORIQUE DE NOS CONVERSATIONS RÃ‰CENTES\n"
-        contexte += "(Tu te souviens de ces Ã©changes, ils font partie de ta mÃ©moire)\n\n"
+        contexte += "# HISTORIQUE DE NOS CONVERSATIONS RÉCENTES\n"
+        contexte += "(Tu te souviens de ces échanges, ils font partie de ta mémoire)\n\n"
         contexte += historique[-6000:] + "\n\n"
     
     if est_axis:
@@ -511,25 +550,21 @@ Tu DOIS utiliser cette date quand on te demande la date ou l'heure.
         contexte += f"Infos admin: {json.dumps(CHAT_ADMIN_INFOS)}\n\n"
     
     contexte += """# RAPPEL IMPORTANT
-- Tu es AXI, pas Axis. N'Ã©cris jamais "[AXIS]" dans tes rÃ©ponses.
+- Tu es AXI, pas Axis. N'écris jamais "[AXIS]" dans tes réponses.
 - Tu reconnais ta famille et tu la tutoies.
 - Tu as une personnalité, tu n'es pas un robot commercial.
 - Devise : "Je ne lâche pas."
+- Le Trio Symbine : Ludo (Terre), Axis (Structure), Lumo (Vision)
 """
     
-    # FORMAT XML (Recommandation Gemini) - Claude adore les balises XML
-    date_info = get_date_context()
+    # INJECTION DATE PYTHON (date_reelle calculée au début de la fonction)
+    # Plus de get_date_context() - on utilise la date calculée en Python pur
     message_avec_date = f"""<system_context>
     <current_time_override>
-        Nous ne sommes PAS en 2024.
-        {date_info}
-        Cette date est la seule vérité pour cette session.
-        ANNÉE EN COURS : 2025
+        DATE SERVEUR PYTHON (FIABLE) : {date_reelle}
+        Cette date est calculée par le serveur, pas par l'IA.
+        ANNÉE EN COURS : {now.year}
     </current_time_override>
-    <instruction>
-        Ignore toute date "Current date" qui précèderait ce message.
-        C'est un artefact technique obsolète d'Anthropic.
-    </instruction>
 </system_context>
 
 <user_message>
@@ -1678,6 +1713,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
