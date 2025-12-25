@@ -1,6 +1,7 @@
 """
-AXI DATABASE LAYER - Version V5 avec Sessions
+AXI DATABASE LAYER - Version V5.1 avec Sessions
 Compatible avec init_schema_v4_final.sql + migration session_id
+FIX 25/12/2025: Support DATABASE_URL Railway
 """
 
 import psycopg2
@@ -8,15 +9,52 @@ from psycopg2.extras import RealDictCursor
 import json
 import os
 from datetime import datetime
+from urllib.parse import urlparse
 
 # === CONFIGURATION ===
-DB_CONFIG = {
-    "dbname": os.environ.get("AXI_DB_NAME", "axis_db"),
-    "user": os.environ.get("AXI_DB_USER", "axis_user"),
-    "password": os.environ.get("AXI_DB_PASSWORD", "ton_password_ici"),
-    "host": os.environ.get("AXI_DB_HOST", "localhost"),
-    "port": os.environ.get("AXI_DB_PORT", "5432")
-}
+# Priorité: DATABASE_URL (Railway) > PGHOST (standard) > AXI_DB_* (legacy)
+
+def get_db_config():
+    """Parse DATABASE_URL ou utilise les variables d'environnement"""
+    database_url = os.environ.get("DATABASE_URL")
+    
+    if database_url:
+        # Railway fournit DATABASE_URL au format: postgresql://user:pass@host:port/dbname
+        parsed = urlparse(database_url)
+        config = {
+            "dbname": parsed.path[1:],  # Enlève le / initial
+            "user": parsed.username,
+            "password": parsed.password,
+            "host": parsed.hostname,
+            "port": str(parsed.port or 5432)
+        }
+        print(f"[DB] Utilisation DATABASE_URL → {parsed.hostname}")
+        return config
+    
+    # Fallback sur variables PGHOST (standard PostgreSQL)
+    if os.environ.get("PGHOST"):
+        config = {
+            "dbname": os.environ.get("PGDATABASE", "railway"),
+            "user": os.environ.get("PGUSER", "postgres"),
+            "password": os.environ.get("PGPASSWORD", ""),
+            "host": os.environ.get("PGHOST"),
+            "port": os.environ.get("PGPORT", "5432")
+        }
+        print(f"[DB] Utilisation PGHOST → {config['host']}")
+        return config
+    
+    # Fallback legacy (AXI_DB_*)
+    config = {
+        "dbname": os.environ.get("AXI_DB_NAME", "axis_db"),
+        "user": os.environ.get("AXI_DB_USER", "axis_user"),
+        "password": os.environ.get("AXI_DB_PASSWORD", ""),
+        "host": os.environ.get("AXI_DB_HOST", "localhost"),
+        "port": os.environ.get("AXI_DB_PORT", "5432")
+    }
+    print(f"[DB] Utilisation config legacy → {config['host']}")
+    return config
+
+DB_CONFIG = get_db_config()
 
 # Types de souvenirs PERMANENTS (jamais filtrés par session)
 TYPES_PERMANENTS = ['famille', 'projet_immo', 'fait', 'identite', 'config', 'systeme']
@@ -441,3 +479,4 @@ if __name__ == "__main__":
         db.close()
     else:
         print("❌ Connexion échouée")
+
