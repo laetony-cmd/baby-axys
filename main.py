@@ -438,27 +438,34 @@ def get_date_context():
     Sans dépendre de la locale du serveur Linux.
     Validé par Axis + Gemini le 25/12/2025.
     """
-    jours = {
-        0: "Lundi", 1: "Mardi", 2: "Mercredi", 3: "Jeudi", 
-        4: "Vendredi", 5: "Samedi", 6: "Dimanche"
-    }
-    mois_dict = {
-        1: "Janvier", 2: "Février", 3: "Mars", 4: "Avril", 
-        5: "Mai", 6: "Juin", 7: "Juillet", 8: "Août", 
-        9: "Septembre", 10: "Octobre", 11: "Novembre", 12: "Décembre"
-    }
-    
-    tz_paris = pytz.timezone('Europe/Paris')
-    now = datetime.now(tz_paris)
-    
-    date_str = f"{jours[now.weekday()]} {now.day} {mois_dict[now.month]} {now.year}"
-    heure_str = now.strftime("%H:%M")
-    
-    return f"""
-[CONTEXTE TEMPOREL]
-Nous sommes le : {date_str}
-Il est : {heure_str} (Heure de Paris)
+    try:
+        jours = {
+            0: "Lundi", 1: "Mardi", 2: "Mercredi", 3: "Jeudi", 
+            4: "Vendredi", 5: "Samedi", 6: "Dimanche"
+        }
+        mois_dict = {
+            1: "Janvier", 2: "Février", 3: "Mars", 4: "Avril", 
+            5: "Mai", 6: "Juin", 7: "Juillet", 8: "Août", 
+            9: "Septembre", 10: "Octobre", 11: "Novembre", 12: "Décembre"
+        }
+        
+        tz_paris = pytz.timezone('Europe/Paris')
+        now = datetime.now(tz_paris)
+        
+        date_str = f"{jours[now.weekday()]} {now.day} {mois_dict[now.month]} {now.year}"
+        heure_str = now.strftime("%H:%M")
+        
+        result = f"""
+[CONTEXTE TEMPOREL - v12.1]
+Aujourd'hui nous sommes le : {date_str}
+Il est exactement : {heure_str} (Heure de Paris)
+Tu connais TOUJOURS la date et l'heure exactes.
 """
+        print(f"[DATE] {date_str} {heure_str}")
+        return result
+    except Exception as e:
+        print(f"[DATE ERROR] {e}")
+        return f"\n[DATE] Erreur: {e}\n"
 
 def faire_recherche(requete):
     """Effectue une recherche et retourne un texte formaté"""
@@ -1640,3 +1647,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
