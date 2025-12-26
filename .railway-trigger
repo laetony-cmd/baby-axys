@@ -1,0 +1,7 @@
+# TRIGGER FILE - Force Railway Deploy
+# Timestamp: 1766721182
+# Date: Fri Dec 26 03:53:02 UTC 2025
+# 
+# Ce fichier existe uniquement pour forcer Railway à redéployer.
+# Si vous voyez ce fichier et que le déploiement ne fonctionne toujours pas,
+# vérifiez que l'auto-deploy GitHub est activé dans Railway Settings.
