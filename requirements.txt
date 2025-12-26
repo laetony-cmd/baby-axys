@@ -1,25 +1,28 @@
-# AXI V12.4 - Dépendances Python
-# Mis à jour le 25/12/2025 - FIX GEMINI
-# FORCE REBUILD pour installer tavily-python
+# AXI V12.5 TRIO SYMBINE - Dépendances Python
+# FORCE REBUILD: 1766720826
+# Dernière modification: 2025-12-26 03:47:06 UTC
 
-# API Claude
+# ============================================
+# OBLIGATOIRE - Ne pas supprimer
+# ============================================
+
+# API Claude (communication avec Anthropic)
 anthropic>=0.18.0
 
-# PostgreSQL
+# PostgreSQL (mémoire permanente)
 psycopg2-binary>=2.9.9
 
-# Scheduler (crons veilles)
+# Scheduler (crons veilles DPE/Concurrence)
 APScheduler>=3.10.0
+
+# Timezone Paris
 pytz>=2024.1
 
 # Excel (rapports veilles)
 openpyxl>=3.1.0
 
-# Recherche web IA (OBLIGATOIRE)
+# RECHERCHE WEB - TAVILY (CRITIQUE!)
 tavily-python>=0.3.0
 
-# URL parsing pour DATABASE_URL
-# (urllib.parse est builtin, pas besoin de package)
-
-# Optionnel - Si déploiement Docker
+# Serveur HTTP
 gunicorn>=21.0.0
