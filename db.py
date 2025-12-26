@@ -13,6 +13,14 @@ from urllib.parse import urlparse
 
 # === CONFIGURATION RAILWAY/LOCAL ===
 def get_db_config():
+    # Debug: afficher variables disponibles
+    import os
+    print("[DB-DEBUG] Variables ENV disponibles:")
+    for k in sorted(os.environ.keys()):
+        if 'PG' in k or 'DATABASE' in k or 'DB' in k:
+            v = os.environ[k]
+            print(f"  {k}={v[:20]}..." if len(v) > 20 else f"  {k}={v}")
+
     """Parse DATABASE_URL, ou PG vars, ou variables locales"""
     database_url = os.environ.get("DATABASE_URL")
     
