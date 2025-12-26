@@ -1,28 +1,23 @@
-# AXI V12.5 TRIO SYMBINE - Dépendances Python
-# FORCE REBUILD: 1766720826
-# Dernière modification: 2025-12-26 03:47:06 UTC
+# AXI V12.5 TRIO SYMBINE
+# FORCE NIXPACKS REBUILD: 1766723128
+# Date: 2025-12-26 04:25:28 UTC
 
-# ============================================
-# OBLIGATOIRE - Ne pas supprimer
-# ============================================
-
-# API Claude (communication avec Anthropic)
+# === CORE ===
 anthropic>=0.18.0
-
-# PostgreSQL (mémoire permanente)
 psycopg2-binary>=2.9.9
 
-# Scheduler (crons veilles DPE/Concurrence)
+# === SCHEDULER ===
 APScheduler>=3.10.0
-
-# Timezone Paris
 pytz>=2024.1
 
-# Excel (rapports veilles)
+# === EXCEL ===
 openpyxl>=3.1.0
 
-# RECHERCHE WEB - TAVILY (CRITIQUE!)
+# === RECHERCHE WEB (TAVILY - OBLIGATOIRE) ===
 tavily-python>=0.3.0
 
-# Serveur HTTP
+# === SERVEUR ===
 gunicorn>=21.0.0
+
+# === GOOGLE GEMINI (TRIO SYMBINE) ===
+google-generativeai>=0.3.0
