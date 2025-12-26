@@ -1,3 +1,4 @@
+# v12.5 TRIO SYMBINE fix - 26 dec 2025
 """
 AXI DATABASE LAYER - Version V5.1 avec Sessions
 Compatible avec init_schema_v4_final.sql + migration session_id
