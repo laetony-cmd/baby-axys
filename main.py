@@ -1,6 +1,6 @@
 # TRIO SYMBINE v12.5 - Rebuild 1766723924
 """
-AXI ICI DORDOGNE v11 UNIFIÃ‰ - PostgreSQL Edition
+AXI ICI DORDOGNE v12.5 - TRIO SYMBINE - UNIFIÃ‰ - PostgreSQL Edition
 =================================================
 Migration du v10 vers PostgreSQL
 TOUTES les fonctionnalitÃ©s conservÃ©es :
@@ -920,14 +920,14 @@ def run_veille_dpe():
             </tr>
             """
         
-        corps += "</table><p>ðŸ¤– GÃ©nÃ©rÃ© par Axi v11 (PostgreSQL)</p>"
+        corps += "</table><p>ðŸ¤– GÃ©nÃ©rÃ© par Axi v12.5 TRIO (PostgreSQL)</p>"
         
         envoyer_email(
             f"ðŸ  Veille DPE - {len(nouveaux_dpe)} nouveaux ({datetime.now().strftime('%d/%m')})",
             corps
         )
     
-    return {"nouveaux": len(nouveaux_dpe), "version": "v11_postgres"}
+    return {"nouveaux": len(nouveaux_dpe), "version": "v12.5_trio"}
 
 # ============================================================
 # VEILLE CONCURRENCE
@@ -1129,7 +1129,7 @@ def run_veille_concurrence():
             </tr>
             """
         
-        corps += "</table><p>ðŸ¤– GÃ©nÃ©rÃ© par Axi v11 (PostgreSQL)</p>"
+        corps += "</table><p>ðŸ¤– GÃ©nÃ©rÃ© par Axi v12.5 TRIO (PostgreSQL)</p>"
         
         nom_fichier = f"veille_concurrence_{datetime.now().strftime('%Y%m%d')}.xlsx" if excel_data else None
         
@@ -1140,7 +1140,7 @@ def run_veille_concurrence():
             nom_fichier=nom_fichier
         )
     
-    return {"nouvelles": len(nouvelles_annonces), "dans_zone": len(dans_zone), "version": "v11_postgres"}
+    return {"nouvelles": len(nouvelles_annonces), "dans_zone": len(dans_zone), "version": "v12.5_trio"}
 
 # ============================================================
 # MEMORY CONTENT
@@ -1226,7 +1226,7 @@ def generer_page_html(conversations):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Axi v11 - ICI Dordogne</title>
+    <title>Axi v12.5 TRIO - ICI Dordogne</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; display: flex; flex-direction: column; }}
@@ -1254,7 +1254,7 @@ def generer_page_html(conversations):
 </head>
 <body>
     <div class="header">
-        <h1>ðŸ¤– Axi v11 <span class="db-status">{db_status}</span></h1>
+        <h1>ðŸ¤– Axi v12.5 TRIO <span class="db-status">{db_status}</span></h1>
         <div class="nav">
             <a href="/">Chat</a>
             <a href="/trio">Trio</a>
@@ -1286,7 +1286,7 @@ def generer_page_html(conversations):
 def formater_conversations_html(historique_txt):
     """Formate les conversations en HTML"""
     if not historique_txt:
-        return '<div class="message assistant"><div class="role">Axi</div><div class="content">Salut ! Je suis Axi v11, avec une mÃ©moire PostgreSQL maintenant ! ðŸš€</div></div>'
+        return '<div class="message assistant"><div class="role">Axi</div><div class="content">Salut ! Je suis Axi v12.5 TRIO, avec une mÃ©moire PostgreSQL maintenant ! ðŸš€</div></div>'
     
     html = ""
     lignes = historique_txt.strip().split('\n')
@@ -1326,7 +1326,7 @@ def formater_conversations_html(historique_txt):
     
     flush_message()
     
-    return html if html else '<div class="message assistant"><div class="role">Axi</div><div class="content">Salut ! Je suis Axi v11. ðŸš€</div></div>'
+    return html if html else '<div class="message assistant"><div class="role">Axi</div><div class="content">Salut ! Je suis Axi v12.5 TRIO. ðŸš€</div></div>'
 
 # ============================================================
 # APSCHEDULER - CRON JOBS
