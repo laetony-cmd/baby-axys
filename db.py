@@ -434,6 +434,37 @@ class AxiDB:
         """, (session_id, limit), fetch=True) or []
 
 
+
+    def log_systeme(self, message, metadata=None):
+        """Log un événement système dans les souvenirs"""
+        return self.add_souvenir(
+            type_souvenir="systeme",
+            source="axi",
+            contenu=message,
+            importance=3,
+            metadata=metadata
+        )
+
+    def formater_historique_pour_llm(self, session_id=None, limit=50):
+        """Formate l'historique des messages pour le LLM"""
+        if session_id:
+            messages = self.get_messages(session_id, limit)
+        else:
+            # Récupérer les messages récents toutes sessions confondues
+            messages = self._query(
+                "SELECT role, contenu, created_at FROM messages ORDER BY created_at DESC LIMIT %s;",
+                (limit,), fetch=True
+            ) or []
+        
+        # Formater pour le LLM
+        historique = []
+        for msg in reversed(messages):  # Ordre chronologique
+            role = msg.get('role', 'user')
+            contenu = msg.get('contenu', '')
+            historique.append(f"[{role.upper()}]: {contenu}")
+        
+        return "\n".join(historique)
+
 # === INSTANCE GLOBALE ===
 _db_instance = None
 
