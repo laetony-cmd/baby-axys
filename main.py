@@ -1007,14 +1007,14 @@ def run_veille_dpe():
             </tr>
             """
         
-        corps += "</table><p>ðŸ¤– GÃ©nÃ©rÃ© par Axi v11 (PostgreSQL)</p>"
+        corps += "</table><p>ðŸ¤– GÃ©nÃ©rÃ© par Axi v12.5 TRIO (PostgreSQL)</p>"
         
         envoyer_email(
             f"ðŸ  Veille DPE - {len(nouveaux_dpe)} nouveaux ({datetime.now().strftime('%d/%m')})",
             corps
         )
     
-    return {"nouveaux": len(nouveaux_dpe), "version": "v11_postgres"}
+    return {"nouveaux": len(nouveaux_dpe), "version": "v12.5_trio"}
 
 # ============================================================
 # VEILLE CONCURRENCE
@@ -1216,7 +1216,7 @@ def run_veille_concurrence():
             </tr>
             """
         
-        corps += "</table><p>ðŸ¤– GÃ©nÃ©rÃ© par Axi v11 (PostgreSQL)</p>"
+        corps += "</table><p>ðŸ¤– GÃ©nÃ©rÃ© par Axi v12.5 TRIO (PostgreSQL)</p>"
         
         nom_fichier = f"veille_concurrence_{datetime.now().strftime('%Y%m%d')}.xlsx" if excel_data else None
         
@@ -1227,7 +1227,7 @@ def run_veille_concurrence():
             nom_fichier=nom_fichier
         )
     
-    return {"nouvelles": len(nouvelles_annonces), "dans_zone": len(dans_zone), "version": "v11_postgres"}
+    return {"nouvelles": len(nouvelles_annonces), "dans_zone": len(dans_zone), "version": "v12.5_trio"}
 
 # ============================================================
 # MEMORY CONTENT
@@ -1684,7 +1684,7 @@ def generer_page_html(conversations):
         <div class="sidebar-footer">
             <div class="status-badge">
                 <span class="status-dot"></span>
-                <span>Axi v11 â€¢ {db_status}</span>
+                <span>Axi v12.5 TRIO â€¢ {db_status}</span>
             </div>
         </div>
     </aside>
@@ -1854,7 +1854,7 @@ def formater_conversations_html(historique_txt):
         <div class="message-avatar">ðŸ¤–</div>
         <div class="message-content">
             <div class="message-role">Axi</div>
-            <div class="message-text">Salut ! Je suis Axi v11. ðŸš€</div>
+            <div class="message-text">Salut ! Je suis Axi v12.5 TRIO. ðŸš€</div>
         </div>
     </div>'''
 
@@ -2010,7 +2010,7 @@ class AxiHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
             self.end_headers()
-            self.wfile.write(f"=== BRIEFING AXI v11 ===\n\n{journal}".encode())
+            self.wfile.write(f"=== BRIEFING AXI v12.5 TRIO ===\n\n{journal}".encode())
         
         elif path == '/memory':
             self.send_response(200)
@@ -2288,7 +2288,7 @@ def main():
     
     print(f"""
 â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
-â•‘         AXI ICI DORDOGNE v11 - PostgreSQL Edition          â•‘
+â•‘         AXI ICI DORDOGNE v12.5 TRIO SYMBINE - PostgreSQL Edition          â•‘
 â•‘         Chat + Veilles + DVF + MÃ©moire Permanente          â•‘
 â• â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•£
 â•‘  Database: {"PostgreSQL âœ…" if DB_OK else "Fichiers (fallback) âš ï¸":42}   â•‘
