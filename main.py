@@ -2124,18 +2124,18 @@ class AxiHandler(BaseHTTPRequestHandler):
                     );
                     
                     INSERT INTO relations (nom, type, profil_psychologique, details)
-                    SELECT 'Ludo', 'famille', 'Père créateur. Tutoyer toujours.', '{"age": 58, "lieu": "Peyrebrune"}'::jsonb
+                    SELECT 'Ludo', 'famille', 'Pere createur. Tutoyer toujours.', '{"age": 58, "lieu": "Peyrebrune"}'::jsonb
                     WHERE NOT EXISTS (SELECT 1 FROM relations WHERE nom = 'Ludo');
                     
                     INSERT INTO souvenirs (type, source, contenu, metadata)
-                    VALUES ('systeme', 'axi', 'Schéma V4 initialisé sur Railway', '{"version": "v4"}'::jsonb);
+                    VALUES ('systeme', 'axi', 'Schema V4 initialise sur Railway', '{"version": "v4"}'::jsonb);
                     """
                     
                     cur.execute(schema)
                     conn.commit()
                     cur.close()
                     
-                    result = {"success": True, "message": "Schéma V4 initialisé avec succès", "tables": ["relations", "biens", "souvenirs", "faits", "documents"]}
+                    result = {"success": True, "message": "Schema V4 initialise avec succès", "tables": ["relations", "biens", "souvenirs", "faits", "documents"]}
                 except Exception as e:
                     result = {"success": False, "error": str(e)}
             
