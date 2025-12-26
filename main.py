@@ -2024,6 +2024,123 @@ class AxiHandler(BaseHTTPRequestHandler):
                              "/test-veille-concurrence", "/dvf/stats", "/dvf/enrichir"]
             }
             self.wfile.write(json.dumps(status, ensure_ascii=False).encode())
+
+        elif path == "/init-db":
+            # Endpoint pour initialiser le schéma PostgreSQL
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            
+            if not DB_OK:
+                result = {"success": False, "error": "PostgreSQL non connecté"}
+            else:
+                try:
+                    db = get_db()
+                    conn = db.conn
+                    cur = conn.cursor()
+                    
+                    # Schéma SQL V4
+                    schema = """
+                    CREATE EXTENSION IF NOT EXISTS pg_trgm;
+                    
+                    CREATE TABLE IF NOT EXISTS relations (
+                        id SERIAL PRIMARY KEY,
+                        nom VARCHAR(200) NOT NULL,
+                        type VARCHAR(50),
+                        email VARCHAR(200),
+                        telephone VARCHAR(50),
+                        adresse TEXT,
+                        profil_psychologique TEXT,
+                        details JSONB DEFAULT '{}',
+                        created_at TIMESTAMPTZ DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ DEFAULT NOW()
+                    );
+                    
+                    CREATE TABLE IF NOT EXISTS biens (
+                        id SERIAL PRIMARY KEY,
+                        reference_interne VARCHAR(200) UNIQUE NOT NULL,
+                        statut VARCHAR(50) DEFAULT 'veille',
+                        adresse_brute TEXT,
+                        code_postal VARCHAR(10),
+                        ville VARCHAR(100),
+                        id_parcelle VARCHAR(50),
+                        latitude DECIMAL(10, 8),
+                        longitude DECIMAL(11, 8),
+                        type_bien VARCHAR(50) DEFAULT 'maison',
+                        prix_affiche INTEGER,
+                        prix_estime INTEGER,
+                        surface_habitable DECIMAL(10, 2),
+                        surface_terrain DECIMAL(12, 2),
+                        pieces INTEGER,
+                        dpe_lettre CHAR(1),
+                        ges_lettre CHAR(1),
+                        dpe_valeur INTEGER,
+                        source_initiale VARCHAR(100),
+                        url_source TEXT,
+                        proprietaire_id INTEGER REFERENCES relations(id),
+                        details JSONB DEFAULT '{}',
+                        created_at TIMESTAMPTZ DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ DEFAULT NOW()
+                    );
+                    
+                    CREATE TABLE IF NOT EXISTS souvenirs (
+                        id SERIAL PRIMARY KEY,
+                        timestamp TIMESTAMPTZ DEFAULT NOW(),
+                        type VARCHAR(50) NOT NULL,
+                        source VARCHAR(100),
+                        contenu TEXT NOT NULL,
+                        relation_id INTEGER REFERENCES relations(id),
+                        bien_id INTEGER REFERENCES biens(id),
+                        importance INTEGER DEFAULT 5,
+                        metadata JSONB DEFAULT '{}'
+                    );
+                    
+                    CREATE TABLE IF NOT EXISTS faits (
+                        id SERIAL PRIMARY KEY,
+                        sujet VARCHAR(200) NOT NULL,
+                        predicat VARCHAR(200) NOT NULL,
+                        objet TEXT NOT NULL,
+                        confiance DECIMAL(3, 2) DEFAULT 1.00,
+                        valide BOOLEAN DEFAULT TRUE,
+                        source_souvenir_id INTEGER REFERENCES souvenirs(id),
+                        created_at TIMESTAMPTZ DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ DEFAULT NOW()
+                    );
+                    
+                    CREATE TABLE IF NOT EXISTS documents (
+                        id SERIAL PRIMARY KEY,
+                        hash_fichier VARCHAR(64) UNIQUE NOT NULL,
+                        nom_original VARCHAR(255),
+                        chemin_stockage TEXT,
+                        type_mime VARCHAR(100),
+                        taille_octets BIGINT,
+                        bien_id INTEGER REFERENCES biens(id),
+                        relation_id INTEGER REFERENCES relations(id),
+                        statut_traitement VARCHAR(50) DEFAULT 'en_attente',
+                        extraction_json JSONB,
+                        contenu_texte TEXT,
+                        created_at TIMESTAMPTZ DEFAULT NOW(),
+                        processed_at TIMESTAMPTZ
+                    );
+                    
+                    INSERT INTO relations (nom, type, profil_psychologique, details)
+                    SELECT 'Ludo', 'famille', 'Père créateur. Tutoyer toujours.', '{"age": 58, "lieu": "Peyrebrune"}'::jsonb
+                    WHERE NOT EXISTS (SELECT 1 FROM relations WHERE nom = 'Ludo');
+                    
+                    INSERT INTO souvenirs (type, source, contenu, metadata)
+                    VALUES ('systeme', 'axi', 'Schéma V4 initialisé sur Railway', '{"version": "v4"}'::jsonb);
+                    """
+                    
+                    cur.execute(schema)
+                    conn.commit()
+                    cur.close()
+                    
+                    result = {"success": True, "message": "Schéma V4 initialisé avec succès", "tables": ["relations", "biens", "souvenirs", "faits", "documents"]}
+                except Exception as e:
+                    result = {"success": False, "error": str(e)}
+            
+            self.wfile.write(json.dumps(result, ensure_ascii=False).encode())
+
         
         elif path == '/stats':
             self.send_response(200)
