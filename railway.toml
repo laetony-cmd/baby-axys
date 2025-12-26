@@ -1,21 +1,17 @@
 [build]
 builder = "nixpacks"
-# FORCE REBUILD: 1766724447 - Fri Dec 26 04:47:27 UTC 2025
-
-[build.nixpacksConfig]
-# Force une nouvelle construction
-providers = ["python"]
+# FORCE REBUILD: 1766740228
 
 [deploy]
 startCommand = "python main.py"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
+healthcheckPath = "/"
+healthcheckTimeout = 10
 
-# Variables d'environnement pour forcer le rebuild
 [build.env]
-FORCE_REBUILD = "1766724447"
+FORCE_REBUILD = "1766740228"
 
-# Cron jobs
 [[crons]]
 schedule = "0 6 * * *"
 endpoint = "/run-veille-concurrence"
