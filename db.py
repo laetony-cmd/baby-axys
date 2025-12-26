@@ -1,7 +1,8 @@
 """
-AXI DATABASE LAYER - Version V4 Railway Compatible - Build 2025-12-26 06:26:37
+AXI DATABASE LAYER - Version V4.1 Railway Compatible + Auto-Init
 Compatible avec init_schema_v4_final.sql
 Supporte: DATABASE_URL, variables PG*, et variables locales
+Auto-initialise les tables au premier démarrage
 """
 
 import psycopg2
@@ -13,8 +14,6 @@ from urllib.parse import urlparse
 
 # === CONFIGURATION RAILWAY/LOCAL ===
 def get_db_config():
-    # Debug: afficher variables disponibles
-    import os
     print("[DB-DEBUG] Variables ENV disponibles:")
     for k in sorted(os.environ.keys()):
         if 'PG' in k or 'DATABASE' in k or 'DB' in k:
@@ -25,7 +24,6 @@ def get_db_config():
     database_url = os.environ.get("DATABASE_URL")
     
     if database_url:
-        # Mode Railway - parser l'URL
         parsed = urlparse(database_url)
         config = {
             "dbname": parsed.path[1:],
@@ -38,7 +36,6 @@ def get_db_config():
         return config
     
     elif os.environ.get("PGHOST"):
-        # Mode Railway avec variables séparées PG*
         config = {
             "host": os.environ.get("PGHOST"),
             "port": os.environ.get("PGPORT", "5432"),
@@ -50,7 +47,6 @@ def get_db_config():
         return config
     
     else:
-        # Mode local - variables séparées AXI_*
         config = {
             "dbname": os.environ.get("AXI_DB_NAME", "axis_db"),
             "user": os.environ.get("AXI_DB_USER", "axis_user"),
@@ -62,330 +58,388 @@ def get_db_config():
         return config
 
 DB_CONFIG = get_db_config()
+
 class AxiDB:
     def __init__(self):
         self.conn = None
+        self._schema_initialized = False
 
     def connect(self):
-        """Ã‰tablit la connexion si elle n'existe pas ou est fermÃ©e"""
+        """Établit la connexion et initialise le schéma si nécessaire"""
         try:
             if self.conn is None or self.conn.closed:
                 self.conn = psycopg2.connect(**DB_CONFIG)
-                print("âœ… [DB] Connexion PostgreSQL Ã©tablie")
+                print("✅ [DB] Connexion PostgreSQL établie")
+                # Auto-init schema
+                if not self._schema_initialized:
+                    self.init_schema()
+                    self._schema_initialized = True
         except Exception as e:
-            print(f"âŒ [DB] Erreur connexion: {e}")
+            print(f"❌ [DB] Erreur connexion: {e}")
             self.conn = None
         return self.conn is not None
 
     def close(self):
-        """Ferme proprement la connexion"""
-        if self.conn and not self.conn.closed:
+        if self.conn:
             self.conn.close()
+            self.conn = None
+
+    def init_schema(self):
+        """Initialise les tables si elles n'existent pas"""
+        print("[DB] Vérification/Initialisation du schéma...")
+        try:
+            cur = self.conn.cursor()
+            
+            # Table relations
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS relations (
+                    id SERIAL PRIMARY KEY,
+                    nom VARCHAR(200) NOT NULL,
+                    type VARCHAR(50),
+                    email VARCHAR(200),
+                    telephone VARCHAR(50),
+                    adresse TEXT,
+                    profil_psychologique TEXT,
+                    details JSONB DEFAULT '{}',
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+            
+            # Table biens
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS biens (
+                    id SERIAL PRIMARY KEY,
+                    reference_interne VARCHAR(200) UNIQUE NOT NULL,
+                    statut VARCHAR(50) DEFAULT 'veille',
+                    adresse_brute TEXT,
+                    code_postal VARCHAR(10),
+                    ville VARCHAR(100),
+                    id_parcelle VARCHAR(50),
+                    latitude DECIMAL(10, 8),
+                    longitude DECIMAL(11, 8),
+                    type_bien VARCHAR(50) DEFAULT 'maison',
+                    prix_affiche INTEGER,
+                    prix_estime INTEGER,
+                    surface_habitable DECIMAL(10, 2),
+                    surface_terrain DECIMAL(12, 2),
+                    pieces INTEGER,
+                    dpe_lettre CHAR(1),
+                    ges_lettre CHAR(1),
+                    dpe_valeur INTEGER,
+                    source_initiale VARCHAR(100),
+                    url_source TEXT,
+                    proprietaire_id INTEGER REFERENCES relations(id),
+                    details JSONB DEFAULT '{}',
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+            
+            # Table souvenirs
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS souvenirs (
+                    id SERIAL PRIMARY KEY,
+                    timestamp TIMESTAMPTZ DEFAULT NOW(),
+                    type VARCHAR(50) NOT NULL,
+                    source VARCHAR(100),
+                    contenu TEXT NOT NULL,
+                    relation_id INTEGER REFERENCES relations(id),
+                    bien_id INTEGER REFERENCES biens(id),
+                    importance INTEGER DEFAULT 5,
+                    metadata JSONB DEFAULT '{}'
+                )
+            """)
+            
+            # Table faits
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS faits (
+                    id SERIAL PRIMARY KEY,
+                    sujet VARCHAR(200) NOT NULL,
+                    predicat VARCHAR(200) NOT NULL,
+                    objet TEXT NOT NULL,
+                    confiance DECIMAL(3, 2) DEFAULT 1.00,
+                    valide BOOLEAN DEFAULT TRUE,
+                    source_souvenir_id INTEGER REFERENCES souvenirs(id),
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+            
+            # Table documents
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS documents (
+                    id SERIAL PRIMARY KEY,
+                    hash_fichier VARCHAR(64) UNIQUE NOT NULL,
+                    nom_original VARCHAR(255),
+                    chemin_stockage TEXT,
+                    type_mime VARCHAR(100),
+                    taille_octets BIGINT,
+                    bien_id INTEGER REFERENCES biens(id),
+                    relation_id INTEGER REFERENCES relations(id),
+                    statut_traitement VARCHAR(50) DEFAULT 'en_attente',
+                    extraction_json JSONB,
+                    contenu_texte TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    processed_at TIMESTAMPTZ
+                )
+            """)
+            
+            # Table sessions
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS sessions (
+                    id SERIAL PRIMARY KEY,
+                    titre VARCHAR(500),
+                    resume TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+            
+            # Table messages
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS messages (
+                    id SERIAL PRIMARY KEY,
+                    session_id INTEGER REFERENCES sessions(id),
+                    role VARCHAR(20) NOT NULL,
+                    contenu TEXT NOT NULL,
+                    timestamp TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+            
+            # Créer Ludo s'il n'existe pas
+            cur.execute("""
+                INSERT INTO relations (nom, type, profil_psychologique, details)
+                SELECT 'Ludo', 'famille', 'Père créateur. Tutoyer toujours.', '{"age": 58, "lieu": "Peyrebrune"}'::jsonb
+                WHERE NOT EXISTS (SELECT 1 FROM relations WHERE nom = 'Ludo')
+            """)
+            
+            self.conn.commit()
+            cur.close()
+            print("✅ [DB] Schéma V4 initialisé avec succès")
+            
+        except Exception as e:
+            print(f"⚠️ [DB] Erreur init schema: {e}")
+            try:
+                self.conn.rollback()
+            except:
+                pass
 
     def _query(self, sql, params=None, fetch=False, fetch_one=False):
-        """ExÃ©cuteur gÃ©nÃ©rique de requÃªtes"""
+        """Exécute une requête SQL"""
         if not self.connect():
             return None
-            
         try:
-            with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(sql, params)
-                if fetch_one:
-                    return cur.fetchone()
-                if fetch:
-                    return cur.fetchall()
+            cur = self.conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute(sql, params)
+            
+            if fetch_one:
+                result = cur.fetchone()
+            elif fetch:
+                result = cur.fetchall()
+            else:
                 self.conn.commit()
-                return True
+                result = cur.rowcount
+            
+            cur.close()
+            return result
         except Exception as e:
-            self.conn.rollback()
-            print(f"âš ï¸ [DB] Erreur: {e}")
+            print(f"⚠️ [DB] Erreur: {e}")
+            try:
+                self.conn.rollback()
+            except:
+                pass
             return None
 
-    # =========================================================================
-    # ðŸ§  SOUVENIRS (MÃ©moire / Conversations / Logs)
-    # =========================================================================
+    # === RELATIONS ===
+    def get_relation(self, nom):
+        return self._query(
+            "SELECT * FROM relations WHERE nom ILIKE %s LIMIT 1;",
+            (f"%{nom}%",), fetch_one=True
+        )
 
-    def ajouter_souvenir(self, type_evt, source, contenu, relation_id=None, bien_id=None, metadata=None):
-        """
-        Enregistre un souvenir (conversation, log, erreur, etc.)
-        """
-        sql = """
-            INSERT INTO souvenirs (type, source, contenu, relation_id, bien_id, metadata, timestamp)
-            VALUES (%s, %s, %s, %s, %s, %s, NOW())
+    def add_relation(self, nom, type_rel='contact', email=None, telephone=None, profil=None, details=None):
+        existing = self.get_relation(nom)
+        if existing:
+            return existing['id']
+        return self._query("""
+            INSERT INTO relations (nom, type, email, telephone, profil_psychologique, details)
+            VALUES (%s, %s, %s, %s, %s, %s)
             RETURNING id;
-        """
-        meta_json = json.dumps(metadata, ensure_ascii=False) if metadata else None
-        result = self._query(sql, (type_evt, source, contenu, relation_id, bien_id, meta_json), fetch_one=True)
-        return result['id'] if result else None
+        """, (nom, type_rel, email, telephone, profil, json.dumps(details or {})), fetch_one=True)
 
-    def recuperer_contexte_chat(self, limit=50):
-        """RÃ©cupÃ¨re l'historique rÃ©cent des conversations"""
-        sql = """
-            SELECT source, contenu, timestamp 
-            FROM souvenirs 
-            WHERE type = 'conversation' 
-            ORDER BY timestamp DESC 
-            LIMIT %s;
-        """
-        rows = self._query(sql, (limit,), fetch=True)
-        return sorted(rows, key=lambda x: x['timestamp']) if rows else []
-
-    def formater_historique_pour_llm(self, limit=50):
-        """
-        Formate l'historique en string pour le prompt Claude/Mistral
-        Retourne le format attendu par main.py
-        """
-        conversations = self.recuperer_contexte_chat(limit)
-        if not conversations:
-            return ""
+    # === BIENS ===
+    def add_bien(self, reference, **kwargs):
+        existing = self._query(
+            "SELECT id FROM biens WHERE reference_interne = %s;",
+            (reference,), fetch_one=True
+        )
+        if existing:
+            return None  # Déjà existant
         
-        lignes = []
-        for conv in conversations:
-            source = conv['source'].upper()
-            if source == 'LUDO':
-                tag = '[USER]'
-            elif source == 'AXIS':
-                tag = '[AXIS]'
-            elif source == 'AXI':
-                tag = '[AXI]'
-            else:
-                tag = f'[{source}]'
-            lignes.append(f"{tag} {conv['contenu']}")
-        
-        return "\n".join(lignes)
-
-    def log_systeme(self, message, metadata=None):
-        """Raccourci pour logs systÃ¨me"""
-        return self.ajouter_souvenir('systeme', 'axi', message, metadata=metadata)
-
-    def log_erreur(self, message, metadata=None):
-        """Raccourci pour logs d'erreur"""
-        return self.ajouter_souvenir('erreur', 'axi', message, metadata=metadata)
-
-    def log_veille(self, message, metadata=None):
-        """Raccourci pour logs de veille"""
-        return self.ajouter_souvenir('log_veille', 'cron', message, metadata=metadata)
-
-    # =========================================================================
-    # ðŸ  BIENS (DPE, Mandats, DVF, Annonces)
-    # =========================================================================
-
-    def ajouter_bien(self, data):
-        """
-        InsÃ¨re ou ignore un bien (anti-doublon via reference_interne)
-        Retourne l'ID si crÃ©Ã©, None si doublon
-        """
-        sql = """
-            INSERT INTO biens (
-                reference_interne, statut, 
-                adresse_brute, code_postal, ville, id_parcelle,
-                type_bien, prix_affiche, surface_habitable, surface_terrain, pieces,
-                dpe_lettre, ges_lettre, dpe_valeur,
-                source_initiale, url_source, proprietaire_id, details,
-                created_at
-            ) VALUES (
-                %(ref)s, %(statut)s,
-                %(adresse)s, %(cp)s, %(ville)s, %(parcelle)s,
-                %(type)s, %(prix)s, %(surface_hab)s, %(surface_ter)s, %(pieces)s,
-                %(dpe)s, %(ges)s, %(dpe_val)s,
-                %(source)s, %(url)s, %(proprio)s, %(details)s,
-                NOW()
-            )
-            ON CONFLICT (reference_interne) DO NOTHING
+        return self._query("""
+            INSERT INTO biens (reference_interne, statut, adresse_brute, code_postal, ville,
+                              type_bien, prix_affiche, surface_habitable, dpe_lettre, ges_lettre,
+                              source_initiale, url_source, details)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id;
-        """
-        
-        params = {
-            'ref': data.get('reference_interne'),
-            'statut': data.get('statut', 'veille'),
-            'adresse': data.get('adresse', ''),
-            'cp': str(data.get('code_postal', '')).replace('.0', ''),
-            'ville': data.get('ville', ''),
-            'parcelle': data.get('id_parcelle'),
-            'type': data.get('type_bien', 'maison'),
-            'prix': data.get('prix') or None,
-            'surface_hab': data.get('surface_habitable') or None,
-            'surface_ter': data.get('surface_terrain') or None,
-            'pieces': data.get('pieces') or None,
-            'dpe': data.get('dpe_lettre'),
-            'ges': data.get('ges_lettre'),
-            'dpe_val': data.get('dpe_valeur') or None,
-            'source': data.get('source_initiale', 'inconnue'),
-            'url': data.get('url_source'),
-            'proprio': data.get('proprietaire_id'),
-            'details': json.dumps(data.get('details', {}), ensure_ascii=False)
-        }
-        
-        result = self._query(sql, params, fetch_one=True)
-        return result['id'] if result else None
-
-    def trouver_bien(self, reference):
-        """Retrouve un bien par sa rÃ©fÃ©rence unique"""
-        sql = "SELECT * FROM biens WHERE reference_interne = %s;"
-        return self._query(sql, (reference,), fetch_one=True)
-
-    def bien_existe(self, reference):
-        """VÃ©rifie si un bien existe (plus rapide que trouver_bien)"""
-        sql = "SELECT 1 FROM biens WHERE reference_interne = %s LIMIT 1;"
-        return self._query(sql, (reference,), fetch_one=True) is not None
+        """, (
+            reference,
+            kwargs.get('statut', 'veille'),
+            kwargs.get('adresse'),
+            kwargs.get('code_postal'),
+            kwargs.get('ville'),
+            kwargs.get('type_bien', 'maison'),
+            kwargs.get('prix'),
+            kwargs.get('surface'),
+            kwargs.get('dpe'),
+            kwargs.get('ges'),
+            kwargs.get('source', 'manuel'),
+            kwargs.get('url'),
+            json.dumps(kwargs.get('details', {}))
+        ), fetch_one=True)
 
     def stats_biens_par_dpe(self):
-        """Stats pour tableau de bord"""
-        sql = """
-            SELECT dpe_lettre, COUNT(*) as total 
+        result = self._query("""
+            SELECT dpe_lettre, COUNT(*) as count 
             FROM biens 
             WHERE dpe_lettre IS NOT NULL
             GROUP BY dpe_lettre 
             ORDER BY dpe_lettre;
-        """
-        return self._query(sql, fetch=True) or []
+        """, fetch=True)
+        return result or []
 
-    def passoires_thermiques(self, code_postal=None):
-        """RÃ©cupÃ¨re les DPE F et G (passoires)"""
-        if code_postal:
-            sql = "SELECT * FROM biens WHERE dpe_lettre IN ('F', 'G') AND code_postal = %s;"
-            return self._query(sql, (code_postal,), fetch=True) or []
-        else:
-            sql = "SELECT * FROM biens WHERE dpe_lettre IN ('F', 'G');"
-            return self._query(sql, fetch=True) or []
-
-    # =========================================================================
-    # ðŸ‘¥ RELATIONS (Personnes)
-    # =========================================================================
-
-    def ajouter_relation(self, nom, type_rel=None, email=None, telephone=None, profil=None):
-        """CrÃ©e une nouvelle relation"""
-        sql = """
-            INSERT INTO relations (nom, type, email, telephone, profil_psychologique, created_at)
-            VALUES (%s, %s, %s, %s, %s, NOW())
-            RETURNING *;
-        """
-        return self._query(sql, (nom, type_rel, email, telephone, profil), fetch_one=True)
-
-    def trouver_relation(self, nom=None, email=None):
-        """Cherche une relation par nom ou email"""
-        if email:
-            sql = "SELECT * FROM relations WHERE email = %s LIMIT 1;"
-            result = self._query(sql, (email,), fetch_one=True)
-            if result:
-                return result
-        
-        if nom:
-            sql = "SELECT * FROM relations WHERE nom ILIKE %s LIMIT 1;"
-            return self._query(sql, (f"%{nom}%",), fetch_one=True)
-        
-        return None
-
-    def trouver_ou_creer_relation(self, nom, email=None, type_rel='prospect'):
-        """Cherche une relation, la crÃ©e si inexistante"""
-        existant = self.trouver_relation(nom, email)
-        if existant:
-            return existant
-        return self.ajouter_relation(nom, type_rel, email)
-
-    # =========================================================================
-    # ðŸ“š FAITS (Connaissances)
-    # =========================================================================
-
-    def ajouter_fait(self, sujet, predicat, objet, confiance=1.0, source_souvenir_id=None):
-        """Enregistre un fait (triplet sujet-prÃ©dicat-objet)"""
-        sql = """
-            INSERT INTO faits (sujet, predicat, objet, confiance, source_souvenir_id, created_at)
-            VALUES (%s, %s, %s, %s, %s, NOW())
+    # === SOUVENIRS ===
+    def add_souvenir(self, type_souvenir, source, contenu, importance=5, metadata=None):
+        return self._query("""
+            INSERT INTO souvenirs (type, source, contenu, importance, metadata)
+            VALUES (%s, %s, %s, %s, %s)
             RETURNING id;
-        """
-        result = self._query(sql, (sujet, predicat, objet, confiance, source_souvenir_id), fetch_one=True)
-        return result['id'] if result else None
+        """, (type_souvenir, source, contenu, importance, json.dumps(metadata or {})), fetch_one=True)
 
-    def chercher_faits(self, sujet=None, predicat=None):
-        """Recherche des faits par sujet et/ou prÃ©dicat"""
-        conditions = ["valide = TRUE"]
+    def get_souvenirs(self, limit=50, type_filter=None, source_filter=None):
+        sql = "SELECT * FROM souvenirs WHERE 1=1"
         params = []
         
-        if sujet:
-            conditions.append("sujet ILIKE %s")
-            params.append(f"%{sujet}%")
+        if type_filter:
+            sql += " AND type = %s"
+            params.append(type_filter)
+        if source_filter:
+            sql += " AND source = %s"
+            params.append(source_filter)
         
-        if predicat:
-            conditions.append("predicat = %s")
-            params.append(predicat)
+        sql += " ORDER BY timestamp DESC LIMIT %s;"
+        params.append(limit)
         
-        sql = f"SELECT * FROM faits WHERE {' AND '.join(conditions)};"
         return self._query(sql, params, fetch=True) or []
 
-    def invalider_fait(self, fait_id):
-        """Invalide un fait (soft delete)"""
-        sql = "UPDATE faits SET valide = FALSE, updated_at = NOW() WHERE id = %s;"
-        return self._query(sql, (fait_id,))
+    def search_souvenirs(self, query, limit=20):
+        return self._query("""
+            SELECT *, ts_rank(to_tsvector('french', contenu), plainto_tsquery('french', %s)) as rank
+            FROM souvenirs
+            WHERE to_tsvector('french', contenu) @@ plainto_tsquery('french', %s)
+            ORDER BY rank DESC, timestamp DESC
+            LIMIT %s;
+        """, (query, query, limit), fetch=True) or []
 
-    # =========================================================================
-    # ðŸ“„ DOCUMENTS (Phase 3 - OCR)
-    # =========================================================================
-
-    def ajouter_document(self, hash_fichier, nom_original, chemin, type_mime, taille, bien_id=None, relation_id=None):
-        """Enregistre un document (prÃ©parÃ© pour OCR)"""
-        sql = """
-            INSERT INTO documents (
-                hash_fichier, nom_original, chemin_stockage, type_mime, taille_octets,
-                bien_id, relation_id, statut_traitement, created_at
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, 'en_attente', NOW())
-            ON CONFLICT (hash_fichier) DO NOTHING
+    # === FAITS ===
+    def add_fait(self, sujet, predicat, objet, confiance=1.0):
+        return self._query("""
+            INSERT INTO faits (sujet, predicat, objet, confiance)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT DO NOTHING
             RETURNING id;
-        """
-        result = self._query(sql, (hash_fichier, nom_original, chemin, type_mime, taille, bien_id, relation_id), fetch_one=True)
-        return result['id'] if result else None
+        """, (sujet, predicat, objet, confiance), fetch_one=True)
 
-    def documents_a_traiter(self):
-        """Liste les documents en attente d'OCR"""
-        sql = "SELECT * FROM documents WHERE statut_traitement = 'en_attente';"
-        return self._query(sql, fetch=True) or []
+    def get_faits(self, sujet=None, limit=100):
+        if sujet:
+            return self._query(
+                "SELECT * FROM faits WHERE sujet ILIKE %s AND valide = TRUE ORDER BY confiance DESC LIMIT %s;",
+                (f"%{sujet}%", limit), fetch=True
+            ) or []
+        return self._query(
+            "SELECT * FROM faits WHERE valide = TRUE ORDER BY created_at DESC LIMIT %s;",
+            (limit,), fetch=True
+        ) or []
 
-    def marquer_document_traite(self, doc_id, extraction_json, contenu_texte):
-        """Met Ã  jour un document aprÃ¨s OCR"""
-        sql = """
-            UPDATE documents 
-            SET statut_traitement = 'traite', 
-                extraction_json = %s, 
-                contenu_texte = %s,
-                processed_at = NOW()
-            WHERE id = %s;
-        """
-        return self._query(sql, (json.dumps(extraction_json, ensure_ascii=False), contenu_texte, doc_id))
+    # === SESSIONS ===
+    def create_session(self, titre=None):
+        result = self._query("""
+            INSERT INTO sessions (titre, created_at)
+            VALUES (%s, NOW())
+            RETURNING id, created_at;
+        """, (titre,), fetch_one=True)
+        return result
+
+    def get_sessions(self, limit=20):
+        return self._query("""
+            SELECT s.*, 
+                   (SELECT COUNT(*) FROM messages WHERE session_id = s.id) as message_count
+            FROM sessions s
+            ORDER BY updated_at DESC
+            LIMIT %s;
+        """, (limit,), fetch=True) or []
+
+    def get_session(self, session_id):
+        return self._query(
+            "SELECT * FROM sessions WHERE id = %s;",
+            (session_id,), fetch_one=True
+        )
+
+    def update_session(self, session_id, titre=None, resume=None):
+        updates = []
+        params = []
+        if titre:
+            updates.append("titre = %s")
+            params.append(titre)
+        if resume:
+            updates.append("resume = %s")
+            params.append(resume)
+        updates.append("updated_at = NOW()")
+        params.append(session_id)
+        
+        return self._query(
+            f"UPDATE sessions SET {', '.join(updates)} WHERE id = %s;",
+            params
+        )
+
+    # === MESSAGES ===
+    def add_message(self, session_id, role, contenu):
+        self._query(
+            "UPDATE sessions SET updated_at = NOW() WHERE id = %s;",
+            (session_id,)
+        )
+        return self._query("""
+            INSERT INTO messages (session_id, role, contenu)
+            VALUES (%s, %s, %s)
+            RETURNING id;
+        """, (session_id, role, contenu), fetch_one=True)
+
+    def get_messages(self, session_id, limit=100):
+        return self._query("""
+            SELECT * FROM messages
+            WHERE session_id = %s
+            ORDER BY timestamp ASC
+            LIMIT %s;
+        """, (session_id, limit), fetch=True) or []
 
 
-# =========================================================================
-# INSTANCE GLOBALE (Singleton)
-# =========================================================================
-
+# === INSTANCE GLOBALE ===
 _db_instance = None
 
 def get_db():
-    """Retourne l'instance unique de la base de donnÃ©es"""
     global _db_instance
     if _db_instance is None:
         _db_instance = AxiDB()
     return _db_instance
 
 
-# =========================================================================
-# TEST DE CONNEXION
-# =========================================================================
-
-if __name__ == "__main__":
-    print("ðŸ§ª Test connexion PostgreSQL...")
+# === TEST DE CONNEXION ===
+def test_connection():
+    """Test la connexion à la base"""
     db = get_db()
     if db.connect():
-        print("âœ… Connexion OK")
-        
-        # Test Ã©criture
-        test_id = db.ajouter_souvenir('test', 'script', 'Test de connexion db.py')
-        if test_id:
-            print(f"âœ… Ã‰criture OK (souvenir #{test_id})")
-        
-        # Test lecture
-        stats = db.stats_biens_par_dpe()
-        print(f"ðŸ“Š Stats DPE: {stats}")
-        
-        db.close()
-    else:
-        print("âŒ Connexion Ã©chouÃ©e")
+        print("[DB] ✅ Connexion PostgreSQL validée")
+        return True
+    print("[DB] ❌ Connexion PostgreSQL échouée")
+    return False
