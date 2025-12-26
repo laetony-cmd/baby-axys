@@ -1,5 +1,5 @@
 """
-AXI DATABASE LAYER - Version V4 Railway Compatible
+AXI DATABASE LAYER - Version V4 Railway Compatible - Build 2025-12-26 06:26:37
 Compatible avec init_schema_v4_final.sql
 Supporte: DATABASE_URL, variables PG*, et variables locales
 """
