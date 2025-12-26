@@ -1,6 +1,6 @@
 [build]
 builder = "nixpacks"
-# FORCE REBUILD: 1766740228
+# FORCE REBUILD v12.5 TRIO: 1766755042
 
 [deploy]
 startCommand = "python main.py"
@@ -10,7 +10,8 @@ healthcheckPath = "/"
 healthcheckTimeout = 10
 
 [build.env]
-FORCE_REBUILD = "1766740228"
+FORCE_REBUILD = "v12_5_trio_1766755042"
+NIXPACKS_PYTHON_VERSION = "3.11"
 
 [[crons]]
 schedule = "0 6 * * *"
