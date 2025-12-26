@@ -1,7 +1,7 @@
 """
 AXI DATABASE LAYER - Version V4 Railway Compatible
 Compatible avec init_schema_v4_final.sql
-Supporte DATABASE_URL (Railway) et variables séparées (local)
+Supporte: DATABASE_URL, variables PG*, et variables locales
 """
 
 import psycopg2
@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 
 # === CONFIGURATION RAILWAY/LOCAL ===
 def get_db_config():
-    """Parse DATABASE_URL si disponible, sinon utilise les variables séparées"""
+    """Parse DATABASE_URL, ou PG vars, ou variables locales"""
     database_url = os.environ.get("DATABASE_URL")
     
     if database_url:
@@ -26,10 +26,23 @@ def get_db_config():
             "host": parsed.hostname,
             "port": parsed.port or 5432
         }
-        print(f"[DB] Mode PROD détecté (Railway) - Host: {config['host']}")
+        print(f"[DB] Mode PROD détecté (DATABASE_URL) - Host: {config['host']}")
         return config
+    
+    elif os.environ.get("PGHOST"):
+        # Mode Railway avec variables séparées PG*
+        config = {
+            "host": os.environ.get("PGHOST"),
+            "port": os.environ.get("PGPORT", "5432"),
+            "dbname": os.environ.get("PGDATABASE"),
+            "user": os.environ.get("PGUSER"),
+            "password": os.environ.get("PGPASSWORD")
+        }
+        print(f"[DB] Mode PROD détecté (PG vars) - Host: {config['host']}")
+        return config
+    
     else:
-        # Mode local - variables séparées
+        # Mode local - variables séparées AXI_*
         config = {
             "dbname": os.environ.get("AXI_DB_NAME", "axis_db"),
             "user": os.environ.get("AXI_DB_USER", "axis_user"),
