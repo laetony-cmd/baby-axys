@@ -76,7 +76,7 @@ CURRENT_SESSION_ID = None
 
 def generer_session_id():
     """GÃ©nÃ¨re un ID de session lisible: YYYYMMDD_HHMM"""
-    return datetime.now().strftime("%Y%m%d_%H%M")
+    return int(datetime.now().timestamp())
 
 def get_current_session():
     """Retourne la session courante, en crÃ©e une si nÃ©cessaire"""
