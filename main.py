@@ -25,7 +25,16 @@ import io
 import re
 import threading
 import time
-import anthropic
+
+# Import anthropic avec fallback
+ANTHROPIC_OK = False
+try:
+    import anthropic
+    ANTHROPIC_OK = True
+except ImportError:
+    print("[ANTHROPIC] ⚠️ Module non installé")
+    anthropic = None
+
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
