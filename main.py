@@ -552,7 +552,15 @@ def lire_page_web_fallback(url):
 def generer_reponse(client, message_utilisateur, identite, histoire, conversations, est_axis=False):
     """Génère une réponse via Claude API"""
     
+    # Injecter la date/heure système
+    from datetime import datetime
+    jours_fr = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+    mois_fr = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
+    now = datetime.now()
+    date_actuelle = f"{jours_fr[now.weekday()]} {now.day} {mois_fr[now.month-1]} {now.year}, {now.hour:02d}:{now.minute:02d}"
+    
     contexte = identite + "\n\n"
+    contexte += f"# DATE ET HEURE ACTUELLES\nNous sommes le {date_actuelle}. Tu dois TOUJOURS utiliser cette date comme référence.\n\n"
     
     # Ajouter l'historique (depuis PostgreSQL ou fichier)
     historique = lire_historique_conversations(50)
