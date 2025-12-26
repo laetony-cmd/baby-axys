@@ -7,3 +7,7 @@ psycopg2-binary
 google-generativeai
 tavily-python
 anthropic
+duckduckgo-search
+trafilatura
+openpyxl
+lxml
