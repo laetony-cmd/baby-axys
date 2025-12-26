@@ -269,6 +269,16 @@ class AxiDB:
         """, (nom, type_rel, email, telephone, profil, json.dumps(details or {})), fetch_one=True)
 
     # === BIENS ===
+
+    def trouver_ou_creer_relation(self, nom, type_rel="contact", email=None, telephone=None, profil=None, details=None):
+        """Trouve une relation existante ou en crée une nouvelle, retourne le dict complet"""
+        existing = self.get_relation(nom)
+        if existing:
+            return existing
+        # Créer la relation
+        self.add_relation(nom, type_rel, email, telephone, profil, details)
+        # Retourner la relation créée
+        return self.get_relation(nom)
     def add_bien(self, reference, **kwargs):
         existing = self._query(
             "SELECT id FROM biens WHERE reference_interne = %s;",
