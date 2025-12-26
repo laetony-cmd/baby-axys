@@ -1903,6 +1903,12 @@ class AxiHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(html.encode())
         
+        elif path == '/health':
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok", "db": DB_OK, "internet": INTERNET_OK}).encode())
+        
         elif path == '/trio':
             self.send_response(200)
             self.send_header('Content-Type', 'text/html; charset=utf-8')
