@@ -2028,6 +2028,79 @@ class AxiHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(result, indent=2, ensure_ascii=False).encode('utf-8'))
         
+        # Debug SDR - Test flux complet avec les vraies fonctions
+        elif path == '/debug-sdr':
+            result = {
+                "timestamp": datetime.now().isoformat(),
+                "steps": []
+            }
+            
+            test_token = "sdr_debug_" + datetime.now().strftime("%H%M%S")
+            
+            # Step 1: Sauver conversation vide
+            try:
+                sauver_conversation_db(test_token, [])
+                result["steps"].append({"step": "1_save_empty", "status": "OK"})
+            except Exception as e:
+                result["steps"].append({"step": "1_save_empty", "status": f"ERREUR: {e}"})
+            
+            # Step 2: Lire conversation
+            try:
+                msgs = get_conversation_sdr(test_token)
+                result["steps"].append({"step": "2_read_empty", "status": "OK", "messages": msgs, "type": str(type(msgs))})
+            except Exception as e:
+                result["steps"].append({"step": "2_read_empty", "status": f"ERREUR: {e}"})
+            
+            # Step 3: Ajouter message
+            try:
+                ajouter_message_sdr(test_token, "assistant", "Test message")
+                result["steps"].append({"step": "3_add_message", "status": "OK"})
+            except Exception as e:
+                result["steps"].append({"step": "3_add_message", "status": f"ERREUR: {e}"})
+            
+            # Step 4: Relire conversation
+            try:
+                msgs = get_conversation_sdr(test_token)
+                result["steps"].append({"step": "4_read_after_add", "status": "OK", "messages": msgs, "count": len(msgs)})
+            except Exception as e:
+                result["steps"].append({"step": "4_read_after_add", "status": f"ERREUR: {e}"})
+            
+            # Step 5: Lecture directe DB pour comparer
+            try:
+                conn = get_db_connection()
+                if conn:
+                    cur = conn.cursor()
+                    cur.execute("SELECT messages FROM conversations_sdr WHERE token = %s", (test_token,))
+                    row = cur.fetchone()
+                    cur.close()
+                    conn.close()
+                    result["steps"].append({"step": "5_direct_db_read", "status": "OK", "raw_data": str(row)})
+                else:
+                    result["steps"].append({"step": "5_direct_db_read", "status": "ERREUR: No connection"})
+            except Exception as e:
+                result["steps"].append({"step": "5_direct_db_read", "status": f"ERREUR: {e}"})
+            
+            # Cleanup
+            try:
+                conn = get_db_connection()
+                if conn:
+                    cur = conn.cursor()
+                    cur.execute("DELETE FROM conversations_sdr WHERE token = %s", (test_token,))
+                    conn.commit()
+                    cur.close()
+                    conn.close()
+            except:
+                pass
+            
+            # Diagnostic
+            all_ok = all(s.get("status", "").startswith("OK") for s in result["steps"])
+            result["diagnostic"] = "FLUX SDR OK" if all_ok else "BUG DETECTE - voir steps"
+            
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(result, indent=2, ensure_ascii=False).encode('utf-8'))
+        
         # ============================================================
         # SDR - ENDPOINTS PROSPECTS
         # ============================================================
