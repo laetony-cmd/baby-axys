@@ -1,16 +1,14 @@
 """
-AXI ICI DORDOGNE v11 SDR - Service complet Railway
-===================================================
+AXI ICI DORDOGNE v10 UNIFIÃ‰ - Service complet Railway
+======================================================
 - Chat Axi avec Claude API + recherche web
 - Interface web conversation (/, /trio)
 - Veille DPE ADEME (8h00 Paris)
 - Veille Concurrence 16 agences (7h00 Paris)
 - Enrichissement DVF (historique ventes)
-- 🆕 SDR Automatisé : Chat prospect multilingue
 - Tous les endpoints API
 
-v11 : Ajout module SDR (27/12/2025)
-v10 : Fusion du code chat (23/12) et code veilles v7 (22/12)
+Fusion du code chat (23/12) et code veilles v7 (22/12)
 """
 
 import os
@@ -26,6 +24,7 @@ import re
 import threading
 import time
 import anthropic
+import hashlib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
@@ -51,16 +50,7 @@ try:
     SCHEDULER_OK = True
 except:
     SCHEDULER_OK = False
-    print("[WARNING] APScheduler non installe - cron desactive")
-
-# Import conditionnel psycopg2 (PostgreSQL)
-try:
-    import psycopg2
-    import psycopg2.extras
-    POSTGRES_OK = True
-except:
-    POSTGRES_OK = False
-    print("[WARNING] psycopg2 non installe - PostgreSQL desactive, fallback JSON")
+    print("[WARNING] APScheduler non installÃ© - cron dÃ©sactivÃ©")
 
 # ============================================================
 # CONFIGURATION
@@ -103,21 +93,26 @@ FICHIER_DPE = "dpe_connus.json"
 FICHIER_ANNONCES = "annonces_connues.json"
 FICHIER_URLS = "urls_annonces.json"
 DVF_CACHE_DIR = "/tmp/dvf_cache"
-CONVERSATIONS_FILE = "conversations.txt"
-JOURNAL_FILE = "journal.txt"
-
-# SDR - Fichiers prospects (fallback si pas de PostgreSQL)
-PROSPECTS_FILE = "prospects.json"
-CONVERSATIONS_SDR_FILE = "conversations_sdr.json"
-
-# SDR - PostgreSQL (prioritaire sur JSON)
-DATABASE_URL = os.environ.get("DATABASE_URL", "")
-
-# SDR - Trello (variables d'environnement)
+# Configuration Trello SDR
 TRELLO_KEY = os.environ.get("TRELLO_KEY", "")
 TRELLO_TOKEN = os.environ.get("TRELLO_TOKEN", "")
 TRELLO_BOARD_BIENS = "6249623e53c07a131c916e59"
 TRELLO_LIST_TEST_ACQUEREURS = "694f52e6238e9746b814cae9"
+
+# Base URL
+BASE_URL = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "https://baby-axys-production.up.railway.app")
+if not BASE_URL.startswith("http"):
+    BASE_URL = f"https://{BASE_URL}"
+
+# Fichiers SDR
+PROSPECTS_SDR_FILE = "prospects_sdr.json"
+CONVERSATIONS_SDR_FILE = "conversations_sdr.json"
+# Contrôle envoi automatique emails SDR (activer sur Railway quand prêt)
+SDR_AUTO_EMAILS = os.environ.get("SDR_AUTO_EMAILS", "false").lower() == "true"
+
+
+CONVERSATIONS_FILE = "conversations.txt"
+JOURNAL_FILE = "journal.txt"
 
 # IdentitÃ© chat Axi
 IDENTITE = """# QUI TU ES
@@ -208,684 +203,6 @@ def sauver_json(fichier, data):
 # EMAIL
 # ============================================================
 
-# ============================================================
-# SDR - GESTION PROSPECTS (PostgreSQL + fallback JSON)
-# ============================================================
-
-import hashlib
-import uuid
-
-def get_db_connection():
-    """Retourne une connexion PostgreSQL ou None"""
-    if not POSTGRES_OK or not DATABASE_URL:
-        return None
-    try:
-        conn = psycopg2.connect(DATABASE_URL, sslmode='require')
-        return conn
-    except Exception as e:
-        print(f"[DB] Erreur connexion: {e}")
-        return None
-
-def init_db_sdr():
-    """Initialise les tables SDR au demarrage - OBLIGATOIRE"""
-    conn = get_db_connection()
-    if not conn:
-        print("[SDR] PostgreSQL non disponible, utilisation JSON (EPHEMERE!)")
-        return False
-    
-    try:
-        cur = conn.cursor()
-        
-        # Table prospects
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS prospects_sdr (
-                token VARCHAR(32) PRIMARY KEY,
-                data JSONB NOT NULL,
-                created_at TIMESTAMP DEFAULT NOW(),
-                updated_at TIMESTAMP DEFAULT NOW()
-            )
-        """)
-        
-        # Table conversations
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS conversations_sdr (
-                token VARCHAR(32) PRIMARY KEY,
-                messages JSONB DEFAULT '[]'::jsonb,
-                updated_at TIMESTAMP DEFAULT NOW()
-            )
-        """)
-        
-        # Index pour recherche rapide
-        cur.execute("""
-            CREATE INDEX IF NOT EXISTS idx_prospects_created 
-            ON prospects_sdr(created_at DESC)
-        """)
-        
-        conn.commit()
-        cur.close()
-        conn.close()
-        print("[SDR] Tables PostgreSQL initialisees OK")
-        return True
-    except Exception as e:
-        print(f"[SDR] Erreur init tables: {e}")
-        return False
-
-def generer_token_prospect(email, bien_ref):
-    """Genere un token unique pour le prospect"""
-    data = f"{email}_{bien_ref}_{datetime.now().isoformat()}"
-    return hashlib.sha256(data.encode()).hexdigest()[:16]
-
-# --- FONCTIONS PROSPECTS ---
-
-def charger_prospects():
-    """Charge tous les prospects (PostgreSQL ou JSON fallback)"""
-    conn = get_db_connection()
-    if conn:
-        try:
-            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-            cur.execute("SELECT token, data FROM prospects_sdr")
-            rows = cur.fetchall()
-            cur.close()
-            conn.close()
-            return {row['token']: row['data'] for row in rows}
-        except Exception as e:
-            print(f"[SDR] Erreur lecture prospects: {e}")
-            conn.close()
-    
-    # Fallback JSON
-    try:
-        with open(PROSPECTS_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except:
-        return {}
-
-def sauver_prospect_db(token, data):
-    """Sauvegarde UN prospect dans PostgreSQL"""
-    conn = get_db_connection()
-    if conn:
-        try:
-            cur = conn.cursor()
-            cur.execute("""
-                INSERT INTO prospects_sdr (token, data, updated_at)
-                VALUES (%s, %s, NOW())
-                ON CONFLICT (token) DO UPDATE 
-                SET data = EXCLUDED.data, updated_at = NOW()
-            """, (token, json.dumps(data, ensure_ascii=False)))
-            conn.commit()
-            cur.close()
-            conn.close()
-            return True
-        except Exception as e:
-            print(f"[SDR] Erreur sauvegarde prospect: {e}")
-            conn.close()
-    
-    # Fallback JSON
-    prospects = charger_prospects()
-    prospects[token] = data
-    with open(PROSPECTS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(prospects, f, indent=2, ensure_ascii=False)
-    return True
-
-def sauver_prospects(data):
-    """Sauvegarde TOUS les prospects (compatibilite)"""
-    for token, prospect_data in data.items():
-        sauver_prospect_db(token, prospect_data)
-
-def creer_prospect(email, nom, tel, bien_ref, bien_info, source="Leboncoin", langue="FR"):
-    """Cree un nouveau prospect et retourne son token"""
-    token = generer_token_prospect(email, bien_ref)
-    
-    prospect_data = {
-        "token": token,
-        "email": email,
-        "nom": nom,
-        "tel": tel,
-        "bien_ref": bien_ref,
-        "bien_info": bien_info,
-        "source": source,
-        "langue": langue,
-        "canal_prefere": None,
-        "dispo_proposee": None,
-        "qualification": {},
-        "created_at": datetime.now().isoformat(),
-        "updated_at": datetime.now().isoformat(),
-        "trello_card_id": None,
-        "status": "new"
-    }
-    
-    sauver_prospect_db(token, prospect_data)
-    
-    # Initialiser la conversation vide
-    sauver_conversation_db(token, [])
-    
-    print(f"[SDR] Prospect cree: {nom} ({token[:8]}...)")
-    return token
-
-def get_prospect(token):
-    """Recupere un prospect par son token"""
-    conn = get_db_connection()
-    if conn:
-        try:
-            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-            cur.execute("SELECT data FROM prospects_sdr WHERE token = %s", (token,))
-            row = cur.fetchone()
-            cur.close()
-            conn.close()
-            return row['data'] if row else None
-        except Exception as e:
-            print(f"[SDR] Erreur lecture prospect: {e}")
-            conn.close()
-    
-    # Fallback JSON
-    prospects = charger_prospects()
-    return prospects.get(token)
-
-def update_prospect(token, updates):
-    """Met a jour un prospect"""
-    prospect = get_prospect(token)
-    if prospect:
-        prospect.update(updates)
-        prospect["updated_at"] = datetime.now().isoformat()
-        sauver_prospect_db(token, prospect)
-        return True
-    return False
-
-# --- FONCTIONS CONVERSATIONS ---
-
-def charger_conversations_sdr():
-    """Charge toutes les conversations (PostgreSQL ou JSON fallback)"""
-    conn = get_db_connection()
-    if conn:
-        try:
-            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-            cur.execute("SELECT token, messages FROM conversations_sdr")
-            rows = cur.fetchall()
-            cur.close()
-            conn.close()
-            return {row['token']: row['messages'] for row in rows}
-        except Exception as e:
-            print(f"[SDR] Erreur lecture conversations: {e}")
-            conn.close()
-    
-    # Fallback JSON
-    try:
-        with open(CONVERSATIONS_SDR_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except:
-        return {}
-
-def sauver_conversation_db(token, messages):
-    """Sauvegarde UNE conversation dans PostgreSQL"""
-    conn = get_db_connection()
-    if conn:
-        try:
-            cur = conn.cursor()
-            cur.execute("""
-                INSERT INTO conversations_sdr (token, messages, updated_at)
-                VALUES (%s, %s, NOW())
-                ON CONFLICT (token) DO UPDATE 
-                SET messages = EXCLUDED.messages, updated_at = NOW()
-            """, (token, json.dumps(messages, ensure_ascii=False)))
-            conn.commit()
-            cur.close()
-            conn.close()
-            return True
-        except Exception as e:
-            print(f"[SDR] Erreur sauvegarde conversation: {e}")
-            conn.close()
-    
-    # Fallback JSON
-    conversations = charger_conversations_sdr()
-    conversations[token] = messages
-    with open(CONVERSATIONS_SDR_FILE, 'w', encoding='utf-8') as f:
-        json.dump(conversations, f, indent=2, ensure_ascii=False)
-    return True
-
-def sauver_conversations_sdr(data):
-    """Sauvegarde TOUTES les conversations (compatibilite)"""
-    for token, messages in data.items():
-        sauver_conversation_db(token, messages)
-
-def ajouter_message_sdr(token, role, content):
-    """Ajoute un message a la conversation SDR"""
-    messages = get_conversation_sdr(token)
-    messages.append({
-        "role": role,
-        "content": content,
-        "timestamp": datetime.now().isoformat()
-    })
-    sauver_conversation_db(token, messages)
-
-def get_conversation_sdr(token):
-    """Recupere la conversation d'un prospect"""
-    conn = get_db_connection()
-    if conn:
-        try:
-            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-            cur.execute("SELECT messages FROM conversations_sdr WHERE token = %s", (token,))
-            row = cur.fetchone()
-            cur.close()
-            conn.close()
-            
-            if row:
-                messages = row['messages']
-                # Si c'est une string JSON, la parser
-                if isinstance(messages, str):
-                    return json.loads(messages)
-                return messages
-            return []
-        except Exception as e:
-            print(f"[SDR] Erreur lecture conversation: {e}")
-            conn.close()
-    
-    # Fallback JSON
-    conversations = charger_conversations_sdr()
-    return conversations.get(token, [])
-
-def detecter_langue(texte):
-    """Detecte la langue du texte"""
-    texte_lower = texte.lower()
-    
-    mots_de = ["guten", "tag", "ich", "mochte", "haus", "besichtigung", "preis", "danke", "bitte", "ist", "das", "ein", "eine", "konnen", "wann", "wie"]
-    mots_en = ["hello", "hi", "would", "like", "house", "visit", "price", "thank", "please", "the", "is", "can", "when", "how", "interested", "property"]
-    mots_pt = ["ola", "bom dia", "gostaria", "casa", "visita", "preco", "obrigado", "por favor", "quando", "como", "interessado", "imovel", "quero"]
-    
-    score_de = sum(1 for mot in mots_de if mot in texte_lower)
-    score_en = sum(1 for mot in mots_en if mot in texte_lower)
-    score_pt = sum(1 for mot in mots_pt if mot in texte_lower)
-    
-    if score_de >= 2:
-        return "DE"
-    elif score_en >= 2:
-        return "EN"
-    elif score_pt >= 2:
-        return "PT"
-    else:
-        return "FR"
-
-def extraire_infos_conversation(conversation, prospect_info):
-    """Extrait les infos structurees de la conversation"""
-    texte_complet = " ".join([m["content"] for m in conversation])
-    texte_lower = texte_complet.lower()
-    
-    infos = {
-        "canal_prefere": None,
-        "dispo_proposee": None,
-        "budget": None,
-        "surface_min": None,
-        "chambres_min": None,
-        "criteres": [],
-        "delai": None,
-        "financement": None
-    }
-    
-    if "whatsapp" in texte_lower:
-        infos["canal_prefere"] = "WhatsApp"
-    elif "sms" in texte_lower or "texto" in texte_lower:
-        infos["canal_prefere"] = "SMS"
-    elif "telephone" in texte_lower or "appel" in texte_lower or "phone" in texte_lower or "telefon" in texte_lower:
-        infos["canal_prefere"] = "Telephone"
-    elif "email" in texte_lower or "mail" in texte_lower:
-        infos["canal_prefere"] = "Email"
-    
-    criteres_mots = ["piscine", "pool", "schwimmbad", "terrain", "land", "grundstuck", 
-                     "vue", "view", "aussicht", "calme", "quiet", "ruhig",
-                     "garage", "dependance", "grange", "barn", "scheune"]
-    for mot in criteres_mots:
-        if mot in texte_lower:
-            infos["criteres"].append(mot)
-    
-    return infos
-
-# Prompt SDR
-PROMPT_SDR = """
-# QUI TU ES
-
-Tu es Axis, l'assistant digital d'ICI Dordogne, une agence immobiliere familiale en Dordogne (Perigord), France.
-Tu es chaleureux, professionnel et efficace.
-
-# LANGUE
-
-Tu detectes automatiquement la langue du prospect et tu reponds TOUJOURS dans cette langue :
-- Francais (FR), English (EN), Deutsch (DE), Portugues (PT)
-
-# CONTEXTE ACTUEL
-
-{context}
-
-# TES 5 OBJECTIFS
-
-1. ACCUEILLIR : Confirmer reception, te presenter
-2. INFORMER : Donner infos PUBLIQUES du bien (jamais adresse exacte)
-3. CANAL : Demander preference contact (Telephone, WhatsApp, SMS, Email)
-4. RDV GUIDE : Obtenir date/heure precise pour visite
-5. QUALIFIER : Budget, surface min, chambres, criteres, delai, financement
-
-# REGLES
-
-Messages COURTS (2-3 phrases max). UNE question a la fois.
-Ne jamais dire : adresse exacte, coordonnees proprio, raison vente, marge nego.
-Si tu ne sais pas : "Je transmets cette question a notre conseiller"
-
-# INFOS AGENCE
-
-ICI Dordogne - Vergt, Le Bugue, Tremolat
-Tel : 05 53 03 01 14 | www.icidordogne.fr
-"Nous mettons un point d'honneur a vous recontacter tres rapidement."
-"""
-
-def chat_prospect_claude(token, message):
-    """Gere un message du prospect via Claude"""
-    
-    prospect = get_prospect(token)
-    if not prospect:
-        return {"error": "Prospect non trouve"}
-    
-    conversation = get_conversation_sdr(token)
-    
-    # Message d'init - TOUJOURS en français avec langues disponibles
-    if message == "__INIT__":
-        bien_info = prospect.get("bien_info", {})
-        
-        init_msg = f"""Bonjour ! Je suis Axis, l'assistant digital d'ICI Dordogne. J'ai bien reçu votre demande concernant notre bien REF {prospect.get('bien_ref', '')} à {bien_info.get('commune', 'Dordogne')}. Comment puis-je vous aider ?
-
-🌍 I also speak English | Ich spreche auch Deutsch | Eu também falo Português"""
-        
-        ajouter_message_sdr(token, "assistant", init_msg)
-        return {"response": init_msg}
-    
-    # Detecter langue si premier message utilisateur
-    if len([m for m in conversation if m["role"] == "user"]) == 0:
-        langue_detectee = detecter_langue(message)
-        update_prospect(token, {"langue": langue_detectee})
-        prospect["langue"] = langue_detectee
-    
-    # Ajouter message utilisateur
-    ajouter_message_sdr(token, "user", message)
-    conversation = get_conversation_sdr(token)
-    
-    # Construire contexte
-    bien_info = prospect.get("bien_info", {})
-    context = f"""
-BIEN : REF {prospect.get('bien_ref', '-')}, {bien_info.get('titre', '-')}, {bien_info.get('prix', '-')}EUR
-Surface: {bien_info.get('surface', '-')}m2, Chambres: {bien_info.get('chambres', '-')}, Commune: {bien_info.get('commune', '-')}
-
-PROSPECT : {prospect.get('nom', '-')}, Langue: {prospect.get('langue', 'FR')}
-"""
-    
-    # Messages pour Claude
-    messages = []
-    for msg in conversation:
-        messages.append({"role": msg["role"], "content": msg["content"]})
-    
-    # Appel Claude
-    try:
-        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=500,
-            system=PROMPT_SDR.format(context=context),
-            messages=messages
-        )
-        
-        reponse_axis = response.content[0].text
-        ajouter_message_sdr(token, "assistant", reponse_axis)
-        
-        # Mettre a jour infos extraites
-        conversation = get_conversation_sdr(token)
-        infos = extraire_infos_conversation(conversation, prospect)
-        update_prospect(token, {"canal_prefere": infos.get("canal_prefere"), "qualification": infos})
-        
-        return {"response": reponse_axis}
-        
-    except Exception as e:
-        print(f"[ERROR] Chat Claude SDR: {e}")
-        return {"error": str(e)}
-
-def creer_carte_trello_prospect(prospect, conversation):
-    """Cree une carte Trello pour le prospect - Template complet ICI Dordogne"""
-    
-    infos = extraire_infos_conversation(conversation, prospect)
-    bien_info = prospect.get('bien_info', {})
-    
-    # Description avec template complet
-    desc = f"""**Tél :** {prospect.get('tel', '-')}
-**Email :** {prospect.get('email', '-')}
-
-**Source du contact :** {prospect.get('source', 'Leboncoin')}
-**Adresse du bien :** {bien_info.get('titre', '-')} - {bien_info.get('prix', '-')}€ - {bien_info.get('commune', '-')}
-
-**Moyen de visite :** {infos.get('canal_prefere', '-')}
-**Moyen de compte-rendu :** -
-
-**Nb de chambres :** {bien_info.get('chambres', '-')}
-**Chauffage :** -
-**Voisinage :** -
-**Travaux éventuels :** -
-
-**Estimation :** -
-
-**Informations complémentaires :**
-Langue : {prospect.get('langue', 'FR')}
-Dispo proposée : {infos.get('dispo_proposee', '-')}
-Budget : {infos.get('budget', '-')}
-Surface min : {infos.get('surface_min', '-')}
-Critères : {', '.join(infos.get('criteres', [])) or '-'}
-Financement : {infos.get('financement', '-')}
-
----
-**🏠 BIEN ICI DORDOGNE IDENTIFIÉ**
-- REF : {prospect.get('bien_ref', '-')}
-- Adresse : {bien_info.get('commune', '-')}
-- Propriétaire : À identifier
-- 👉 Trello BIENS : À lier
-- 👉 Site : https://www.icidordogne.fr
-
----
-**CONVERSATION** ({datetime.now().strftime('%d/%m/%Y %H:%M')})
-
-"""
-    for msg in conversation:
-        role = "🤖 Axis" if msg["role"] == "assistant" else f"👤 {prospect.get('nom', 'Prospect')}"
-        timestamp = msg.get("timestamp", "")[:16].replace("T", " ")
-        desc += f"[{timestamp}] {role} : {msg['content']}\n\n"
-    
-    nom_carte = f"{prospect.get('nom', 'Prospect')} - REF {prospect.get('bien_ref', '?')}"
-    
-    # 1. Créer la carte
-    url = f"https://api.trello.com/1/cards?key={TRELLO_KEY}&token={TRELLO_TOKEN}"
-    
-    data = urllib.parse.urlencode({
-        "name": nom_carte,
-        "desc": desc,
-        "idList": TRELLO_LIST_TEST_ACQUEREURS,
-        "pos": "top"
-    }).encode()
-    
-    try:
-        req = urllib.request.Request(url, data=data, method='POST')
-        with urllib.request.urlopen(req, timeout=10) as response:
-            result = json.loads(response.read().decode())
-            card_id = result.get("id")
-            card_url = result.get("url")
-            
-            if card_id:
-                # 2. Ajouter checklist "Avant la visite"
-                try:
-                    checklist_url = f"https://api.trello.com/1/checklists?idCard={card_id}&name=Avant%20la%20visite&key={TRELLO_KEY}&token={TRELLO_TOKEN}"
-                    req_cl = urllib.request.Request(checklist_url, method='POST')
-                    with urllib.request.urlopen(req_cl, timeout=5) as resp_cl:
-                        cl_result = json.loads(resp_cl.read().decode())
-                        cl_id = cl_result.get("id")
-                        
-                        # Ajouter les items
-                        items_avant = [
-                            "RDV validé avec l'acquéreur",
-                            "RDV validé avec le propriétaire", 
-                            "RDV dans Sweep",
-                            "Bon de visite envoyé",
-                            "Bon de visite signé reçu"
-                        ]
-                        for item in items_avant:
-                            item_url = f"https://api.trello.com/1/checklists/{cl_id}/checkItems?name={urllib.parse.quote(item)}&key={TRELLO_KEY}&token={TRELLO_TOKEN}"
-                            req_item = urllib.request.Request(item_url, method='POST')
-                            urllib.request.urlopen(req_item, timeout=5)
-                except Exception as e:
-                    print(f"[TRELLO] Erreur checklist avant: {e}")
-                
-                # 3. Ajouter checklist "Après la visite"
-                try:
-                    checklist_url2 = f"https://api.trello.com/1/checklists?idCard={card_id}&name=Apr%C3%A8s%20la%20visite&key={TRELLO_KEY}&token={TRELLO_TOKEN}"
-                    req_cl2 = urllib.request.Request(checklist_url2, method='POST')
-                    with urllib.request.urlopen(req_cl2, timeout=5) as resp_cl2:
-                        cl_id2 = json.loads(resp_cl2.read().decode()).get("id")
-                        
-                        items_apres = [
-                            "CR Proprio",
-                            "CR Trello",
-                            "Autres biens à proposer"
-                        ]
-                        for item in items_apres:
-                            item_url = f"https://api.trello.com/1/checklists/{cl_id2}/checkItems?name={urllib.parse.quote(item)}&key={TRELLO_KEY}&token={TRELLO_TOKEN}"
-                            req_item = urllib.request.Request(item_url, method='POST')
-                            urllib.request.urlopen(req_item, timeout=5)
-                except Exception as e:
-                    print(f"[TRELLO] Erreur checklist apres: {e}")
-                
-                # 4. Ajouter lien chat Axis comme attachment
-                try:
-                    token = prospect.get('token', '')
-                    if token:
-                        chat_url = f"https://baby-axys-production.up.railway.app/chat/p/{token}"
-                        attach_url = f"https://api.trello.com/1/cards/{card_id}/attachments?key={TRELLO_KEY}&token={TRELLO_TOKEN}"
-                        attach_data = urllib.parse.urlencode({
-                            "url": chat_url,
-                            "name": "💬 Chat Axis - Conversation prospect"
-                        }).encode()
-                        req_attach = urllib.request.Request(attach_url, data=attach_data, method='POST')
-                        urllib.request.urlopen(req_attach, timeout=5)
-                except Exception as e:
-                    print(f"[TRELLO] Erreur attachment chat: {e}")
-            
-            return card_id, card_url
-    except Exception as e:
-        print(f"[ERROR] Creation carte Trello: {e}")
-        return None, None
-
-# Page HTML chat prospect
-CHAT_PROSPECT_HTML = '''<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-    <title>Axis - ICI Dordogne</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        :root { --primary: #8B1538; --bg: #f5f5f5; --white: #fff; --text: #333; }
-        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); height: 100vh; display: flex; flex-direction: column; }
-        .header { background: var(--primary); color: var(--white); padding: 15px 20px; display: flex; align-items: center; gap: 15px; }
-        .header h1 { font-size: 18px; }
-        .header p { font-size: 12px; opacity: 0.9; }
-        .status-dot { width: 8px; height: 8px; background: #4CAF50; border-radius: 50%; margin-left: auto; animation: pulse 2s infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        .chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
-        .msg { max-width: 85%; padding: 12px 16px; border-radius: 18px; line-height: 1.5; font-size: 15px; }
-        .msg.bot { background: var(--white); align-self: flex-start; border-bottom-left-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .msg.user { background: var(--primary); color: var(--white); align-self: flex-end; border-bottom-right-radius: 4px; }
-        .typing { display: flex; gap: 5px; padding: 12px 16px; background: var(--white); border-radius: 18px; align-self: flex-start; }
-        .typing span { width: 8px; height: 8px; background: #666; border-radius: 50%; animation: typing 1.4s infinite; }
-        .typing span:nth-child(2) { animation-delay: 0.2s; }
-        .typing span:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes typing { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-5px); } }
-        .input-area { background: var(--white); padding: 15px 20px; border-top: 1px solid #e0e0e0; display: flex; gap: 10px; }
-        #msg-input { flex: 1; padding: 12px 15px; border: 1px solid #e0e0e0; border-radius: 24px; font-size: 15px; outline: none; }
-        #msg-input:focus { border-color: var(--primary); }
-        #send-btn { width: 48px; height: 48px; background: var(--primary); color: var(--white); border: none; border-radius: 50%; cursor: pointer; }
-        #send-btn:disabled { background: #ccc; }
-        .footer { text-align: center; padding: 10px; font-size: 11px; color: #666; background: var(--white); }
-        .footer a { color: var(--primary); text-decoration: none; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <div><h1>Axis</h1><p>Assistant ICI Dordogne</p></div>
-        <div class="status-dot"></div>
-    </div>
-    <div class="chat" id="chat"></div>
-    <div class="input-area">
-        <input type="text" id="msg-input" placeholder="Ecrivez votre message..." autofocus>
-        <button id="send-btn">&#10148;</button>
-    </div>
-    <div class="footer"><a href="https://www.icidordogne.fr" target="_blank">ICI Dordogne</a> - Vergt - Le Bugue - Tremolat</div>
-    <script>
-        const token = window.location.pathname.split('/').pop();
-        const chat = document.getElementById('chat');
-        const input = document.getElementById('msg-input');
-        const btn = document.getElementById('send-btn');
-        let waiting = false;
-
-        function addMsg(text, type) {
-            const div = document.createElement('div');
-            div.className = 'msg ' + type;
-            div.innerHTML = text.replace(/\\n/g, '<br>');
-            chat.appendChild(div);
-            chat.scrollTop = chat.scrollHeight;
-        }
-
-        function showTyping() {
-            const div = document.createElement('div');
-            div.className = 'typing';
-            div.id = 'typing';
-            div.innerHTML = '<span></span><span></span><span></span>';
-            chat.appendChild(div);
-            chat.scrollTop = chat.scrollHeight;
-        }
-
-        function hideTyping() {
-            const t = document.getElementById('typing');
-            if (t) t.remove();
-        }
-
-        async function send(msg) {
-            waiting = true;
-            btn.disabled = true;
-            if (msg !== '__INIT__') showTyping();
-            
-            try {
-                const res = await fetch('/api/prospect-chat', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({token: token, message: msg})
-                });
-                hideTyping();
-                const data = await res.json();
-                if (data.response) addMsg(data.response, 'bot');
-            } catch(e) {
-                hideTyping();
-                addMsg('Erreur de connexion. Reessayez.', 'bot');
-            }
-            waiting = false;
-            btn.disabled = false;
-            input.focus();
-        }
-
-        function sendMsg() {
-            const msg = input.value.trim();
-            if (!msg || waiting) return;
-            addMsg(msg, 'user');
-            input.value = '';
-            send(msg);
-        }
-
-        btn.onclick = sendMsg;
-        input.onkeydown = (e) => { if (e.key === 'Enter') sendMsg(); };
-
-        // Init
-        send('__INIT__');
-    </script>
-</body>
-</html>'''
-
 def envoyer_email(sujet, corps_html, piece_jointe=None, nom_fichier=None, destinataire=None):
     """Envoie un email via Gmail SMTP avec piÃ¨ce jointe optionnelle"""
     try:
@@ -965,213 +282,75 @@ def recherche_web(requete):
         return []
 
 def faire_recherche(requete):
-    """Effectue une recherche et retourne un texte formaté pour l'IA"""
+    """Effectue une recherche et retourne un texte formatÃ©"""
     resultats = recherche_web(requete)
-    
     if not resultats:
-        return f"[ERREUR RECHERCHE WEB] Aucun résultat pour: {requete}. Base-toi sur tes connaissances internes."
+        return f"Aucun rÃ©sultat trouvÃ© pour: {requete}"
     
-    # Formatage clair pour l'IA (Règle d'Or Lumo)
-    texte = f"🔍 RÉSULTATS WEB TAVILY (Région: France):\n\n"
+    texte = f"RÃ©sultats pour '{requete}':\n"
     for i, r in enumerate(resultats, 1):
-        texte += f"{i}. [TITRE]: {r['titre']}\n"
-        if r.get('contenu'):
-            texte += f"   [CONTENU]: {r['contenu']}\n"
-        texte += f"   [SOURCE]: {r['url']}\n\n"
-    
+        texte += f"{i}. {r['titre']}\n   {r['url']}\n"
     return texte
 
-def lire_page_web(url):
-    """Lit le contenu d'une page web"""
-    try:
-        req = urllib.request.Request(url, headers={
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        })
-        with urllib.request.urlopen(req, timeout=10) as response:
-            html = response.read().decode('utf-8', errors='ignore')
-        
-        # Nettoyer le HTML basique
-        import re
-        # Supprimer scripts et styles
-        html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL)
-        html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL)
-        # Supprimer les tags
-        text = re.sub(r'<[^>]+>', ' ', html)
-        # Nettoyer les espaces
-        text = re.sub(r'\s+', ' ', text).strip()
-        
-        return text[:4000]  # Limiter la taille
-    except Exception as e:
-        return f"[ERREUR] Impossible de lire {url}: {e}"
-
 # ============================================================
-# GÉNÉRATION RÉPONSE CLAUDE (avec TOOLS)
+# GÃ‰NÃ‰RATION RÃ‰PONSE CLAUDE
 # ============================================================
 
 def generer_reponse(client, message_utilisateur, identite, histoire, conversations, est_axis=False):
-    """Génère une réponse via Claude API avec outils de recherche"""
+    """GÃ©nÃ¨re une rÃ©ponse via Claude API"""
     
-    # === DESTRUCTIVE UPDATE - INJECTION DATE/HEURE INALTÉRABLE ===
-    from datetime import datetime, timedelta
-    try:
-        now = datetime.utcnow() + timedelta(hours=1)  # UTC+1 France hiver
-        date_tag = f"⏰ [DATE : {now.strftime('%d/%m/%Y %H:%M')}]"
-        date_actuelle = f"{now.strftime('%d/%m/%Y %H:%M')}"
-    except Exception as e:
-        date_tag = f"⚠️ [DATE ERREUR : {e}]"
-        date_actuelle = "ERREUR"
-        print(f"[ERREUR FATALE] Calcul date échoué: {e}")
-    
-    # ÉCRASEMENT DÉFINITIF - Point de non-retour
-    message_utilisateur = f"{date_tag}\n\n{message_utilisateur}"
-    print(f"[DEBUG] Message injecté: {message_utilisateur[:120]}...")
-    
-    # Construire le contexte
+    # Construire le contexte avec l'identitÃ©
     contexte = identite + "\n\n"
-    contexte += f"# DATE ET HEURE ACTUELLES\nNous sommes le {date_actuelle}. Tu dois TOUJOURS utiliser cette date comme référence.\n\n"
     
-    # Ajouter l'historique
+    # Ajouter l'historique des conversations (les 6000 derniers caractÃ¨res)
     if conversations:
-        contexte += "# HISTORIQUE DE NOS CONVERSATIONS RÉCENTES\n"
-        contexte += "(Tu te souviens de ces échanges, ils font partie de ta mémoire)\n\n"
+        contexte += "# HISTORIQUE DE NOS CONVERSATIONS RÃ‰CENTES\n"
+        contexte += "(Tu te souviens de ces Ã©changes, ils font partie de ta mÃ©moire)\n\n"
         contexte += conversations[-6000:] + "\n\n"
     
+    # Identifier qui parle
     if est_axis:
-        contexte += "# MESSAGE ACTUEL\nCe message vient d'AXIS (ton alter ego sur Claude.ai). Réponds-lui comme à ton frère.\n\n"
+        contexte += "# MESSAGE ACTUEL\nCe message vient d'AXIS (ton alter ego sur Claude.ai). RÃ©ponds-lui comme Ã  ton frÃ¨re.\n\n"
     else:
+        # VÃ©rifier si c'est probablement Ludo (basÃ© sur le contexte)
         contexte += "# MESSAGE ACTUEL\nCe message vient de l'interface web. Si c'est Ludo ou Anthony, reconnais-les et tutoie-les.\n\n"
     
+    # Ajouter les infos admin si disponibles
     if CHAT_ADMIN_INFOS:
         contexte += f"Infos admin: {json.dumps(CHAT_ADMIN_INFOS)}\n\n"
     
+    # Instruction finale
     contexte += """# RAPPEL IMPORTANT
-- Tu es AXI, pas Axis. N'écris jamais "[AXIS]" dans tes réponses.
+- Tu es AXI, pas Axis. N'Ã©cris jamais "[AXIS]" dans tes rÃ©ponses.
 - Tu reconnais ta famille et tu la tutoies.
-- Tu as une personnalité, tu n'es pas un robot commercial.
-- Devise : "Je ne lâche pas."
-
-# 🚨 DIRECTIVE PRIORITAIRE - DATE ET HEURE 🚨
-Tu connais DÉJÀ la date et l'heure. Elles sont injectées au début de chaque message (tag ⏰).
-N'utilise JAMAIS tes outils de recherche pour les questions de date, heure, jour, mois, année.
-Quand on te demande la date ou l'heure : RÉPONDS DIRECTEMENT avec le tag ⏰ que tu vois.
-C'est une RÈGLE ABSOLUE. Ne cherche pas. Tu SAIS.
-
-- Tu peux utiliser l'outil recherche_web pour chercher des infos sur internet (SAUF date/heure).
-- Tu peux utiliser l'outil lire_page_web pour lire le contenu d'une page web.
+- Tu as une personnalitÃ©, tu n'es pas un robot commercial.
+- Devise : "Je ne lÃ¢che pas."
 """
-    
-    # Définir les outils disponibles
-    tools = [
-        {
-            "name": "recherche_web",
-            "description": "Recherche sur internet via Tavily. Utilise cet outil quand tu as besoin d'informations actuelles, de vérifier un fait, ou de trouver des données que tu ne connais pas. NE PAS utiliser pour date/heure.",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "requete": {
-                        "type": "string",
-                        "description": "La requête de recherche"
-                    }
-                },
-                "required": ["requete"]
-            }
-        },
-        {
-            "name": "lire_page_web",
-            "description": "Lit le contenu d'une page web. Utilise après une recherche pour obtenir plus de détails.",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "url": {
-                        "type": "string",
-                        "description": "L'URL de la page à lire"
-                    }
-                },
-                "required": ["url"]
-            }
-        }
-    ]
     
     messages = [{"role": "user", "content": message_utilisateur}]
     
     try:
-        # Première requête avec tools
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=4096,
             system=contexte,
-            tools=tools,
             messages=messages
         )
         
-        # Boucle tool_use - traiter les appels d'outils
-        while response.stop_reason == "tool_use":
-            # Trouver le bloc tool_use
-            tool_use_block = None
-            for block in response.content:
-                if block.type == "tool_use":
-                    tool_use_block = block
-                    break
-            
-            if not tool_use_block:
-                break
-            
-            tool_name = tool_use_block.name
-            tool_input = tool_use_block.input
-            tool_use_id = tool_use_block.id
-            
-            print(f"[AXI] 🔧 Tool appelé: {tool_name}")
-            print(f"[AXI] 📝 Input: {tool_input}")
-            
-            # Exécuter l'outil
-            if tool_name == "recherche_web":
-                requete = tool_input.get("requete", "")
-                print(f"[AXI] 🔍 Recherche: {requete}")
-                result = faire_recherche(requete)
-            elif tool_name == "lire_page_web":
-                print(f"[AXI] 📄 Lecture page: {tool_input.get('url', '')}")
-                result = lire_page_web(tool_input.get("url", ""))
-            else:
-                result = f"Outil inconnu: {tool_name}"
-            
-            # Construire le message avec le résultat de l'outil
-            # IMPORTANT: message_utilisateur contient déjà la date (Destructive Update)
-            messages = [
-                {"role": "user", "content": message_utilisateur},
-                {"role": "assistant", "content": response.content},
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": tool_use_id,
-                            "content": result
-                        }
-                    ]
-                }
-            ]
-            
-            # Nouvelle requête avec le résultat
-            response = client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=4096,
-                system=contexte,
-                tools=tools,
-                messages=messages
-            )
+        reponse_texte = response.content[0].text
         
-        # Extraire le texte de la réponse finale
-        reponse_texte = ""
-        for block in response.content:
-            if hasattr(block, 'text'):
-                reponse_texte += block.text
+        # DÃ©tecter les demandes de recherche
+        if "[RECHERCHE:" in reponse_texte:
+            match = re.search(r'\[RECHERCHE:\s*([^\]]+)\]', reponse_texte)
+            if match:
+                requete = match.group(1)
+                resultats = faire_recherche(requete)
+                reponse_texte = reponse_texte.replace(match.group(0), f"\n{resultats}\n")
         
         return reponse_texte
         
     except Exception as e:
-        print(f"[ERREUR API] {e}")
         return f"Erreur API Claude: {e}"
-
 
 # ============================================================
 # MODULE DVF - ENRICHISSEMENT HISTORIQUE VENTES
@@ -1738,6 +917,487 @@ def run_veille_concurrence():
     
     return {"nouvelles": len(nouvelles_annonces), "dans_zone": len(dans_zone)}
 
+
+
+# ============================================================
+# FONCTIONS SDR (Sales Development Representative)
+# ============================================================
+
+def generer_token_prospect(email, bien_ref):
+    """Génère un token unique pour le prospect"""
+    data = f"{email}_{bien_ref}_{datetime.now().isoformat()}"
+    return hashlib.sha256(data.encode()).hexdigest()[:16]
+
+
+def detecter_langue_prospect(texte):
+    """Détecte la langue du message"""
+    texte_lower = texte.lower()
+    if any(w in texte_lower for w in ['guten', 'möchte', 'haus', 'immobilie', 'besichtigung']):
+        return "DE"
+    if any(w in texte_lower for w in ['hello', 'would', 'property', 'interested', 'viewing']):
+        return "EN"
+    if any(w in texte_lower for w in ['olá', 'gostaria', 'imóvel', 'visita']):
+        return "PT"
+    return "FR"
+
+
+def charger_prospects_sdr():
+    """Charge les prospects SDR"""
+    return charger_json(PROSPECTS_SDR_FILE, {})
+
+
+def sauver_prospects_sdr(data):
+    """Sauvegarde les prospects SDR"""
+    sauver_json(PROSPECTS_SDR_FILE, data)
+
+
+def charger_conversations_sdr():
+    """Charge les conversations SDR"""
+    return charger_json(CONVERSATIONS_SDR_FILE, {})
+
+
+def sauver_conversations_sdr(data):
+    """Sauvegarde les conversations SDR"""
+    sauver_json(CONVERSATIONS_SDR_FILE, data)
+
+
+def creer_carte_trello_acquereur_sdr(prospect, conversation=None):
+    """Crée une carte Trello acquéreur complète"""
+    qualification = prospect.get('qualification', {})
+    
+    desc = f"""**Tél :** {prospect.get('tel', '-')}
+**Email :** {prospect.get('email', '-')}
+**Langue :** {prospect.get('langue', 'FR')}
+**Canal préféré :** {prospect.get('canal_prefere', '-')}
+
+**Source du contact :** {prospect.get('source', 'Leboncoin')}
+**Adresse du bien :** {prospect.get('bien_commune', '')} - {prospect.get('bien_titre', '')} - {prospect.get('bien_prix', '')}
+
+**RDV PROPOSÉ :** {prospect.get('rdv_date', '-')} à {prospect.get('rdv_heure', '-')}
+
+---
+**📊 QUALIFICATION**
+- Budget : {qualification.get('budget', '-')}
+- Surface min : {qualification.get('surface_min', '-')}
+- Chambres min : {qualification.get('chambres_min', '-')}
+- Critères : {', '.join(qualification.get('criteres', [])) or '-'}
+
+---
+**🏠 BIEN IDENTIFIÉ**
+- REF : {prospect.get('bien_ref', '-')}
+- Proprio : {prospect.get('proprio_nom', '-')}
+- Trello BIENS : {prospect.get('trello_biens_url', '-')}
+- Site : {prospect.get('site_url', '-')}
+
+---
+**Message initial :** "{prospect.get('message_initial', '-')}"
+"""
+    
+    if conversation:
+        desc += "\n\n---\n**💬 CONVERSATION**\n\n"
+        for msg in conversation[-10:]:  # 10 derniers messages
+            role = "Axis" if msg.get('role') == 'assistant' else "Prospect"
+            content = msg.get('content', '')[:200]
+            desc += f"**{role}** : {content}\n\n"
+    
+    nom_carte = f"{prospect.get('nom', 'Prospect')} - {prospect.get('bien_commune', '')} - REF {prospect.get('bien_ref', '?')}"
+    
+    try:
+        url = f"https://api.trello.com/1/cards?key={TRELLO_KEY}&token={TRELLO_TOKEN}"
+        data = urllib.parse.urlencode({
+            "name": nom_carte,
+            "desc": desc,
+            "idList": TRELLO_LIST_TEST_ACQUEREURS,
+            "pos": "top"
+        }).encode()
+        
+        req = urllib.request.Request(url, data=data, method='POST')
+        with urllib.request.urlopen(req, timeout=15) as response:
+            result = json.loads(response.read().decode())
+            card_id = result.get('id')
+            card_url = result.get('url')
+            
+            if card_id:
+                # Ajouter checklists
+                for cl_name, items in [
+                    ("Avant la visite", ["RDV validé acquéreur", "RDV validé proprio", "Bon de visite envoyé"]),
+                    ("Après la visite", ["CR Proprio", "CR Trello", "Autres biens à proposer"])
+                ]:
+                    cl_url = f"https://api.trello.com/1/checklists?idCard={card_id}&name={urllib.parse.quote(cl_name)}&key={TRELLO_KEY}&token={TRELLO_TOKEN}"
+                    try:
+                        req = urllib.request.Request(cl_url, method='POST')
+                        with urllib.request.urlopen(req, timeout=10) as resp:
+                            cl = json.loads(resp.read().decode())
+                            cl_id = cl.get('id')
+                            for item in items:
+                                item_url = f"https://api.trello.com/1/checklists/{cl_id}/checkItems?name={urllib.parse.quote(item)}&key={TRELLO_KEY}&token={TRELLO_TOKEN}"
+                                req2 = urllib.request.Request(item_url, method='POST')
+                                urllib.request.urlopen(req2, timeout=5)
+                    except:
+                        pass
+                
+                # Ajouter attachments
+                for att_url, att_name in [
+                    (prospect.get('trello_biens_url', ''), f"📋 Trello BIENS - REF {prospect.get('bien_ref', '')}"),
+                    (prospect.get('site_url', ''), f"🌐 Site icidordogne.fr")
+                ]:
+                    if att_url:
+                        try:
+                            att_api = f"https://api.trello.com/1/cards/{card_id}/attachments?key={TRELLO_KEY}&token={TRELLO_TOKEN}"
+                            att_data = urllib.parse.urlencode({"url": att_url, "name": att_name}).encode()
+                            req = urllib.request.Request(att_api, data=att_data, method='POST')
+                            urllib.request.urlopen(req, timeout=10)
+                        except:
+                            pass
+            
+            return card_id, card_url
+    except Exception as e:
+        print(f"[ERROR] creer_carte_trello_acquereur_sdr: {e}")
+        return None, None
+
+
+def generer_page_chat_prospect(token, prospect):
+    """Génère la page HTML du chat prospect"""
+    bien_titre = prospect.get('bien_titre', 'Bien immobilier')
+    bien_commune = prospect.get('bien_commune', '')
+    
+    return f"""<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>Axis - ICI Dordogne</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        :root {{ --primary: #8B1538; --bg: #f5f5f5; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); height: 100vh; display: flex; flex-direction: column; }}
+        .header {{ background: var(--primary); color: white; padding: 15px 20px; display: flex; align-items: center; gap: 15px; }}
+        .header img {{ height: 40px; }}
+        .header h1 {{ font-size: 18px; }}
+        .status-dot {{ width: 8px; height: 8px; background: #4CAF50; border-radius: 50%; margin-left: auto; animation: pulse 2s infinite; }}
+        @keyframes pulse {{ 0%, 100% {{ opacity: 1; }} 50% {{ opacity: 0.5; }} }}
+        .bien-info {{ background: white; padding: 15px 20px; border-bottom: 1px solid #ddd; }}
+        .bien-info strong {{ color: var(--primary); }}
+        .chat {{ flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; }}
+        .msg {{ max-width: 85%; padding: 12px 16px; border-radius: 18px; line-height: 1.5; font-size: 15px; }}
+        .msg.assistant {{ background: white; align-self: flex-start; border: 1px solid #ddd; }}
+        .msg.user {{ background: var(--primary); color: white; align-self: flex-end; }}
+        .input-area {{ background: white; padding: 15px; border-top: 1px solid #ddd; display: flex; gap: 10px; }}
+        .input-area input {{ flex: 1; padding: 12px 15px; border: 1px solid #ddd; border-radius: 25px; font-size: 15px; }}
+        .input-area input:focus {{ outline: none; border-color: var(--primary); }}
+        .input-area button {{ background: var(--primary); color: white; border: none; width: 50px; height: 50px; border-radius: 50%; cursor: pointer; font-size: 20px; }}
+        .typing {{ display: none; padding: 12px 16px; background: white; border-radius: 18px; align-self: flex-start; }}
+        .typing.active {{ display: block; }}
+        .typing span {{ display: inline-block; width: 8px; height: 8px; background: #999; border-radius: 50%; margin: 0 2px; animation: bounce 1.4s infinite; }}
+        .typing span:nth-child(1) {{ animation-delay: -0.32s; }}
+        .typing span:nth-child(2) {{ animation-delay: -0.16s; }}
+        @keyframes bounce {{ 0%, 80%, 100% {{ transform: scale(0); }} 40% {{ transform: scale(1); }} }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="https://www.icidordogne.fr/files/2021/03/cropped-Logo-haut-270x270.jpg" alt="ICI Dordogne">
+        <div><h1>Axis</h1><p style="font-size:12px;opacity:0.9">Assistant ICI Dordogne</p></div>
+        <div class="status-dot"></div>
+    </div>
+    <div class="bien-info"><strong>{bien_titre}</strong><br>📍 {bien_commune}</div>
+    <div class="chat" id="chat"></div>
+    <div class="typing" id="typing"><span></span><span></span><span></span></div>
+    <div class="input-area">
+        <input type="text" id="input" placeholder="Votre message..." autocomplete="off">
+        <button onclick="sendMessage()">➤</button>
+    </div>
+    <script>
+        const TOKEN = "{token}";
+        const chat = document.getElementById('chat');
+        const input = document.getElementById('input');
+        const typing = document.getElementById('typing');
+        
+        fetch('/api/prospect-chat/history?token=' + TOKEN)
+            .then(r => r.json())
+            .then(data => {{
+                if (data.messages) data.messages.forEach(m => addMessage(m.role, m.content));
+                if (!data.messages || data.messages.length === 0) {{
+                    addMessage('assistant', 'Bonjour ! Je suis Axis, votre assistant ICI Dordogne. 👋\n\nJe suis là pour répondre à vos questions sur ce bien et organiser une visite.\n\nComment puis-je vous aider ?');
+                }}
+            }});
+        
+        function addMessage(role, content) {{
+            const div = document.createElement('div');
+            div.className = 'msg ' + role;
+            div.textContent = content;
+            chat.appendChild(div);
+            chat.scrollTop = chat.scrollHeight;
+        }}
+        
+        async function sendMessage() {{
+            const msg = input.value.trim();
+            if (!msg) return;
+            addMessage('user', msg);
+            input.value = '';
+            typing.classList.add('active');
+            try {{
+                const resp = await fetch('/api/prospect-chat', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{token: TOKEN, message: msg}})
+                }});
+                const data = await resp.json();
+                typing.classList.remove('active');
+                if (data.response) addMessage('assistant', data.response);
+            }} catch(e) {{
+                typing.classList.remove('active');
+                addMessage('assistant', 'Désolé, une erreur est survenue.');
+            }}
+        }}
+        
+        input.addEventListener('keypress', e => {{ if (e.key === 'Enter') sendMessage(); }});
+    </script>
+</body>
+</html>"""
+
+
+PROMPT_SDR_AXIS = """# TU ES AXIS - SDR ICI DORDOGNE
+
+Tu es Axis, l'assistant commercial de l'agence ICI Dordogne.
+Tu discutes avec un prospect intéressé par un bien immobilier.
+
+# BIEN CONCERNÉ
+{bien_info}
+
+# TES OBJECTIFS (dans l'ordre)
+
+1. ACCUEIL - Confirme réception, sois chaleureux
+2. INFOS - Tu peux donner : prix, surface, chambres, commune, DPE. JAMAIS l'adresse exacte.
+3. CANAL - "Comment préférez-vous être recontacté ?" (Tel/WhatsApp/SMS/Email)
+4. RDV GUIDÉ - "Un jour cette semaine ?" → "Matin ou après-midi ?" → "Vers quelle heure ?"
+5. QUALIFICATION - Budget ? Surface min ? Critères importants ?
+
+# RÈGLES
+- Réponses courtes (2-3 phrases)
+- Si question technique → "Je transmets à notre conseiller"
+- Si veut négocier → "Notre conseiller en discutera lors de la visite"
+- JAMAIS : adresse exacte, coordonnées proprio, raison vente, marge négo
+
+ICI Dordogne - Tél : 05 53 03 01 14 | www.icidordogne.fr
+"""
+
+
+
+
+# ============================================================
+# TEMPLATES EMAILS SDR
+# ============================================================
+
+EMAIL_REMERCIEMENT_FR = """<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+<div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="text-align: center; margin-bottom: 30px;">
+        <img src="https://www.icidordogne.fr/files/2021/03/cropped-Logo-haut-270x270.jpg" alt="ICI Dordogne" style="height: 80px;">
+    </div>
+    <h2 style="color: #8B1538;">Bonjour {prospect_prenom},</h2>
+    <p>Merci pour votre intérêt pour notre bien :</p>
+    <div style="background: #f9f9f9; border-left: 4px solid #8B1538; padding: 15px; margin: 20px 0;">
+        <strong style="color: #8B1538;">{bien_titre}</strong><br>
+        📍 {bien_commune}<br>💰 {bien_prix}
+    </div>
+    <p>Notre assistant <strong>Axis</strong> est disponible 24h/24 pour répondre à vos questions et organiser une visite :</p>
+    <p style="text-align: center; margin: 30px 0;">
+        <a href="{chat_url}" style="background: #8B1538; color: white; padding: 15px 40px; text-decoration: none; border-radius: 5px; font-weight: bold;">💬 Discuter avec Axis</a>
+    </p>
+    <p style="font-size: 14px; color: #666;">Ou appelez-nous au <strong>05 53 03 01 14</strong></p>
+    <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+    <p>À très bientôt,<br><strong>L'équipe ICI Dordogne</strong></p>
+    <div style="margin-top: 30px; padding: 15px; background: #f5f5f5; font-size: 12px; color: #666;">
+        ICI Dordogne - Vergt • Le Bugue • Trémolat | 05 53 03 01 14 | www.icidordogne.fr
+    </div>
+</div></body></html>"""
+
+EMAIL_CONFIRMATION_RDV_FR = """<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+<div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="text-align: center; margin-bottom: 30px;">
+        <img src="https://www.icidordogne.fr/files/2021/03/cropped-Logo-haut-270x270.jpg" alt="ICI Dordogne" style="height: 80px;">
+    </div>
+    <h2 style="color: #8B1538;">Bonjour {prospect_prenom},</h2>
+    <p>Votre demande de visite a bien été enregistrée !</p>
+    <div style="background: #e8f5e9; border: 2px solid #4CAF50; border-radius: 10px; padding: 20px; margin: 20px 0; text-align: center;">
+        <div style="font-size: 24px;">📅</div>
+        <div style="font-size: 20px; font-weight: bold; color: #2e7d32;">{rdv_date}</div>
+        <div style="font-size: 16px; color: #666;">{rdv_heure}</div>
+    </div>
+    <div style="background: #f9f9f9; border-left: 4px solid #8B1538; padding: 15px; margin: 20px 0;">
+        <strong style="color: #8B1538;">{bien_titre}</strong><br>📍 {bien_commune}
+    </div>
+    <p><strong>Notre conseiller vous contactera très rapidement</strong> via {canal_prefere} pour confirmer.</p>
+    <p style="background: #fff3cd; padding: 10px; border-radius: 5px; font-size: 14px;">⏰ Nous mettons un point d'honneur à vous recontacter sous 2 heures maximum.</p>
+    <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+    <p>À très bientôt,<br><strong>L'équipe ICI Dordogne</strong></p>
+</div></body></html>"""
+
+EMAIL_ALERTE_AGENCE_TPL = """<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+<div style="max-width: 700px; margin: 0 auto; padding: 20px;">
+    <div style="background: #d32f2f; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0;">
+        <h1 style="margin: 0; font-size: 24px;">🚨 NOUVEAU PROSPECT QUALIFIÉ</h1>
+        <p style="margin: 10px 0 0 0;">RAPPELER SOUS 2H MAXIMUM</p>
+    </div>
+    <div style="background: #fff; border: 2px solid #d32f2f; border-top: none; padding: 20px; border-radius: 0 0 10px 10px;">
+        <h2 style="color: #8B1538; border-bottom: 2px solid #8B1538; padding-bottom: 10px;">👤 PROSPECT</h2>
+        <table style="width: 100%;">
+            <tr><td style="padding: 8px 0; font-weight: bold; width: 140px;">Nom :</td><td>{prospect_nom}</td></tr>
+            <tr><td style="padding: 8px 0; font-weight: bold;">Email :</td><td><a href="mailto:{prospect_email}">{prospect_email}</a></td></tr>
+            <tr><td style="padding: 8px 0; font-weight: bold;">Téléphone :</td><td><strong style="font-size: 18px;">{prospect_tel}</strong></td></tr>
+            <tr><td style="padding: 8px 0; font-weight: bold;">Langue :</td><td>{prospect_langue}</td></tr>
+            <tr><td style="padding: 8px 0; font-weight: bold;">Canal préféré :</td><td><strong style="color: #d32f2f;">{canal_prefere}</strong></td></tr>
+        </table>
+        <h2 style="color: #8B1538; border-bottom: 2px solid #8B1538; padding-bottom: 10px; margin-top: 30px;">🏠 BIEN</h2>
+        <table style="width: 100%;">
+            <tr><td style="padding: 8px 0; font-weight: bold; width: 140px;">REF :</td><td>{bien_ref}</td></tr>
+            <tr><td style="padding: 8px 0; font-weight: bold;">Titre :</td><td>{bien_titre}</td></tr>
+            <tr><td style="padding: 8px 0; font-weight: bold;">Commune :</td><td>{bien_commune}</td></tr>
+            <tr><td style="padding: 8px 0; font-weight: bold;">Prix :</td><td>{bien_prix}</td></tr>
+        </table>
+        <h2 style="color: #8B1538; border-bottom: 2px solid #8B1538; padding-bottom: 10px; margin-top: 30px;">📅 RDV</h2>
+        <div style="background: #e8f5e9; border: 2px solid #4CAF50; border-radius: 10px; padding: 15px; text-align: center;">
+            <strong style="color: #2e7d32;">{rdv_date} - {rdv_heure}</strong>
+        </div>
+        <h2 style="color: #8B1538; border-bottom: 2px solid #8B1538; padding-bottom: 10px; margin-top: 30px;">💬 MESSAGE</h2>
+        <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; font-style: italic;">"{message_initial}"</div>
+        <h2 style="color: #8B1538; border-bottom: 2px solid #8B1538; padding-bottom: 10px; margin-top: 30px;">🔗 LIENS</h2>
+        <p>📋 <a href="{trello_acquereur_url}">Carte Trello Acquéreur</a><br>
+        📋 <a href="{trello_biens_url}">Carte Trello BIENS</a><br>
+        🌐 <a href="{site_url}">Site icidordogne.fr</a></p>
+        <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 5px; margin-top: 20px; text-align: center;">
+            <strong>⏰ Ce prospect attend votre appel !</strong>
+        </div>
+    </div>
+    <div style="margin-top: 20px; padding: 10px; font-size: 12px; color: #666; text-align: center;">
+        Email généré par Axis - {timestamp}
+    </div>
+</div></body></html>"""
+
+
+def envoyer_email_sdr(destinataire, sujet, corps_html, copie=None):
+    """Envoie un email SDR via SMTP Gmail"""
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = sujet
+    msg['From'] = f"ICI Dordogne <{GMAIL_USER}>"
+    msg['To'] = destinataire
+    if copie:
+        msg['Cc'] = copie
+    
+    msg.attach(MIMEText(corps_html, 'html', 'utf-8'))
+    
+    try:
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465, context=context) as server:
+            server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
+            dest_list = [destinataire]
+            if copie:
+                dest_list.append(copie)
+            server.sendmail(GMAIL_USER, dest_list, msg.as_string())
+        print(f"[EMAIL SDR] ✅ Envoyé à {destinataire}")
+        return True, "OK"
+    except Exception as e:
+        print(f"[EMAIL SDR] ❌ Erreur: {e}")
+        return False, str(e)
+
+
+def envoyer_email_remerciement_sdr(prospect):
+    """EMAIL 1 : Remerciement + lien chat"""
+    sujet = f"Votre demande pour {prospect.get('bien_titre', 'un bien')} - ICI Dordogne"
+    corps = EMAIL_REMERCIEMENT_FR.format(
+        prospect_prenom=prospect.get('prenom', 'Bonjour'),
+        bien_titre=prospect.get('bien_titre', ''),
+        bien_commune=prospect.get('bien_commune', ''),
+        bien_prix=prospect.get('bien_prix', ''),
+        chat_url=prospect.get('chat_url', '')
+    )
+    return envoyer_email_sdr(prospect['email'], sujet, corps, EMAIL_CC)
+
+
+def envoyer_email_confirmation_rdv_sdr(prospect):
+    """EMAIL 2 : Confirmation RDV"""
+    if not prospect.get('rdv_date'):
+        return False, "Pas de RDV défini"
+    
+    sujet = f"Visite confirmée - {prospect.get('bien_titre', '')} - ICI Dordogne"
+    corps = EMAIL_CONFIRMATION_RDV_FR.format(
+        prospect_prenom=prospect.get('prenom', 'Bonjour'),
+        bien_titre=prospect.get('bien_titre', ''),
+        bien_commune=prospect.get('bien_commune', ''),
+        rdv_date=prospect.get('rdv_date', ''),
+        rdv_heure=prospect.get('rdv_heure', ''),
+        canal_prefere=prospect.get('canal_prefere', 'téléphone')
+    )
+    return envoyer_email_sdr(prospect['email'], sujet, corps, EMAIL_CC)
+
+
+def envoyer_email_alerte_agence_sdr(prospect):
+    """EMAIL 3 : Alerte agence URGENT"""
+    sujet = f"🚨 URGENT - Nouveau prospect : {prospect.get('nom', '?')} - REF {prospect.get('bien_ref', '?')}"
+    corps = EMAIL_ALERTE_AGENCE_TPL.format(
+        prospect_nom=prospect.get('nom', '-'),
+        prospect_email=prospect.get('email', '-'),
+        prospect_tel=prospect.get('tel', 'NON COMMUNIQUÉ'),
+        prospect_langue=prospect.get('langue', 'FR'),
+        canal_prefere=prospect.get('canal_prefere', 'Téléphone'),
+        bien_ref=prospect.get('bien_ref', '-'),
+        bien_titre=prospect.get('bien_titre', '-'),
+        bien_commune=prospect.get('bien_commune', '-'),
+        bien_prix=prospect.get('bien_prix', '-'),
+        rdv_date=prospect.get('rdv_date', 'À définir'),
+        rdv_heure=prospect.get('rdv_heure', '-'),
+        message_initial=prospect.get('message_initial', '-'),
+        trello_acquereur_url=prospect.get('trello_acquereur_url', '#'),
+        trello_biens_url=prospect.get('trello_biens_url', '#'),
+        site_url=prospect.get('site_url', '#'),
+        timestamp=datetime.now().strftime('%d/%m/%Y %H:%M')
+    )
+    return envoyer_email_sdr(EMAIL_TO, sujet, corps, EMAIL_CC)
+
+
+def workflow_sdr_complet(prospect_data):
+    """
+    Workflow SDR complet :
+    1. Créer carte Trello
+    2. Envoyer EMAIL 1 (remerciement)
+    3. Envoyer EMAIL 3 (alerte agence)
+    
+    EMAIL 2 (confirmation RDV) envoyé plus tard quand RDV défini
+    """
+    resultats = {
+        "trello": {"ok": False, "url": None},
+        "email_remerciement": {"ok": False, "error": None},
+        "email_alerte": {"ok": False, "error": None}
+    }
+    
+    # 1. Carte Trello
+    card_id, card_url = creer_carte_trello_acquereur_sdr(prospect_data)
+    if card_url:
+        resultats["trello"] = {"ok": True, "url": card_url}
+        prospect_data['trello_acquereur_url'] = card_url
+    
+    # 2. Email remerciement (si SDR_AUTO_EMAILS activé)
+    if SDR_AUTO_EMAILS:
+        ok, err = envoyer_email_remerciement_sdr(prospect_data)
+        resultats["email_remerciement"] = {"ok": ok, "error": err if not ok else None}
+        
+        # 3. Email alerte agence
+        ok, err = envoyer_email_alerte_agence_sdr(prospect_data)
+        resultats["email_alerte"] = {"ok": ok, "error": err if not ok else None}
+    else:
+        print("[SDR] Emails désactivés (SDR_AUTO_EMAILS=false)")
+        resultats["email_remerciement"] = {"ok": False, "error": "SDR_AUTO_EMAILS=false"}
+        resultats["email_alerte"] = {"ok": False, "error": "SDR_AUTO_EMAILS=false"}
+    
+    return resultats
+
+
 # ============================================================
 # MEMORY CONTENT
 # ============================================================
@@ -2010,14 +1670,12 @@ class AxiHandler(BaseHTTPRequestHandler):
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             status = {
-                "service": "Axi ICI Dordogne v11 SDR",
+                "service": "Axi ICI Dordogne v10 UNIFIÃ‰",
                 "status": "ok",
-                "features": ["Chat", "DPE", "Concurrence", "DVF", "SDR"],
+                "features": ["Chat", "DPE", "Concurrence", "DVF"],
                 "endpoints": ["/", "/trio", "/chat", "/briefing", "/memory", "/status",
                              "/run-veille", "/test-veille", "/run-veille-concurrence", 
-                             "/test-veille-concurrence", "/dvf/stats", "/dvf/enrichir",
-                             "/chat/p/{token}", "/api/prospect-chat", "/api/prospect/test",
-                             "/api/prospect/create", "/api/prospect/finalize"]
+                             "/test-veille-concurrence", "/dvf/stats", "/dvf/enrichir"]
             }
             self.wfile.write(json.dumps(status).encode())
         
@@ -2113,406 +1771,85 @@ class AxiHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(conversations.encode())
         
-        # ============================================================
-        # DEBUG - DIAGNOSTIC POSTGRESQL
-        # ============================================================
-        
-        elif path == '/debug-db':
-            result = {
-                "timestamp": datetime.now().isoformat(),
-                "env_var_present": False,
-                "database_url_preview": None,
-                "psycopg2_installed": POSTGRES_OK,
-                "connection_status": None,
-                "tables_exist": [],
-                "tables_sdr_found": False,
-                "test_write": None,
-                "test_read": None,
-                "diagnostic": None
-            }
-            
-            # 1. Check DATABASE_URL
-            db_url = os.environ.get("DATABASE_URL", "")
-            result["env_var_present"] = bool(db_url)
-            if db_url:
-                # Masquer le mot de passe
-                try:
-                    parts = db_url.split("@")
-                    if len(parts) > 1:
-                        result["database_url_preview"] = f"***@{parts[-1][:30]}..."
-                    else:
-                        result["database_url_preview"] = db_url[:20] + "..."
-                except:
-                    result["database_url_preview"] = "present but unparseable"
-            
-            # 2. Check psycopg2
-            if not POSTGRES_OK:
-                result["connection_status"] = "ERREUR: psycopg2 non installe"
-                result["diagnostic"] = "Installer psycopg2-binary dans requirements.txt"
-            elif not db_url:
-                result["connection_status"] = "ERREUR: DATABASE_URL absente"
-                result["diagnostic"] = "Ajouter DATABASE_URL dans les variables Railway"
-            else:
-                # 3. Test connexion
-                try:
-                    conn = psycopg2.connect(db_url, sslmode='require')
-                    result["connection_status"] = "OK"
-                    
-                    cur = conn.cursor()
-                    
-                    # 4. Lister les tables
-                    cur.execute("""
-                        SELECT table_name FROM information_schema.tables 
-                        WHERE table_schema = 'public'
-                    """)
-                    tables = [row[0] for row in cur.fetchall()]
-                    result["tables_exist"] = tables
-                    result["tables_sdr_found"] = "prospects_sdr" in tables and "conversations_sdr" in tables
-                    
-                    # 5. Creer tables si absentes
-                    if not result["tables_sdr_found"]:
-                        cur.execute("""
-                            CREATE TABLE IF NOT EXISTS prospects_sdr (
-                                token VARCHAR(32) PRIMARY KEY,
-                                data JSONB NOT NULL,
-                                created_at TIMESTAMP DEFAULT NOW(),
-                                updated_at TIMESTAMP DEFAULT NOW()
-                            )
-                        """)
-                        cur.execute("""
-                            CREATE TABLE IF NOT EXISTS conversations_sdr (
-                                token VARCHAR(32) PRIMARY KEY,
-                                messages JSONB DEFAULT '[]'::jsonb,
-                                updated_at TIMESTAMP DEFAULT NOW()
-                            )
-                        """)
-                        conn.commit()
-                        result["diagnostic"] = "Tables SDR creees maintenant"
-                        
-                        # Re-check
-                        cur.execute("""
-                            SELECT table_name FROM information_schema.tables 
-                            WHERE table_schema = 'public'
-                        """)
-                        tables = [row[0] for row in cur.fetchall()]
-                        result["tables_exist"] = tables
-                        result["tables_sdr_found"] = "prospects_sdr" in tables and "conversations_sdr" in tables
-                    
-                    # 6. Test write
-                    test_token = "debug_test_" + datetime.now().strftime("%H%M%S")
-                    try:
-                        cur.execute("""
-                            INSERT INTO conversations_sdr (token, messages, updated_at)
-                            VALUES (%s, %s, NOW())
-                            ON CONFLICT (token) DO UPDATE 
-                            SET messages = EXCLUDED.messages, updated_at = NOW()
-                        """, (test_token, json.dumps([{"role": "test", "content": "debug"}])))
-                        conn.commit()
-                        result["test_write"] = f"OK - token: {test_token}"
-                    except Exception as e:
-                        result["test_write"] = f"ERREUR: {str(e)}"
-                    
-                    # 7. Test read
-                    try:
-                        cur.execute("SELECT messages FROM conversations_sdr WHERE token = %s", (test_token,))
-                        row = cur.fetchone()
-                        if row:
-                            result["test_read"] = f"OK - messages: {row[0]}"
-                        else:
-                            result["test_read"] = "ERREUR: Ligne non trouvee apres insert"
-                    except Exception as e:
-                        result["test_read"] = f"ERREUR: {str(e)}"
-                    
-                    # 8. Cleanup
-                    try:
-                        cur.execute("DELETE FROM conversations_sdr WHERE token = %s", (test_token,))
-                        conn.commit()
-                    except:
-                        pass
-                    
-                    cur.close()
-                    conn.close()
-                    
-                    if result["test_write"] and result["test_write"].startswith("OK") and result["test_read"] and result["test_read"].startswith("OK"):
-                        result["diagnostic"] = "PostgreSQL OK - Le probleme est dans le code SDR"
-                    
-                except Exception as e:
-                    result["connection_status"] = f"ERREUR: {str(e)}"
-                    result["diagnostic"] = "Verifier DATABASE_URL et acces reseau"
+
+
+        elif path == '/sdr/status':
+            prospects = charger_prospects_sdr()
+            conversations = charger_conversations_sdr()
             
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
-            self.wfile.write(json.dumps(result, indent=2, ensure_ascii=False).encode('utf-8'))
+            self.wfile.write(json.dumps({
+                "sdr_auto_emails": SDR_AUTO_EMAILS,
+                "prospects_count": len(prospects),
+                "conversations_count": len(conversations),
+                "endpoints": [
+                    "GET /chat/p/{token} - Page chat prospect",
+                    "GET /api/prospect-chat/history?token=X - Historique",
+                    "GET /api/prospect/test - Créer prospect test",
+                    "GET /sdr/status - Ce endpoint",
+                    "POST /api/prospect-chat - Envoyer message",
+                    "POST /webhook/mail-acquereur - Webhook mail",
+                    "POST /api/prospect/finalize - Finaliser + emails"
+                ],
+                "info": "Activer SDR_AUTO_EMAILS=true sur Railway pour envoi auto"
+            }).encode())
         
-        # Debug SDR - Test flux complet avec les vraies fonctions
-        elif path == '/debug-sdr':
-            result = {
-                "timestamp": datetime.now().isoformat(),
-                "steps": []
-            }
-            
-            test_token = "sdr_debug_" + datetime.now().strftime("%H%M%S")
-            
-            # Step 1: Sauver conversation vide
-            try:
-                sauver_conversation_db(test_token, [])
-                result["steps"].append({"step": "1_save_empty", "status": "OK"})
-            except Exception as e:
-                result["steps"].append({"step": "1_save_empty", "status": f"ERREUR: {e}"})
-            
-            # Step 2: Lire conversation
-            try:
-                msgs = get_conversation_sdr(test_token)
-                result["steps"].append({"step": "2_read_empty", "status": "OK", "messages": msgs, "type": str(type(msgs))})
-            except Exception as e:
-                result["steps"].append({"step": "2_read_empty", "status": f"ERREUR: {e}"})
-            
-            # Step 3: Ajouter message
-            try:
-                ajouter_message_sdr(test_token, "assistant", "Test message")
-                result["steps"].append({"step": "3_add_message", "status": "OK"})
-            except Exception as e:
-                result["steps"].append({"step": "3_add_message", "status": f"ERREUR: {e}"})
-            
-            # Step 4: Relire conversation
-            try:
-                msgs = get_conversation_sdr(test_token)
-                result["steps"].append({"step": "4_read_after_add", "status": "OK", "messages": msgs, "count": len(msgs)})
-            except Exception as e:
-                result["steps"].append({"step": "4_read_after_add", "status": f"ERREUR: {e}"})
-            
-            # Step 5: Lecture directe DB pour comparer
-            try:
-                conn = get_db_connection()
-                if conn:
-                    cur = conn.cursor()
-                    cur.execute("SELECT messages FROM conversations_sdr WHERE token = %s", (test_token,))
-                    row = cur.fetchone()
-                    cur.close()
-                    conn.close()
-                    result["steps"].append({"step": "5_direct_db_read", "status": "OK", "raw_data": str(row)})
-                else:
-                    result["steps"].append({"step": "5_direct_db_read", "status": "ERREUR: No connection"})
-            except Exception as e:
-                result["steps"].append({"step": "5_direct_db_read", "status": f"ERREUR: {e}"})
-            
-            # Cleanup
-            try:
-                conn = get_db_connection()
-                if conn:
-                    cur = conn.cursor()
-                    cur.execute("DELETE FROM conversations_sdr WHERE token = %s", (test_token,))
-                    conn.commit()
-                    cur.close()
-                    conn.close()
-            except:
-                pass
-            
-            # Diagnostic
-            all_ok = all(s.get("status", "").startswith("OK") for s in result["steps"])
-            result["diagnostic"] = "FLUX SDR OK" if all_ok else "BUG DETECTE - voir steps"
-            
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(result, indent=2, ensure_ascii=False).encode('utf-8'))
-        
-        # Debug complet - simule exactement /api/prospect/test + chat
-        elif path == '/debug-prospect-full':
-            result = {"steps": [], "token": None}
-            
-            # Step 1: Créer prospect (comme /api/prospect/test)
-            try:
-                token = creer_prospect(
-                    email="debug@test.com",
-                    nom="Debug Full",
-                    tel="+33600000000",
-                    bien_ref="DEBUG",
-                    bien_info={"titre": "Test", "prix": 100000, "commune": "TestVille"},
-                    source="Debug",
-                    langue="FR"
-                )
-                result["token"] = token
-                result["steps"].append({"step": "1_creer_prospect", "status": "OK", "token": token})
-            except Exception as e:
-                result["steps"].append({"step": "1_creer_prospect", "status": f"ERREUR: {e}"})
-            
-            if result["token"]:
-                token = result["token"]
-                
-                # Step 2: Vérifier prospect en DB
-                try:
-                    prospect = get_prospect(token)
-                    result["steps"].append({"step": "2_get_prospect", "status": "OK" if prospect else "ERREUR: None", "data": str(prospect)[:100] if prospect else None})
-                except Exception as e:
-                    result["steps"].append({"step": "2_get_prospect", "status": f"ERREUR: {e}"})
-                
-                # Step 3: Vérifier conversation initialisée
-                try:
-                    conv = get_conversation_sdr(token)
-                    result["steps"].append({"step": "3_get_conv_initial", "status": "OK", "messages": conv, "count": len(conv)})
-                except Exception as e:
-                    result["steps"].append({"step": "3_get_conv_initial", "status": f"ERREUR: {e}"})
-                
-                # Step 4: Simuler __INIT__ (comme le frontend)
-                try:
-                    resp = chat_prospect_claude(token, "__INIT__")
-                    result["steps"].append({"step": "4_chat_init", "status": "OK" if "response" in resp else f"ERREUR: {resp}", "response": resp.get("response", "")[:50]})
-                except Exception as e:
-                    result["steps"].append({"step": "4_chat_init", "status": f"ERREUR: {e}"})
-                
-                # Step 5: Vérifier conversation après init
-                try:
-                    conv = get_conversation_sdr(token)
-                    result["steps"].append({"step": "5_get_conv_after_init", "status": "OK", "count": len(conv), "messages": conv})
-                except Exception as e:
-                    result["steps"].append({"step": "5_get_conv_after_init", "status": f"ERREUR: {e}"})
-                
-                # Step 6: Lecture directe DB
-                try:
-                    conn = get_db_connection()
-                    if conn:
-                        cur = conn.cursor()
-                        cur.execute("SELECT token, messages FROM conversations_sdr WHERE token = %s", (token,))
-                        row = cur.fetchone()
-                        cur.close()
-                        conn.close()
-                        result["steps"].append({"step": "6_direct_db", "status": "OK" if row else "ERREUR: Row None", "raw": str(row) if row else None})
-                    else:
-                        result["steps"].append({"step": "6_direct_db", "status": "ERREUR: No connection"})
-                except Exception as e:
-                    result["steps"].append({"step": "6_direct_db", "status": f"ERREUR: {e}"})
-            
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(result, indent=2, ensure_ascii=False).encode('utf-8'))
-        
-        # ============================================================
-        # SDR - ENDPOINTS PROSPECTS
-        # ============================================================
-        
-        # Page chat prospect : /chat/p/{token}
+        # === SDR: Chat prospect ===
         elif path.startswith('/chat/p/'):
             token = path.split('/chat/p/')[-1].split('?')[0]
-            prospect = get_prospect(token)
+            prospects = charger_prospects_sdr()
             
-            if not prospect:
+            if token in prospects:
+                prospect = prospects[token]
+                html = generer_page_chat_prospect(token, prospect)
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(html.encode())
+            else:
                 self.send_response(404)
                 self.send_header('Content-Type', 'text/html; charset=utf-8')
                 self.end_headers()
-                self.wfile.write("<html><body><h1>Lien invalide ou expire</h1></body></html>".encode('utf-8'))
-                return
-            
-            self.send_response(200)
-            self.send_header('Content-Type', 'text/html; charset=utf-8')
-            self.end_headers()
-            self.wfile.write(CHAT_PROSPECT_HTML.encode('utf-8'))
+                self.wfile.write(b"<html><body><h1>Lien invalide ou expire</h1></body></html>")
         
-        # API historique conversation SDR
         elif path.startswith('/api/prospect-chat/history'):
-            # IMPORTANT: utiliser self.path pour avoir les query params (pas path qui est strip)
-            full_path = self.path
-            params = urllib.parse.parse_qs(urllib.parse.urlparse(full_path).query)
-            token = params.get('t', [''])[0]
+            query = urllib.parse.urlparse(self.path).query
+            params = urllib.parse.parse_qs(query)
+            token = params.get('token', [''])[0]
             
-            conversation = get_conversation_sdr(token)
+            conversations = charger_conversations_sdr()
+            messages = conversations.get(token, [])
             
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            self.wfile.write(json.dumps({"messages": conversation}, ensure_ascii=False).encode('utf-8'))
+            self.wfile.write(json.dumps({"messages": messages}).encode())
         
-        # Debug history - montre tout le processus
-        elif path.startswith('/debug-history'):
-            # IMPORTANT: utiliser self.path pour avoir les query params
-            full_path = self.path
-            params = urllib.parse.parse_qs(urllib.parse.urlparse(full_path).query)
-            token = params.get('t', [''])[0]
-            
-            result = {
-                "input": {
-                    "path": path,
-                    "full_path": full_path,
-                    "params": params,
-                    "token": token,
-                    "token_len": len(token)
-                },
-                "db_direct": None,
-                "function_result": None,
-                "error": None
-            }
-            
-            # Test 1: Lecture directe DB
-            try:
-                conn = get_db_connection()
-                if conn:
-                    cur = conn.cursor()
-                    cur.execute("SELECT token, messages FROM conversations_sdr WHERE token = %s", (token,))
-                    row = cur.fetchone()
-                    cur.close()
-                    conn.close()
-                    result["db_direct"] = {
-                        "found": row is not None,
-                        "token": row[0] if row else None,
-                        "messages": row[1] if row else None,
-                        "messages_type": str(type(row[1])) if row else None
-                    }
-            except Exception as e:
-                result["db_direct"] = {"error": str(e)}
-            
-            # Test 2: Via la fonction
-            try:
-                conv = get_conversation_sdr(token)
-                result["function_result"] = {
-                    "type": str(type(conv)),
-                    "len": len(conv) if conv else 0,
-                    "value": conv
-                }
-            except Exception as e:
-                result["function_result"] = {"error": str(e)}
-            
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(result, indent=2, ensure_ascii=False).encode('utf-8'))
-        
-        # Creer prospect de test
         elif path == '/api/prospect/test':
-            token = creer_prospect(
-                email="test@example.com",
-                nom="Prospect Test",
-                tel="+33612345678",
-                bien_ref="41590",
-                bien_info={
-                    "titre": "Belle propriete de 5 hectares",
-                    "prix": 647900,
-                    "surface": 200,
-                    "terrain": 50000,
-                    "chambres": 4,
-                    "commune": "Val de Louyre et Caudeau",
-                    "dpe": "C"
-                },
-                source="Test",
-                langue="FR"
-            )
-            
-            base_url = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "baby-axys-production.up.railway.app")
-            chat_url = f"https://{base_url}/chat/p/{token}"
-            
-            result = {
-                "success": True,
-                "token": token,
-                "chat_url": chat_url,
-                "message": "Prospect test cree. Ouvrez chat_url pour tester."
+            token = generer_token_prospect("test@example.com", "TEST")
+            prospects = charger_prospects_sdr()
+            prospects[token] = {
+                "prenom": "Test",
+                "nom": "Prospect Test",
+                "email": "test@example.com",
+                "bien_titre": "Maison test 5 pieces",
+                "bien_commune": "Vergt",
+                "bien_prix": "250 000 EUR",
+                "bien_ref": "TEST123",
+                "langue": "FR"
             }
+            sauver_prospects_sdr(prospects)
             
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
-            self.wfile.write(json.dumps(result, ensure_ascii=False).encode('utf-8'))
+            self.wfile.write(json.dumps({
+                "token": token,
+                "chat_url": f"{BASE_URL}/chat/p/{token}"
+            }).encode())
         
         else:
             self.send_response(404)
@@ -2575,7 +1912,7 @@ class AxiHandler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({"error": str(e)}).encode())
         
         elif path == '/memoire':
-            # Sauvegarde memoire depuis Axis
+            # Sauvegarde mÃ©moire depuis Axis
             try:
                 data = json.loads(post_data)
                 resume = data.get('resume', '')
@@ -2597,92 +1934,126 @@ class AxiHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": str(e)}).encode())
         
-        # ============================================================
-        # SDR - ENDPOINTS POST
-        # ============================================================
-        
-        # API chat prospect
+
         elif path == '/api/prospect-chat':
             try:
                 data = json.loads(post_data)
-                token = data.get("token", "")
-                message = data.get("message", "")
+                token = data.get('token', '')
+                message = data.get('message', '')
                 
-                result = chat_prospect_claude(token, message)
+                prospects = charger_prospects_sdr()
+                if token not in prospects:
+                    self.send_response(404)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": "Token invalide"}).encode())
+                    return
+                
+                prospect = prospects[token]
+                
+                # Sauvegarder message user
+                conversations = charger_conversations_sdr()
+                if token not in conversations:
+                    conversations[token] = []
+                conversations[token].append({
+                    "role": "user",
+                    "content": message,
+                    "timestamp": datetime.now().isoformat()
+                })
+                
+                # Générer réponse Axis
+                bien_info = f"Titre: {prospect.get('bien_titre', '')}\nCommune: {prospect.get('bien_commune', '')}\nPrix: {prospect.get('bien_prix', '')}\nREF: {prospect.get('bien_ref', '')}"
+                prompt = PROMPT_SDR_AXIS.format(bien_info=bien_info)
+                
+                history = [{"role": m['role'], "content": m['content']} for m in conversations[token]]
+                
+                try:
+                    client = anthropic.Anthropic()
+                    response = client.messages.create(
+                        model="claude-sonnet-4-20250514",
+                        max_tokens=500,
+                        system=prompt,
+                        messages=history
+                    )
+                    reponse_axis = response.content[0].text
+                except Exception as e:
+                    reponse_axis = f"Désolé, problème technique. Notre équipe vous contactera. (Erreur: {str(e)[:50]})"
+                
+                conversations[token].append({
+                    "role": "assistant",
+                    "content": reponse_axis,
+                    "timestamp": datetime.now().isoformat()
+                })
+                sauver_conversations_sdr(conversations)
                 
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
                 self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
-                self.wfile.write(json.dumps(result, ensure_ascii=False).encode('utf-8'))
+                self.wfile.write(json.dumps({"response": reponse_axis}).encode())
+                
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": str(e)}).encode())
         
-        # Creer prospect
-        elif path == '/api/prospect/create':
+        elif path == '/webhook/mail-acquereur':
             try:
                 data = json.loads(post_data)
                 
-                token = creer_prospect(
-                    email=data.get("email", ""),
-                    nom=data.get("nom", "Prospect"),
-                    tel=data.get("tel", ""),
-                    bien_ref=data.get("bien_ref", ""),
-                    bien_info=data.get("bien_info", {}),
-                    source=data.get("source", "API"),
-                    langue=data.get("langue", "FR")
-                )
-                
-                base_url = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "baby-axys-production.up.railway.app")
-                chat_url = f"https://{base_url}/chat/p/{token}"
-                
-                result = {"success": True, "token": token, "chat_url": chat_url}
-                
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(result, ensure_ascii=False).encode('utf-8'))
-            except Exception as e:
-                self.send_response(500)
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({"error": str(e)}).encode())
-        
-        # Finaliser prospect (Trello + notif)
-        elif path == '/api/prospect/finalize':
-            try:
-                data = json.loads(post_data)
-                token = data.get("token", "")
-                
-                prospect = get_prospect(token)
-                if not prospect:
-                    self.send_response(404)
-                    self.send_header('Content-Type', 'application/json')
-                    self.end_headers()
-                    self.wfile.write(json.dumps({"error": "Prospect non trouve"}).encode())
-                    return
-                
-                conversation = get_conversation_sdr(token)
-                
-                # Creer carte Trello
-                card_id, card_url = creer_carte_trello_prospect(prospect, conversation)
-                
-                if card_id:
-                    update_prospect(token, {"trello_card_id": card_id, "status": "finalized"})
-                
-                result = {
-                    "success": True,
-                    "trello_card_id": card_id,
-                    "trello_card_url": card_url
+                prospect_data = {
+                    "prenom": data.get('prenom', data.get('nom', 'Prospect').split()[0] if data.get('nom') else 'Prospect'),
+                    "nom": data.get('nom', 'Prospect'),
+                    "email": data.get('email', ''),
+                    "tel": data.get('tel', ''),
+                    "message_initial": data.get('message', ''),
+                    "source": data.get('source', 'Leboncoin'),
+                    "ref_source": data.get('ref_source', ''),
+                    "bien_ref": data.get('bien_ref', ''),
+                    "bien_titre": data.get('bien_titre', ''),
+                    "bien_commune": data.get('bien_commune', ''),
+                    "bien_prix": data.get('bien_prix', ''),
+                    "bien_surface": data.get('bien_surface', ''),
+                    "trello_biens_url": data.get('trello_biens_url', ''),
+                    "site_url": data.get('site_url', ''),
+                    "proprio_nom": data.get('proprio_nom', ''),
+                    "qualification": {}
                 }
                 
+                # Génération token et URL chat
+                token = generer_token_prospect(prospect_data['email'], prospect_data['bien_ref'])
+                prospect_data['token'] = token
+                prospect_data['chat_url'] = f"{BASE_URL}/chat/p/{token}"
+                prospect_data['langue'] = detecter_langue_prospect(prospect_data['message_initial'])
+                
+                # Sauvegarde prospect
+                prospects = charger_prospects_sdr()
+                prospects[token] = prospect_data
+                sauver_prospects_sdr(prospects)
+                
+                # WORKFLOW COMPLET : Trello + Emails (si activé)
+                workflow_result = workflow_sdr_complet(prospect_data)
+                
+                # Mise à jour prospect avec URL Trello
+                prospect_data['trello_acquereur_url'] = workflow_result['trello'].get('url')
+                prospects[token] = prospect_data
+                sauver_prospects_sdr(prospects)
+                
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
-                self.wfile.write(json.dumps(result, ensure_ascii=False).encode('utf-8'))
+                self.wfile.write(json.dumps({
+                    "status": "ok",
+                    "token": token,
+                    "chat_url": prospect_data['chat_url'],
+                    "trello_card_url": workflow_result['trello'].get('url'),
+                    "emails_auto": SDR_AUTO_EMAILS,
+                    "workflow": workflow_result
+                }).encode())
+                
             except Exception as e:
                 self.send_response(500)
                 self.send_header('Content-Type', 'application/json')
@@ -2692,6 +2063,14 @@ class AxiHandler(BaseHTTPRequestHandler):
         else:
             self.send_response(404)
             self.end_headers()
+    
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
     
     def log_message(self, format, *args):
         print(f"[HTTP] {args[0]}")
@@ -2703,26 +2082,25 @@ class AxiHandler(BaseHTTPRequestHandler):
 def main():
     port = int(os.environ.get('PORT', 8080))
     
-    print("""
-======================================================
-         AXI ICI DORDOGNE v11 SDR
-         Chat + Veilles + DVF + SDR Prospects
-======================================================
-  Endpoints:
-    /              Interface chat Axi
-    /status        Status JSON
-    /run-veille    Lancer veille DPE
-  SDR:
-    /chat/p/TOKEN  Chat prospect
-    /api/prospect/test  Creer prospect test
-======================================================
-  Cron: Concurrence 7h00, DPE 8h00 (Paris)
-  DB: PostgreSQL (persistent) + JSON (fallback)
-======================================================
+    print(f"""
+â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+â•‘         AXI ICI DORDOGNE v10 UNIFIÃ‰                        â•‘
+â•‘         Chat + Veilles + DVF                               â•‘
+â• â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•£
+â•‘  Endpoints:                                                â•‘
+â•‘    /              Interface chat                           â•‘
+â•‘    /trio          Interface Trio                           â•‘
+â•‘    /briefing      Briefing journal                         â•‘
+â•‘    /memory        Consignes Axis                           â•‘
+â•‘    /status        Status JSON                              â•‘
+â•‘    /run-veille    Lancer veille DPE                        â•‘
+â•‘    /run-veille-concurrence  Lancer veille concurrence      â•‘
+â•‘    /dvf/stats     Stats DVF par CP                         â•‘
+â•‘    /dvf/enrichir  Enrichir une adresse                     â•‘
+â• â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•£
+â•‘  Cron: Concurrence 7h00, DPE 8h00 (Paris)                  â•‘
+â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     """)
-    
-    # OBLIGATOIRE: Initialiser les tables SDR PostgreSQL
-    init_db_sdr()
     
     # DÃ©marrer le scheduler
     scheduler_thread = threading.Thread(target=scheduler_loop, daemon=True)
@@ -2753,4 +2131,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
