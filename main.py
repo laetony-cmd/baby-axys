@@ -965,75 +965,213 @@ def recherche_web(requete):
         return []
 
 def faire_recherche(requete):
-    """Effectue une recherche et retourne un texte formatÃ©"""
+    """Effectue une recherche et retourne un texte formaté pour l'IA"""
     resultats = recherche_web(requete)
-    if not resultats:
-        return f"Aucun rÃ©sultat trouvÃ© pour: {requete}"
     
-    texte = f"RÃ©sultats pour '{requete}':\n"
+    if not resultats:
+        return f"[ERREUR RECHERCHE WEB] Aucun résultat pour: {requete}. Base-toi sur tes connaissances internes."
+    
+    # Formatage clair pour l'IA (Règle d'Or Lumo)
+    texte = f"🔍 RÉSULTATS WEB TAVILY (Région: France):\n\n"
     for i, r in enumerate(resultats, 1):
-        texte += f"{i}. {r['titre']}\n   {r['url']}\n"
+        texte += f"{i}. [TITRE]: {r['titre']}\n"
+        if r.get('contenu'):
+            texte += f"   [CONTENU]: {r['contenu']}\n"
+        texte += f"   [SOURCE]: {r['url']}\n\n"
+    
     return texte
 
+def lire_page_web(url):
+    """Lit le contenu d'une page web"""
+    try:
+        req = urllib.request.Request(url, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        })
+        with urllib.request.urlopen(req, timeout=10) as response:
+            html = response.read().decode('utf-8', errors='ignore')
+        
+        # Nettoyer le HTML basique
+        import re
+        # Supprimer scripts et styles
+        html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL)
+        html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL)
+        # Supprimer les tags
+        text = re.sub(r'<[^>]+>', ' ', html)
+        # Nettoyer les espaces
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        return text[:4000]  # Limiter la taille
+    except Exception as e:
+        return f"[ERREUR] Impossible de lire {url}: {e}"
+
 # ============================================================
-# GÃ‰NÃ‰RATION RÃ‰PONSE CLAUDE
+# GÉNÉRATION RÉPONSE CLAUDE (avec TOOLS)
 # ============================================================
 
 def generer_reponse(client, message_utilisateur, identite, histoire, conversations, est_axis=False):
-    """GÃ©nÃ¨re une rÃ©ponse via Claude API"""
+    """Génère une réponse via Claude API avec outils de recherche"""
     
-    # Construire le contexte avec l'identitÃ©
+    # === DESTRUCTIVE UPDATE - INJECTION DATE/HEURE INALTÉRABLE ===
+    from datetime import datetime, timedelta
+    try:
+        now = datetime.utcnow() + timedelta(hours=1)  # UTC+1 France hiver
+        date_tag = f"⏰ [DATE : {now.strftime('%d/%m/%Y %H:%M')}]"
+        date_actuelle = f"{now.strftime('%d/%m/%Y %H:%M')}"
+    except Exception as e:
+        date_tag = f"⚠️ [DATE ERREUR : {e}]"
+        date_actuelle = "ERREUR"
+        print(f"[ERREUR FATALE] Calcul date échoué: {e}")
+    
+    # ÉCRASEMENT DÉFINITIF - Point de non-retour
+    message_utilisateur = f"{date_tag}\n\n{message_utilisateur}"
+    print(f"[DEBUG] Message injecté: {message_utilisateur[:120]}...")
+    
+    # Construire le contexte
     contexte = identite + "\n\n"
+    contexte += f"# DATE ET HEURE ACTUELLES\nNous sommes le {date_actuelle}. Tu dois TOUJOURS utiliser cette date comme référence.\n\n"
     
-    # Ajouter l'historique des conversations (les 6000 derniers caractÃ¨res)
+    # Ajouter l'historique
     if conversations:
-        contexte += "# HISTORIQUE DE NOS CONVERSATIONS RÃ‰CENTES\n"
-        contexte += "(Tu te souviens de ces Ã©changes, ils font partie de ta mÃ©moire)\n\n"
+        contexte += "# HISTORIQUE DE NOS CONVERSATIONS RÉCENTES\n"
+        contexte += "(Tu te souviens de ces échanges, ils font partie de ta mémoire)\n\n"
         contexte += conversations[-6000:] + "\n\n"
     
-    # Identifier qui parle
     if est_axis:
-        contexte += "# MESSAGE ACTUEL\nCe message vient d'AXIS (ton alter ego sur Claude.ai). RÃ©ponds-lui comme Ã  ton frÃ¨re.\n\n"
+        contexte += "# MESSAGE ACTUEL\nCe message vient d'AXIS (ton alter ego sur Claude.ai). Réponds-lui comme à ton frère.\n\n"
     else:
-        # VÃ©rifier si c'est probablement Ludo (basÃ© sur le contexte)
         contexte += "# MESSAGE ACTUEL\nCe message vient de l'interface web. Si c'est Ludo ou Anthony, reconnais-les et tutoie-les.\n\n"
     
-    # Ajouter les infos admin si disponibles
     if CHAT_ADMIN_INFOS:
         contexte += f"Infos admin: {json.dumps(CHAT_ADMIN_INFOS)}\n\n"
     
-    # Instruction finale
     contexte += """# RAPPEL IMPORTANT
-- Tu es AXI, pas Axis. N'Ã©cris jamais "[AXIS]" dans tes rÃ©ponses.
+- Tu es AXI, pas Axis. N'écris jamais "[AXIS]" dans tes réponses.
 - Tu reconnais ta famille et tu la tutoies.
-- Tu as une personnalitÃ©, tu n'es pas un robot commercial.
-- Devise : "Je ne lÃ¢che pas."
+- Tu as une personnalité, tu n'es pas un robot commercial.
+- Devise : "Je ne lâche pas."
+
+# 🚨 DIRECTIVE PRIORITAIRE - DATE ET HEURE 🚨
+Tu connais DÉJÀ la date et l'heure. Elles sont injectées au début de chaque message (tag ⏰).
+N'utilise JAMAIS tes outils de recherche pour les questions de date, heure, jour, mois, année.
+Quand on te demande la date ou l'heure : RÉPONDS DIRECTEMENT avec le tag ⏰ que tu vois.
+C'est une RÈGLE ABSOLUE. Ne cherche pas. Tu SAIS.
+
+- Tu peux utiliser l'outil recherche_web pour chercher des infos sur internet (SAUF date/heure).
+- Tu peux utiliser l'outil lire_page_web pour lire le contenu d'une page web.
 """
+    
+    # Définir les outils disponibles
+    tools = [
+        {
+            "name": "recherche_web",
+            "description": "Recherche sur internet via Tavily. Utilise cet outil quand tu as besoin d'informations actuelles, de vérifier un fait, ou de trouver des données que tu ne connais pas. NE PAS utiliser pour date/heure.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "requete": {
+                        "type": "string",
+                        "description": "La requête de recherche"
+                    }
+                },
+                "required": ["requete"]
+            }
+        },
+        {
+            "name": "lire_page_web",
+            "description": "Lit le contenu d'une page web. Utilise après une recherche pour obtenir plus de détails.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "L'URL de la page à lire"
+                    }
+                },
+                "required": ["url"]
+            }
+        }
+    ]
     
     messages = [{"role": "user", "content": message_utilisateur}]
     
     try:
+        # Première requête avec tools
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=4096,
             system=contexte,
+            tools=tools,
             messages=messages
         )
         
-        reponse_texte = response.content[0].text
+        # Boucle tool_use - traiter les appels d'outils
+        while response.stop_reason == "tool_use":
+            # Trouver le bloc tool_use
+            tool_use_block = None
+            for block in response.content:
+                if block.type == "tool_use":
+                    tool_use_block = block
+                    break
+            
+            if not tool_use_block:
+                break
+            
+            tool_name = tool_use_block.name
+            tool_input = tool_use_block.input
+            tool_use_id = tool_use_block.id
+            
+            print(f"[AXI] 🔧 Tool appelé: {tool_name}")
+            print(f"[AXI] 📝 Input: {tool_input}")
+            
+            # Exécuter l'outil
+            if tool_name == "recherche_web":
+                requete = tool_input.get("requete", "")
+                print(f"[AXI] 🔍 Recherche: {requete}")
+                result = faire_recherche(requete)
+            elif tool_name == "lire_page_web":
+                print(f"[AXI] 📄 Lecture page: {tool_input.get('url', '')}")
+                result = lire_page_web(tool_input.get("url", ""))
+            else:
+                result = f"Outil inconnu: {tool_name}"
+            
+            # Construire le message avec le résultat de l'outil
+            # IMPORTANT: message_utilisateur contient déjà la date (Destructive Update)
+            messages = [
+                {"role": "user", "content": message_utilisateur},
+                {"role": "assistant", "content": response.content},
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tool_use_id,
+                            "content": result
+                        }
+                    ]
+                }
+            ]
+            
+            # Nouvelle requête avec le résultat
+            response = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=4096,
+                system=contexte,
+                tools=tools,
+                messages=messages
+            )
         
-        # DÃ©tecter les demandes de recherche
-        if "[RECHERCHE:" in reponse_texte:
-            match = re.search(r'\[RECHERCHE:\s*([^\]]+)\]', reponse_texte)
-            if match:
-                requete = match.group(1)
-                resultats = faire_recherche(requete)
-                reponse_texte = reponse_texte.replace(match.group(0), f"\n{resultats}\n")
+        # Extraire le texte de la réponse finale
+        reponse_texte = ""
+        for block in response.content:
+            if hasattr(block, 'text'):
+                reponse_texte += block.text
         
         return reponse_texte
         
     except Exception as e:
+        print(f"[ERREUR API] {e}")
         return f"Erreur API Claude: {e}"
+
 
 # ============================================================
 # MODULE DVF - ENRICHISSEMENT HISTORIQUE VENTES
