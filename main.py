@@ -552,11 +552,12 @@ def lire_page_web_fallback(url):
 def generer_reponse(client, message_utilisateur, identite, histoire, conversations, est_axis=False):
     """Génère une réponse via Claude API"""
     
-    # Injecter la date/heure système
+    # Injecter la date/heure système EN HEURE DE PARIS
     from datetime import datetime
+    PARIS_TZ = pytz.timezone('Europe/Paris')
     jours_fr = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
     mois_fr = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
-    now = datetime.now()
+    now = datetime.now(PARIS_TZ)
     date_actuelle = f"{jours_fr[now.weekday()]} {now.day} {mois_fr[now.month-1]} {now.year}, {now.hour:02d}:{now.minute:02d}"
     
     contexte = identite + "\n\n"
@@ -617,7 +618,9 @@ def generer_reponse(client, message_utilisateur, identite, histoire, conversatio
         }
     ]
     
-    messages = [{"role": "user", "content": message_utilisateur}]
+    # Injection date dans le message utilisateur (double ancrage)
+    message_avec_date = f"[DATE ET HEURE : {date_actuelle}]\n\n{message_utilisateur}"
+    messages = [{"role": "user", "content": message_avec_date}]
     
     try:
         # Première requête avec tools
