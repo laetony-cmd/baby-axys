@@ -1057,108 +1057,26 @@ def creer_carte_trello_acquereur_sdr(prospect, conversation=None):
 
 
 def generer_page_chat_prospect(token, prospect):
-    """Génère la page HTML du chat prospect"""
-    bien_titre = prospect.get('bien_titre', 'Bien immobilier')
-    bien_commune = prospect.get('bien_commune', '')
-    
-    return f"""<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-    <title>Axis - ICI Dordogne</title>
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        :root {{ --primary: #8B1538; --bg: #f5f5f5; }}
-        body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); height: 100vh; display: flex; flex-direction: column; }}
-        .header {{ background: var(--primary); color: white; padding: 15px 20px; display: flex; align-items: center; gap: 15px; }}
-        .header img {{ height: 40px; }}
-        .header h1 {{ font-size: 18px; }}
-        .status-dot {{ width: 8px; height: 8px; background: #4CAF50; border-radius: 50%; margin-left: auto; animation: pulse 2s infinite; }}
-        @keyframes pulse {{ 0%, 100% {{ opacity: 1; }} 50% {{ opacity: 0.5; }} }}
-        .bien-info {{ background: white; padding: 15px 20px; border-bottom: 1px solid #ddd; }}
-        .bien-info strong {{ color: var(--primary); }}
-        .chat {{ flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; }}
-        .msg {{ max-width: 85%; padding: 12px 16px; border-radius: 18px; line-height: 1.5; font-size: 15px; white-space: pre-wrap; }}
-        .msg.assistant {{ background: white; align-self: flex-start; border: 1px solid #ddd; }}
-        .msg.user {{ background: var(--primary); color: white; align-self: flex-end; }}
-        .input-area {{ background: white; padding: 15px; border-top: 1px solid #ddd; display: flex; gap: 10px; }}
-        .input-area input {{ flex: 1; padding: 12px 15px; border: 1px solid #ddd; border-radius: 25px; font-size: 15px; }}
-        .input-area input:focus {{ outline: none; border-color: var(--primary); }}
-        .input-area button {{ background: var(--primary); color: white; border: none; width: 50px; height: 50px; border-radius: 50%; cursor: pointer; font-size: 20px; }}
-        .typing {{ display: none; padding: 12px 16px; background: white; border-radius: 18px; align-self: flex-start; }}
-        .typing.active {{ display: block; }}
-        .typing span {{ display: inline-block; width: 8px; height: 8px; background: #999; border-radius: 50%; margin: 0 2px; animation: bounce 1.4s infinite; }}
-        .typing span:nth-child(1) {{ animation-delay: -0.32s; }}
-        .typing span:nth-child(2) {{ animation-delay: -0.16s; }}
-        @keyframes bounce {{ 0%, 80%, 100% {{ transform: scale(0); }} 40% {{ transform: scale(1); }} }}
-    </style>
-</head>
-<body>
-    <div class="header">
-        <img src="https://www.icidordogne.fr/files/2021/03/cropped-Logo-haut-270x270.jpg" alt="ICI Dordogne">
-        <div><h1>Axis</h1><p style="font-size:12px;opacity:0.9">Assistant ICI Dordogne</p></div>
-        <div class="status-dot"></div>
-    </div>
-    <div class="bien-info"><strong>{bien_titre}</strong><br>📍 {bien_commune}</div>
-    <div class="chat" id="chat"></div>
-    <div class="typing" id="typing"><span></span><span></span><span></span></div>
-    <div class="input-area">
-        <input type="text" id="input" placeholder="Votre message..." autocomplete="off">
-        <button onclick="sendMessage()">➤</button>
-    </div>
-    <script>
-        const TOKEN = "{token}";
-        const chat = document.getElementById('chat');
-        const input = document.getElementById('input');
-        const typing = document.getElementById('typing');
+    """Génère la page HTML du chat prospect en lisant le template externe"""
+    try:
+        # Lecture du fichier template séparé
+        with open('chat_prospect.html', 'r', encoding='utf-8') as f:
+            html_content = f.read()
+            
+        # Remplacement sécurisé des variables
+        bien_titre = prospect.get('bien_titre', 'Bien immobilier')
+        bien_commune = prospect.get('bien_commune', '')
         
-        fetch('/api/prospect-chat/history?token=' + TOKEN)
-            .then(r => r.json())
-            .then(data => {{
-                if (data.messages) data.messages.forEach(m => addMessage(m.role, m.content));
-                if (!data.messages || data.messages.length === 0) {{
-                    addMessage('assistant', 'Bonjour ! Je suis Axis, votre assistant ICI Dordogne. 👋\\n\\nJe suis là pour répondre à vos questions sur ce bien et organiser une visite.\\n\\nComment puis-je vous aider ?');
-                }}
-            }})
-            .catch(e => {{
-                console.error('History error:', e);
-                addMessage('assistant', 'Bonjour ! Je suis Axis, votre assistant ICI Dordogne. 👋\\n\\nComment puis-je vous aider ?');
-            }});
+        html_content = html_content.replace('__TOKEN__', token)
+        html_content = html_content.replace('__BIEN_TITRE__', str(bien_titre))
+        html_content = html_content.replace('__BIEN_COMMUNE__', str(bien_commune))
         
-        function addMessage(role, content) {{
-            const div = document.createElement('div');
-            div.className = 'msg ' + role;
-            div.textContent = content;
-            chat.appendChild(div);
-            chat.scrollTop = chat.scrollHeight;
-        }}
+        return html_content
         
-        async function sendMessage() {{
-            const msg = input.value.trim();
-            if (!msg) return;
-            addMessage('user', msg);
-            input.value = '';
-            typing.classList.add('active');
-            try {{
-                const resp = await fetch('/api/prospect-chat', {{
-                    method: 'POST',
-                    headers: {{'Content-Type': 'application/json'}},
-                    body: JSON.stringify({{token: TOKEN, message: msg}})
-                }});
-                const data = await resp.json();
-                typing.classList.remove('active');
-                if (data.response) addMessage('assistant', data.response);
-            }} catch(e) {{
-                typing.classList.remove('active');
-                addMessage('assistant', 'Désolé, une erreur est survenue.');
-            }}
-        }}
-        
-        input.addEventListener('keypress', e => {{ if (e.key === 'Enter') sendMessage(); }});
-    </script>
-</body>
-</html>"""
+    except Exception as e:
+        print(f"[ERREUR TEMPLATE] Impossible de lire chat_prospect.html: {e}")
+        # Fallback minimaliste en cas de panique
+        return f"<html><body><h1>Erreur système</h1><p>Contactez l'agence au 05 53 03 01 14</p></body></html>"
 
 
 PROMPT_SDR_AXIS = """# TU ES AXIS - SDR ICI DORDOGNE
