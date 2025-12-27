@@ -458,26 +458,19 @@ def ajouter_message_sdr(token, role, content):
 
 def get_conversation_sdr(token):
     """Recupere la conversation d'un prospect"""
-    print(f"[DEBUG get_conversation_sdr] token={token}")
-    
     conn = get_db_connection()
     if conn:
         try:
             cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cur.execute("SELECT messages FROM conversations_sdr WHERE token = %s", (token,))
             row = cur.fetchone()
-            
-            print(f"[DEBUG get_conversation_sdr] row={row}, type={type(row)}")
-            
             cur.close()
             conn.close()
             
             if row:
                 messages = row['messages']
-                print(f"[DEBUG get_conversation_sdr] messages type={type(messages)}, value={messages}")
                 # Si c'est une string JSON, la parser
                 if isinstance(messages, str):
-                    print("[DEBUG get_conversation_sdr] PARSING STRING TO JSON")
                     return json.loads(messages)
                 return messages
             return []
