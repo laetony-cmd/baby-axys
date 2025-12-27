@@ -1,14 +1,15 @@
-Flask
-gunicorn
-requests
-apscheduler
-pytz
-psycopg2-binary
-google-generativeai
-tavily-python
-anthropic
-duckduckgo-search
-trafilatura
-openpyxl
-lxml
-# v12.4 - 27/12/2025 - Timezone Paris
+# AXI ICI DORDOGNE v11 SDR
+# Requirements Railway
+
+# Claude API
+anthropic>=0.18.0
+
+# PostgreSQL (OBLIGATOIRE pour persistence SDR)
+psycopg2-binary>=2.9.9
+
+# Excel exports
+openpyxl>=3.1.2
+
+# Scheduler (cron jobs)
+APScheduler>=3.10.4
+pytz>=2024.1
