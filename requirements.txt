@@ -11,3 +11,4 @@ duckduckgo-search
 trafilatura
 openpyxl
 lxml
+# v12.4 - 27/12/2025 - Timezone Paris
