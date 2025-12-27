@@ -2209,18 +2209,12 @@ class AxiHandler(BaseHTTPRequestHandler):
         
         # API historique conversation SDR
         elif path.startswith('/api/prospect-chat/history'):
-            params = urllib.parse.parse_qs(urllib.parse.urlparse(path).query)
+            # IMPORTANT: utiliser self.path pour avoir les query params (pas path qui est strip)
+            full_path = self.path
+            params = urllib.parse.parse_qs(urllib.parse.urlparse(full_path).query)
             token = params.get('t', [''])[0]
             
-            # DEBUG - À SUPPRIMER APRÈS FIX
-            print(f"[DEBUG HISTORY] path={path}")
-            print(f"[DEBUG HISTORY] params={params}")
-            print(f"[DEBUG HISTORY] token={token}, len={len(token)}")
-            
             conversation = get_conversation_sdr(token)
-            
-            print(f"[DEBUG HISTORY] conversation type={type(conversation)}, len={len(conversation) if conversation else 0}")
-            print(f"[DEBUG HISTORY] conversation={conversation}")
             
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
@@ -2230,12 +2224,15 @@ class AxiHandler(BaseHTTPRequestHandler):
         
         # Debug history - montre tout le processus
         elif path.startswith('/debug-history'):
-            params = urllib.parse.parse_qs(urllib.parse.urlparse(path).query)
+            # IMPORTANT: utiliser self.path pour avoir les query params
+            full_path = self.path
+            params = urllib.parse.parse_qs(urllib.parse.urlparse(full_path).query)
             token = params.get('t', [''])[0]
             
             result = {
                 "input": {
                     "path": path,
+                    "full_path": full_path,
                     "params": params,
                     "token": token,
                     "token_len": len(token)
