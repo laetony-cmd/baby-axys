@@ -554,14 +554,21 @@ def lire_page_web_fallback(url):
 def generer_reponse(client, message_utilisateur, identite, histoire, conversations, est_axis=False):
     """Génère une réponse via Claude API"""
     
-    # === INJECTION DATE/HEURE - VERSION KISS (sans pytz) ===
+    # === DESTRUCTIVE UPDATE - INJECTION DATE/HEURE INALTÉRABLE ===
+    # On écrase message_utilisateur à la source pour que TOUT le code utilise la version avec date
     from datetime import datetime, timedelta
-    # UTC+1 pour la France (hiver). En été ce sera UTC+2 mais on s'en fout pour l'instant.
-    now = datetime.utcnow() + timedelta(hours=1)
-    jours_fr = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
-    mois_fr = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
-    date_actuelle = f"{jours_fr[now.weekday()]} {now.day} {mois_fr[now.month-1]} {now.year}, {now.hour:02d}:{now.minute:02d}"
-    print(f"[DEBUG INJECTION] Date injectée: {date_actuelle}")
+    try:
+        now = datetime.utcnow() + timedelta(hours=1)  # UTC+1 France hiver
+        date_tag = f"⏰ [DATE : {now.strftime('%d/%m/%Y %H:%M')}]"
+        date_actuelle = f"{now.strftime('%d/%m/%Y %H:%M')}"
+    except Exception as e:
+        date_tag = f"⚠️ [DATE ERREUR : {e}]"
+        date_actuelle = "ERREUR"
+        print(f"[ERREUR FATALE] Calcul date échoué: {e}")
+    
+    # ÉCRASEMENT DÉFINITIF - Point de non-retour
+    message_utilisateur = f"{date_tag}\n\n{message_utilisateur}"
+    print(f"[DEBUG] Message injecté: {message_utilisateur[:120]}...")
     
     contexte = identite + "\n\n"
     contexte += f"# DATE ET HEURE ACTUELLES\nNous sommes le {date_actuelle}. Tu dois TOUJOURS utiliser cette date comme référence.\n\n"
@@ -621,11 +628,8 @@ def generer_reponse(client, message_utilisateur, identite, histoire, conversatio
         }
     ]
     
-    # Injection date dans le message utilisateur (double ancrage)
-    # === INJECTION DANS LE USER MESSAGE (double ancrage) ===
-    message_avec_date = f"[DATE ET HEURE : {date_actuelle}]\n\n{message_utilisateur}"
-    print(f"[DEBUG INJECTION] Message modifié: {message_avec_date[:100]}...")
-    messages = [{"role": "user", "content": message_avec_date}]
+    # message_utilisateur est déjà injecté avec la date (Destructive Update)
+    messages = [{"role": "user", "content": message_utilisateur}]
     
     try:
         # Première requête avec tools
