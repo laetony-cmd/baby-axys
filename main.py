@@ -583,19 +583,13 @@ def chat_prospect_claude(token, message):
     
     conversation = get_conversation_sdr(token)
     
-    # Message d'init
+    # Message d'init - TOUJOURS en français avec langues disponibles
     if message == "__INIT__":
-        langue = prospect.get("langue", "FR")
         bien_info = prospect.get("bien_info", {})
         
-        if langue == "DE":
-            init_msg = f"Guten Tag! Ich bin Axis, der digitale Assistent von ICI Dordogne. Ich habe Ihre Anfrage zu unserem Objekt REF {prospect.get('bien_ref', '')} in {bien_info.get('commune', 'Dordogne')} erhalten. Wie kann ich Ihnen helfen?"
-        elif langue == "EN":
-            init_msg = f"Hello! I'm Axis, the digital assistant of ICI Dordogne. I've received your inquiry about our property REF {prospect.get('bien_ref', '')} in {bien_info.get('commune', 'Dordogne')}. How can I help you?"
-        elif langue == "PT":
-            init_msg = f"Ola! Sou Axis, o assistente digital da ICI Dordogne. Recebi sua solicitacao sobre nosso imovel REF {prospect.get('bien_ref', '')} em {bien_info.get('commune', 'Dordogne')}. Como posso ajuda-lo?"
-        else:
-            init_msg = f"Bonjour ! Je suis Axis, l'assistant digital d'ICI Dordogne. J'ai bien recu votre demande concernant notre bien REF {prospect.get('bien_ref', '')} a {bien_info.get('commune', 'Dordogne')}. Comment puis-je vous aider ?"
+        init_msg = f"""Bonjour ! Je suis Axis, l'assistant digital d'ICI Dordogne. J'ai bien reçu votre demande concernant notre bien REF {prospect.get('bien_ref', '')} à {bien_info.get('commune', 'Dordogne')}. Comment puis-je vous aider ?
+
+🌍 I also speak English | Ich spreche auch Deutsch | Eu também falo Português"""
         
         ajouter_message_sdr(token, "assistant", init_msg)
         return {"response": init_msg}
