@@ -34,16 +34,6 @@ from datetime import datetime, timedelta
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from math import radians, cos, sin, asin, sqrt
 
-# Import Tavily pour recherche web pro
-try:
-    from tavily import TavilyClient
-    TAVILY_KEY = os.environ.get('TAVILY_API_KEY', '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')
-    TAVILY_OK = True
-    print("[TAVILY] ✅ Client initialisé")
-except Exception as e:
-    TAVILY_OK = False
-    print(f"[TAVILY] ❌ Non disponible: {e}")
-
 # Import conditionnel openpyxl
 try:
     from openpyxl import Workbook
@@ -653,39 +643,56 @@ PROSPECT : {prospect.get('nom', '-')}, Langue: {prospect.get('langue', 'FR')}
         return {"error": str(e)}
 
 def creer_carte_trello_prospect(prospect, conversation):
-    """Cree une carte Trello pour le prospect"""
+    """Cree une carte Trello pour le prospect - Template complet ICI Dordogne"""
     
     infos = extraire_infos_conversation(conversation, prospect)
+    bien_info = prospect.get('bien_info', {})
     
-    desc = f"""**Tel :** {prospect.get('tel', '-')}
+    # Description avec template complet
+    desc = f"""**Tél :** {prospect.get('tel', '-')}
 **Email :** {prospect.get('email', '-')}
-**Langue :** {prospect.get('langue', 'FR')}
-**Canal prefere :** {infos.get('canal_prefere', '-')}
 
-**Source :** {prospect.get('source', 'Leboncoin')}
-**Bien :** REF {prospect.get('bien_ref', '-')}
+**Source du contact :** {prospect.get('source', 'Leboncoin')}
+**Adresse du bien :** {bien_info.get('titre', '-')} - {bien_info.get('prix', '-')}€ - {bien_info.get('commune', '-')}
 
-**Dispo proposee :** {infos.get('dispo_proposee', '-')}
+**Moyen de visite :** {infos.get('canal_prefere', '-')}
+**Moyen de compte-rendu :** -
+
+**Nb de chambres :** {bien_info.get('chambres', '-')}
+**Chauffage :** -
+**Voisinage :** -
+**Travaux éventuels :** -
+
+**Estimation :** -
+
+**Informations complémentaires :**
+Langue : {prospect.get('langue', 'FR')}
+Dispo proposée : {infos.get('dispo_proposee', '-')}
+Budget : {infos.get('budget', '-')}
+Surface min : {infos.get('surface_min', '-')}
+Critères : {', '.join(infos.get('criteres', [])) or '-'}
+Financement : {infos.get('financement', '-')}
 
 ---
-**QUALIFICATION**
-- Budget : {infos.get('budget', '-')}
-- Surface min : {infos.get('surface_min', '-')}
-- Chambres min : {infos.get('chambres_min', '-')}
-- Criteres : {', '.join(infos.get('criteres', [])) or '-'}
-- Financement : {infos.get('financement', '-')}
+**🏠 BIEN ICI DORDOGNE IDENTIFIÉ**
+- REF : {prospect.get('bien_ref', '-')}
+- Adresse : {bien_info.get('commune', '-')}
+- Propriétaire : À identifier
+- 👉 Trello BIENS : À lier
+- 👉 Site : https://www.icidordogne.fr
 
 ---
 **CONVERSATION** ({datetime.now().strftime('%d/%m/%Y %H:%M')})
 
 """
     for msg in conversation:
-        role = "Axis" if msg["role"] == "assistant" else prospect.get('nom', 'Prospect')
+        role = "🤖 Axis" if msg["role"] == "assistant" else f"👤 {prospect.get('nom', 'Prospect')}"
         timestamp = msg.get("timestamp", "")[:16].replace("T", " ")
-        desc += f"[{timestamp}] **{role}** : {msg['content']}\n\n"
+        desc += f"[{timestamp}] {role} : {msg['content']}\n\n"
     
     nom_carte = f"{prospect.get('nom', 'Prospect')} - REF {prospect.get('bien_ref', '?')}"
     
+    # 1. Créer la carte
     url = f"https://api.trello.com/1/cards?key={TRELLO_KEY}&token={TRELLO_TOKEN}"
     
     data = urllib.parse.urlencode({
@@ -699,7 +706,68 @@ def creer_carte_trello_prospect(prospect, conversation):
         req = urllib.request.Request(url, data=data, method='POST')
         with urllib.request.urlopen(req, timeout=10) as response:
             result = json.loads(response.read().decode())
-            return result.get("id"), result.get("url")
+            card_id = result.get("id")
+            card_url = result.get("url")
+            
+            if card_id:
+                # 2. Ajouter checklist "Avant la visite"
+                try:
+                    checklist_url = f"https://api.trello.com/1/checklists?idCard={card_id}&name=Avant%20la%20visite&key={TRELLO_KEY}&token={TRELLO_TOKEN}"
+                    req_cl = urllib.request.Request(checklist_url, method='POST')
+                    with urllib.request.urlopen(req_cl, timeout=5) as resp_cl:
+                        cl_result = json.loads(resp_cl.read().decode())
+                        cl_id = cl_result.get("id")
+                        
+                        # Ajouter les items
+                        items_avant = [
+                            "RDV validé avec l'acquéreur",
+                            "RDV validé avec le propriétaire", 
+                            "RDV dans Sweep",
+                            "Bon de visite envoyé",
+                            "Bon de visite signé reçu"
+                        ]
+                        for item in items_avant:
+                            item_url = f"https://api.trello.com/1/checklists/{cl_id}/checkItems?name={urllib.parse.quote(item)}&key={TRELLO_KEY}&token={TRELLO_TOKEN}"
+                            req_item = urllib.request.Request(item_url, method='POST')
+                            urllib.request.urlopen(req_item, timeout=5)
+                except Exception as e:
+                    print(f"[TRELLO] Erreur checklist avant: {e}")
+                
+                # 3. Ajouter checklist "Après la visite"
+                try:
+                    checklist_url2 = f"https://api.trello.com/1/checklists?idCard={card_id}&name=Apr%C3%A8s%20la%20visite&key={TRELLO_KEY}&token={TRELLO_TOKEN}"
+                    req_cl2 = urllib.request.Request(checklist_url2, method='POST')
+                    with urllib.request.urlopen(req_cl2, timeout=5) as resp_cl2:
+                        cl_id2 = json.loads(resp_cl2.read().decode()).get("id")
+                        
+                        items_apres = [
+                            "CR Proprio",
+                            "CR Trello",
+                            "Autres biens à proposer"
+                        ]
+                        for item in items_apres:
+                            item_url = f"https://api.trello.com/1/checklists/{cl_id2}/checkItems?name={urllib.parse.quote(item)}&key={TRELLO_KEY}&token={TRELLO_TOKEN}"
+                            req_item = urllib.request.Request(item_url, method='POST')
+                            urllib.request.urlopen(req_item, timeout=5)
+                except Exception as e:
+                    print(f"[TRELLO] Erreur checklist apres: {e}")
+                
+                # 4. Ajouter lien chat Axis comme attachment
+                try:
+                    token = prospect.get('token', '')
+                    if token:
+                        chat_url = f"https://baby-axys-production.up.railway.app/chat/p/{token}"
+                        attach_url = f"https://api.trello.com/1/cards/{card_id}/attachments?key={TRELLO_KEY}&token={TRELLO_TOKEN}"
+                        attach_data = urllib.parse.urlencode({
+                            "url": chat_url,
+                            "name": "💬 Chat Axis - Conversation prospect"
+                        }).encode()
+                        req_attach = urllib.request.Request(attach_url, data=attach_data, method='POST')
+                        urllib.request.urlopen(req_attach, timeout=5)
+                except Exception as e:
+                    print(f"[TRELLO] Erreur attachment chat: {e}")
+            
+            return card_id, card_url
     except Exception as e:
         print(f"[ERROR] Creation carte Trello: {e}")
         return None, None
@@ -868,64 +936,43 @@ def fetch_url(url, timeout=15):
         return None
 
 # ============================================================
-# RECHERCHE WEB (TAVILY - API Pro pour IA)
+# RECHERCHE WEB (DuckDuckGo)
 # ============================================================
 
 def recherche_web(requete):
-    """Recherche web via Tavily API (fiable, conçu pour IA)"""
-    if not TAVILY_OK:
-        print("[TAVILY] Non disponible - recherche impossible")
-        return []
-    
+    """Recherche web via DuckDuckGo HTML"""
     try:
-        client = TavilyClient(api_key=TAVILY_KEY)
-        
-        # === DESTRUCTIVE UPDATE GÉOGRAPHIQUE ===
-        # On force TOUJOURS le contexte France dans la requête
-        # Comme pour la date, on ne fait confiance à rien d'autre
-        requete_forcee = f"{requete} France actualités"
-        
-        print(f"[TAVILY] Requête originale: {requete}")
-        print(f"[TAVILY] Requête forcée: {requete_forcee}")
-        
-        response = client.search(query=requete_forcee, search_depth="basic", max_results=5)
+        url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(requete)}"
+        req = urllib.request.Request(url, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        })
+        with urllib.request.urlopen(req, timeout=10) as response:
+            html = response.read().decode('utf-8')
         
         resultats = []
-        for r in response.get('results', []):
-            # Filtre anti-Seattle (détection mode démo/erreur)
-            titre = r.get('title', '')
-            if 'Seattle' in titre or 'Space Needle' in titre:
-                print(f"[TAVILY] ⚠️ Résultat suspect ignoré: {titre}")
-                continue
-            
-            resultats.append({
-                "titre": titre,
-                "url": r.get('url', ''),
-                "contenu": r.get('content', '')[:500]
-            })
+        import re
+        pattern = r'<a rel="nofollow" class="result__a" href="([^"]+)"[^>]*>([^<]+)</a>'
+        matches = re.findall(pattern, html)
         
-        print(f"[TAVILY] ✅ {len(resultats)} résultats valides")
+        for url, titre in matches[:5]:
+            if url.startswith('//duckduckgo.com/l/?uddg='):
+                url = urllib.parse.unquote(url.split('uddg=')[1].split('&')[0])
+            resultats.append({"titre": titre.strip(), "url": url})
+        
         return resultats
-        
     except Exception as e:
-        print(f"[TAVILY ERREUR] {e}")
+        print(f"[RECHERCHE ERREUR] {e}")
         return []
 
 def faire_recherche(requete):
-    """Effectue une recherche et retourne un texte formaté pour l'IA"""
+    """Effectue une recherche et retourne un texte formatÃ©"""
     resultats = recherche_web(requete)
-    
     if not resultats:
-        return f"[ERREUR RECHERCHE WEB] Aucun résultat pour: {requete}. Base-toi sur tes connaissances internes."
+        return f"Aucun rÃ©sultat trouvÃ© pour: {requete}"
     
-    # Formatage clair pour l'IA (Règle d'Or Lumo)
-    texte = f"🔍 RÉSULTATS WEB TAVILY (Région: France):\n\n"
+    texte = f"RÃ©sultats pour '{requete}':\n"
     for i, r in enumerate(resultats, 1):
-        texte += f"{i}. [TITRE]: {r['titre']}\n"
-        if r.get('contenu'):
-            texte += f"   [CONTENU]: {r['contenu']}\n"
-        texte += f"   [SOURCE]: {r['url']}\n\n"
-    
+        texte += f"{i}. {r['titre']}\n   {r['url']}\n"
     return texte
 
 # ============================================================
