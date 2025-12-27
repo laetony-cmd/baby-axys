@@ -2101,6 +2101,77 @@ class AxiHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(result, indent=2, ensure_ascii=False).encode('utf-8'))
         
+        # Debug complet - simule exactement /api/prospect/test + chat
+        elif path == '/debug-prospect-full':
+            result = {"steps": [], "token": None}
+            
+            # Step 1: Créer prospect (comme /api/prospect/test)
+            try:
+                token = creer_prospect(
+                    email="debug@test.com",
+                    nom="Debug Full",
+                    tel="+33600000000",
+                    bien_ref="DEBUG",
+                    bien_info={"titre": "Test", "prix": 100000, "commune": "TestVille"},
+                    source="Debug",
+                    langue="FR"
+                )
+                result["token"] = token
+                result["steps"].append({"step": "1_creer_prospect", "status": "OK", "token": token})
+            except Exception as e:
+                result["steps"].append({"step": "1_creer_prospect", "status": f"ERREUR: {e}"})
+            
+            if result["token"]:
+                token = result["token"]
+                
+                # Step 2: Vérifier prospect en DB
+                try:
+                    prospect = get_prospect(token)
+                    result["steps"].append({"step": "2_get_prospect", "status": "OK" if prospect else "ERREUR: None", "data": str(prospect)[:100] if prospect else None})
+                except Exception as e:
+                    result["steps"].append({"step": "2_get_prospect", "status": f"ERREUR: {e}"})
+                
+                # Step 3: Vérifier conversation initialisée
+                try:
+                    conv = get_conversation_sdr(token)
+                    result["steps"].append({"step": "3_get_conv_initial", "status": "OK", "messages": conv, "count": len(conv)})
+                except Exception as e:
+                    result["steps"].append({"step": "3_get_conv_initial", "status": f"ERREUR: {e}"})
+                
+                # Step 4: Simuler __INIT__ (comme le frontend)
+                try:
+                    resp = chat_prospect_claude(token, "__INIT__")
+                    result["steps"].append({"step": "4_chat_init", "status": "OK" if "response" in resp else f"ERREUR: {resp}", "response": resp.get("response", "")[:50]})
+                except Exception as e:
+                    result["steps"].append({"step": "4_chat_init", "status": f"ERREUR: {e}"})
+                
+                # Step 5: Vérifier conversation après init
+                try:
+                    conv = get_conversation_sdr(token)
+                    result["steps"].append({"step": "5_get_conv_after_init", "status": "OK", "count": len(conv), "messages": conv})
+                except Exception as e:
+                    result["steps"].append({"step": "5_get_conv_after_init", "status": f"ERREUR: {e}"})
+                
+                # Step 6: Lecture directe DB
+                try:
+                    conn = get_db_connection()
+                    if conn:
+                        cur = conn.cursor()
+                        cur.execute("SELECT token, messages FROM conversations_sdr WHERE token = %s", (token,))
+                        row = cur.fetchone()
+                        cur.close()
+                        conn.close()
+                        result["steps"].append({"step": "6_direct_db", "status": "OK" if row else "ERREUR: Row None", "raw": str(row) if row else None})
+                    else:
+                        result["steps"].append({"step": "6_direct_db", "status": "ERREUR: No connection"})
+                except Exception as e:
+                    result["steps"].append({"step": "6_direct_db", "status": f"ERREUR: {e}"})
+            
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(result, indent=2, ensure_ascii=False).encode('utf-8'))
+        
         # ============================================================
         # SDR - ENDPOINTS PROSPECTS
         # ============================================================
