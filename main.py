@@ -1079,7 +1079,7 @@ def generer_page_chat_prospect(token, prospect):
         .bien-info {{ background: white; padding: 15px 20px; border-bottom: 1px solid #ddd; }}
         .bien-info strong {{ color: var(--primary); }}
         .chat {{ flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; }}
-        .msg {{ max-width: 85%; padding: 12px 16px; border-radius: 18px; line-height: 1.5; font-size: 15px; }}
+        .msg {{ max-width: 85%; padding: 12px 16px; border-radius: 18px; line-height: 1.5; font-size: 15px; white-space: pre-wrap; }}
         .msg.assistant {{ background: white; align-self: flex-start; border: 1px solid #ddd; }}
         .msg.user {{ background: var(--primary); color: white; align-self: flex-end; }}
         .input-area {{ background: white; padding: 15px; border-top: 1px solid #ddd; display: flex; gap: 10px; }}
@@ -1118,8 +1118,12 @@ def generer_page_chat_prospect(token, prospect):
             .then(data => {{
                 if (data.messages) data.messages.forEach(m => addMessage(m.role, m.content));
                 if (!data.messages || data.messages.length === 0) {{
-                    addMessage('assistant', 'Bonjour ! Je suis Axis, votre assistant ICI Dordogne. 👋\n\nJe suis là pour répondre à vos questions sur ce bien et organiser une visite.\n\nComment puis-je vous aider ?');
+                    addMessage('assistant', 'Bonjour ! Je suis Axis, votre assistant ICI Dordogne. 👋\\n\\nJe suis là pour répondre à vos questions sur ce bien et organiser une visite.\\n\\nComment puis-je vous aider ?');
                 }}
+            }})
+            .catch(e => {{
+                console.error('History error:', e);
+                addMessage('assistant', 'Bonjour ! Je suis Axis, votre assistant ICI Dordogne. 👋\\n\\nComment puis-je vous aider ?');
             }});
         
         function addMessage(role, content) {{
