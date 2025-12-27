@@ -113,11 +113,13 @@ except:
     OPENPYXL_OK = False
     print("[WARNING] openpyxl non installé - Excel désactivé")
 
+# Import pytz (timezone) - TOUJOURS nécessaire
+import pytz
+
 # Import conditionnel APScheduler
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
     from apscheduler.triggers.cron import CronTrigger
-    import pytz
     SCHEDULER_OK = True
 except:
     SCHEDULER_OK = False
