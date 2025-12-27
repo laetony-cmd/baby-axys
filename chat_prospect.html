@@ -51,10 +51,24 @@
     <script>
         // Injection via Python .replace() - AUCUN risque de conflit de syntaxe
         const TOKEN = "__TOKEN__";
+        const BIEN_TITRE = "__BIEN_TITRE__";
+        const BIEN_COMMUNE = "__BIEN_COMMUNE__";
         
         const chat = document.getElementById('chat');
         const input = document.getElementById('input');
         const typing = document.getElementById('typing');
+        
+        // Message d'accueil multilingue
+        const MSG_ACCUEIL = `Merci de nous avoir contactés pour ${BIEN_TITRE} à ${BIEN_COMMUNE} ! 🏠
+
+Je suis Axis, votre assistant ICI Dordogne.
+
+N'hésitez pas à me poser vos questions sur ce bien, ou définissons ensemble un rendez-vous de visite.
+
+🇫🇷 Je parle français
+🇬🇧 I speak English
+🇩🇪 Ich spreche Deutsch
+🇵🇹 Eu falo português`;
         
         // Chargement historique
         fetch('/api/prospect-chat/history?token=' + TOKEN)
@@ -63,7 +77,7 @@
                 if (data.messages && data.messages.length > 0) {
                     data.messages.forEach(m => addMessage(m.role, m.content));
                 } else {
-                    addMessage('assistant', 'Bonjour ! Je suis Axis, votre assistant ICI Dordogne. 👋\n\nJe suis là pour répondre à vos questions sur ce bien et organiser une visite.\n\nComment puis-je vous aider ?');
+                    addMessage('assistant', MSG_ACCUEIL);
                 }
             })
             .catch(e => console.error("Erreur historique:", e));
