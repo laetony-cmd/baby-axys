@@ -34,15 +34,6 @@ from datetime import datetime, timedelta
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from math import radians, cos, sin, asin, sqrt
 
-# Import Tavily pour recherche web pro
-try:
-    from tavily import TavilyClient
-    TAVILY_KEY = os.environ.get('TAVILY_API_KEY', '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')
-    TAVILY_OK = True
-except:
-    TAVILY_OK = False
-    print("[WARNING] Tavily non disponible")
-
 # Import conditionnel openpyxl
 try:
     from openpyxl import Workbook
@@ -467,15 +458,29 @@ def ajouter_message_sdr(token, role, content):
 
 def get_conversation_sdr(token):
     """Recupere la conversation d'un prospect"""
+    print(f"[DEBUG get_conversation_sdr] token={token}")
+    
     conn = get_db_connection()
     if conn:
         try:
             cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cur.execute("SELECT messages FROM conversations_sdr WHERE token = %s", (token,))
             row = cur.fetchone()
+            
+            print(f"[DEBUG get_conversation_sdr] row={row}, type={type(row)}")
+            
             cur.close()
             conn.close()
-            return row['messages'] if row else []
+            
+            if row:
+                messages = row['messages']
+                print(f"[DEBUG get_conversation_sdr] messages type={type(messages)}, value={messages}")
+                # Si c'est une string JSON, la parser
+                if isinstance(messages, str):
+                    print("[DEBUG get_conversation_sdr] PARSING STRING TO JSON")
+                    return json.loads(messages)
+                return messages
+            return []
         except Exception as e:
             print(f"[SDR] Erreur lecture conversation: {e}")
             conn.close()
@@ -866,57 +871,43 @@ def fetch_url(url, timeout=15):
         return None
 
 # ============================================================
-# RECHERCHE WEB (TAVILY - API Pro pour IA)
+# RECHERCHE WEB (DuckDuckGo)
 # ============================================================
 
 def recherche_web(requete):
-    """Recherche web via Tavily API (fiable, conçu pour IA)"""
-    if not TAVILY_OK:
-        print("[RECHERCHE] Tavily non disponible")
-        return []
-    
+    """Recherche web via DuckDuckGo HTML"""
     try:
-        client = TavilyClient(api_key=TAVILY_KEY)
-        
-        # Ajouter contexte France si pas de localisation explicite
-        requete_enrichie = requete
-        mots_geo = ['france', 'français', 'paris', 'dordogne', 'périgord', 'bordeaux']
-        if not any(mot in requete.lower() for mot in mots_geo):
-            requete_enrichie = f"{requete} France"
-        
-        print(f"[TAVILY] Recherche: {requete_enrichie}")
-        response = client.search(query=requete_enrichie, search_depth="basic", max_results=5)
+        url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(requete)}"
+        req = urllib.request.Request(url, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        })
+        with urllib.request.urlopen(req, timeout=10) as response:
+            html = response.read().decode('utf-8')
         
         resultats = []
-        for r in response.get('results', []):
-            resultats.append({
-                "titre": r.get('title', 'Sans titre'),
-                "url": r.get('url', ''),
-                "contenu": r.get('content', '')[:500]  # Limiter la taille
-            })
+        import re
+        pattern = r'<a rel="nofollow" class="result__a" href="([^"]+)"[^>]*>([^<]+)</a>'
+        matches = re.findall(pattern, html)
         
-        print(f"[TAVILY] {len(resultats)} résultats trouvés")
+        for url, titre in matches[:5]:
+            if url.startswith('//duckduckgo.com/l/?uddg='):
+                url = urllib.parse.unquote(url.split('uddg=')[1].split('&')[0])
+            resultats.append({"titre": titre.strip(), "url": url})
+        
         return resultats
-        
     except Exception as e:
-        print(f"[TAVILY ERREUR] {e}")
+        print(f"[RECHERCHE ERREUR] {e}")
         return []
 
 def faire_recherche(requete):
-    """Effectue une recherche et retourne un texte formaté pour l'IA"""
+    """Effectue une recherche et retourne un texte formatÃ©"""
     resultats = recherche_web(requete)
-    
     if not resultats:
-        return f"[ERREUR RECHERCHE WEB] Aucun résultat pour: {requete}. Base-toi sur tes connaissances."
+        return f"Aucun rÃ©sultat trouvÃ© pour: {requete}"
     
-    # Formatage clair pour l'IA (Règle d'Or Lumo)
-    texte = f"🔍 RÉSULTATS WEB TAVILY (Région: France):\n\n"
+    texte = f"RÃ©sultats pour '{requete}':\n"
     for i, r in enumerate(resultats, 1):
-        texte += f"{i}. [TITRE]: {r['titre']}\n"
-        if r.get('contenu'):
-            texte += f"   [CONTENU]: {r['contenu']}\n"
-        texte += f"   [SOURCE]: {r['url']}\n\n"
-    
+        texte += f"{i}. {r['titre']}\n   {r['url']}\n"
     return texte
 
 # ============================================================
@@ -2220,7 +2211,16 @@ class AxiHandler(BaseHTTPRequestHandler):
         elif path.startswith('/api/prospect-chat/history'):
             params = urllib.parse.parse_qs(urllib.parse.urlparse(path).query)
             token = params.get('t', [''])[0]
+            
+            # DEBUG - À SUPPRIMER APRÈS FIX
+            print(f"[DEBUG HISTORY] path={path}")
+            print(f"[DEBUG HISTORY] params={params}")
+            print(f"[DEBUG HISTORY] token={token}, len={len(token)}")
+            
             conversation = get_conversation_sdr(token)
+            
+            print(f"[DEBUG HISTORY] conversation type={type(conversation)}, len={len(conversation) if conversation else 0}")
+            print(f"[DEBUG HISTORY] conversation={conversation}")
             
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
