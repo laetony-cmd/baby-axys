@@ -34,6 +34,16 @@ from datetime import datetime, timedelta
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from math import radians, cos, sin, asin, sqrt
 
+# Import Tavily pour recherche web pro
+try:
+    from tavily import TavilyClient
+    TAVILY_KEY = os.environ.get('TAVILY_API_KEY', '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')
+    TAVILY_OK = True
+    print("[TAVILY] ✅ Client initialisé")
+except Exception as e:
+    TAVILY_OK = False
+    print(f"[TAVILY] ❌ Non disponible: {e}")
+
 # Import conditionnel openpyxl
 try:
     from openpyxl import Workbook
@@ -858,43 +868,64 @@ def fetch_url(url, timeout=15):
         return None
 
 # ============================================================
-# RECHERCHE WEB (DuckDuckGo)
+# RECHERCHE WEB (TAVILY - API Pro pour IA)
 # ============================================================
 
 def recherche_web(requete):
-    """Recherche web via DuckDuckGo HTML"""
+    """Recherche web via Tavily API (fiable, conçu pour IA)"""
+    if not TAVILY_OK:
+        print("[TAVILY] Non disponible - recherche impossible")
+        return []
+    
     try:
-        url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(requete)}"
-        req = urllib.request.Request(url, headers={
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        })
-        with urllib.request.urlopen(req, timeout=10) as response:
-            html = response.read().decode('utf-8')
+        client = TavilyClient(api_key=TAVILY_KEY)
+        
+        # === DESTRUCTIVE UPDATE GÉOGRAPHIQUE ===
+        # On force TOUJOURS le contexte France dans la requête
+        # Comme pour la date, on ne fait confiance à rien d'autre
+        requete_forcee = f"{requete} France actualités"
+        
+        print(f"[TAVILY] Requête originale: {requete}")
+        print(f"[TAVILY] Requête forcée: {requete_forcee}")
+        
+        response = client.search(query=requete_forcee, search_depth="basic", max_results=5)
         
         resultats = []
-        import re
-        pattern = r'<a rel="nofollow" class="result__a" href="([^"]+)"[^>]*>([^<]+)</a>'
-        matches = re.findall(pattern, html)
+        for r in response.get('results', []):
+            # Filtre anti-Seattle (détection mode démo/erreur)
+            titre = r.get('title', '')
+            if 'Seattle' in titre or 'Space Needle' in titre:
+                print(f"[TAVILY] ⚠️ Résultat suspect ignoré: {titre}")
+                continue
+            
+            resultats.append({
+                "titre": titre,
+                "url": r.get('url', ''),
+                "contenu": r.get('content', '')[:500]
+            })
         
-        for url, titre in matches[:5]:
-            if url.startswith('//duckduckgo.com/l/?uddg='):
-                url = urllib.parse.unquote(url.split('uddg=')[1].split('&')[0])
-            resultats.append({"titre": titre.strip(), "url": url})
-        
+        print(f"[TAVILY] ✅ {len(resultats)} résultats valides")
         return resultats
+        
     except Exception as e:
-        print(f"[RECHERCHE ERREUR] {e}")
+        print(f"[TAVILY ERREUR] {e}")
         return []
 
 def faire_recherche(requete):
-    """Effectue une recherche et retourne un texte formatÃ©"""
+    """Effectue une recherche et retourne un texte formaté pour l'IA"""
     resultats = recherche_web(requete)
-    if not resultats:
-        return f"Aucun rÃ©sultat trouvÃ© pour: {requete}"
     
-    texte = f"RÃ©sultats pour '{requete}':\n"
+    if not resultats:
+        return f"[ERREUR RECHERCHE WEB] Aucun résultat pour: {requete}. Base-toi sur tes connaissances internes."
+    
+    # Formatage clair pour l'IA (Règle d'Or Lumo)
+    texte = f"🔍 RÉSULTATS WEB TAVILY (Région: France):\n\n"
     for i, r in enumerate(resultats, 1):
-        texte += f"{i}. {r['titre']}\n   {r['url']}\n"
+        texte += f"{i}. [TITRE]: {r['titre']}\n"
+        if r.get('contenu'):
+            texte += f"   [CONTENU]: {r['contenu']}\n"
+        texte += f"   [SOURCE]: {r['url']}\n\n"
+    
     return texte
 
 # ============================================================
