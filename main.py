@@ -1897,6 +1897,138 @@ class AxiHandler(BaseHTTPRequestHandler):
             self.wfile.write(conversations.encode())
         
         # ============================================================
+        # DEBUG - DIAGNOSTIC POSTGRESQL
+        # ============================================================
+        
+        elif path == '/debug-db':
+            result = {
+                "timestamp": datetime.now().isoformat(),
+                "env_var_present": False,
+                "database_url_preview": None,
+                "psycopg2_installed": POSTGRES_OK,
+                "connection_status": None,
+                "tables_exist": [],
+                "tables_sdr_found": False,
+                "test_write": None,
+                "test_read": None,
+                "diagnostic": None
+            }
+            
+            # 1. Check DATABASE_URL
+            db_url = os.environ.get("DATABASE_URL", "")
+            result["env_var_present"] = bool(db_url)
+            if db_url:
+                # Masquer le mot de passe
+                try:
+                    parts = db_url.split("@")
+                    if len(parts) > 1:
+                        result["database_url_preview"] = f"***@{parts[-1][:30]}..."
+                    else:
+                        result["database_url_preview"] = db_url[:20] + "..."
+                except:
+                    result["database_url_preview"] = "present but unparseable"
+            
+            # 2. Check psycopg2
+            if not POSTGRES_OK:
+                result["connection_status"] = "ERREUR: psycopg2 non installe"
+                result["diagnostic"] = "Installer psycopg2-binary dans requirements.txt"
+            elif not db_url:
+                result["connection_status"] = "ERREUR: DATABASE_URL absente"
+                result["diagnostic"] = "Ajouter DATABASE_URL dans les variables Railway"
+            else:
+                # 3. Test connexion
+                try:
+                    conn = psycopg2.connect(db_url, sslmode='require')
+                    result["connection_status"] = "OK"
+                    
+                    cur = conn.cursor()
+                    
+                    # 4. Lister les tables
+                    cur.execute("""
+                        SELECT table_name FROM information_schema.tables 
+                        WHERE table_schema = 'public'
+                    """)
+                    tables = [row[0] for row in cur.fetchall()]
+                    result["tables_exist"] = tables
+                    result["tables_sdr_found"] = "prospects_sdr" in tables and "conversations_sdr" in tables
+                    
+                    # 5. Creer tables si absentes
+                    if not result["tables_sdr_found"]:
+                        cur.execute("""
+                            CREATE TABLE IF NOT EXISTS prospects_sdr (
+                                token VARCHAR(32) PRIMARY KEY,
+                                data JSONB NOT NULL,
+                                created_at TIMESTAMP DEFAULT NOW(),
+                                updated_at TIMESTAMP DEFAULT NOW()
+                            )
+                        """)
+                        cur.execute("""
+                            CREATE TABLE IF NOT EXISTS conversations_sdr (
+                                token VARCHAR(32) PRIMARY KEY,
+                                messages JSONB DEFAULT '[]'::jsonb,
+                                updated_at TIMESTAMP DEFAULT NOW()
+                            )
+                        """)
+                        conn.commit()
+                        result["diagnostic"] = "Tables SDR creees maintenant"
+                        
+                        # Re-check
+                        cur.execute("""
+                            SELECT table_name FROM information_schema.tables 
+                            WHERE table_schema = 'public'
+                        """)
+                        tables = [row[0] for row in cur.fetchall()]
+                        result["tables_exist"] = tables
+                        result["tables_sdr_found"] = "prospects_sdr" in tables and "conversations_sdr" in tables
+                    
+                    # 6. Test write
+                    test_token = "debug_test_" + datetime.now().strftime("%H%M%S")
+                    try:
+                        cur.execute("""
+                            INSERT INTO conversations_sdr (token, messages, updated_at)
+                            VALUES (%s, %s, NOW())
+                            ON CONFLICT (token) DO UPDATE 
+                            SET messages = EXCLUDED.messages, updated_at = NOW()
+                        """, (test_token, json.dumps([{"role": "test", "content": "debug"}])))
+                        conn.commit()
+                        result["test_write"] = f"OK - token: {test_token}"
+                    except Exception as e:
+                        result["test_write"] = f"ERREUR: {str(e)}"
+                    
+                    # 7. Test read
+                    try:
+                        cur.execute("SELECT messages FROM conversations_sdr WHERE token = %s", (test_token,))
+                        row = cur.fetchone()
+                        if row:
+                            result["test_read"] = f"OK - messages: {row[0]}"
+                        else:
+                            result["test_read"] = "ERREUR: Ligne non trouvee apres insert"
+                    except Exception as e:
+                        result["test_read"] = f"ERREUR: {str(e)}"
+                    
+                    # 8. Cleanup
+                    try:
+                        cur.execute("DELETE FROM conversations_sdr WHERE token = %s", (test_token,))
+                        conn.commit()
+                    except:
+                        pass
+                    
+                    cur.close()
+                    conn.close()
+                    
+                    if result["test_write"] and result["test_write"].startswith("OK") and result["test_read"] and result["test_read"].startswith("OK"):
+                        result["diagnostic"] = "PostgreSQL OK - Le probleme est dans le code SDR"
+                    
+                except Exception as e:
+                    result["connection_status"] = f"ERREUR: {str(e)}"
+                    result["diagnostic"] = "Verifier DATABASE_URL et acces reseau"
+            
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(result, indent=2, ensure_ascii=False).encode('utf-8'))
+        
+        # ============================================================
         # SDR - ENDPOINTS PROSPECTS
         # ============================================================
         
@@ -2203,3 +2335,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
