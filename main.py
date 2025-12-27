@@ -2228,6 +2228,57 @@ class AxiHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({"messages": conversation}, ensure_ascii=False).encode('utf-8'))
         
+        # Debug history - montre tout le processus
+        elif path.startswith('/debug-history'):
+            params = urllib.parse.parse_qs(urllib.parse.urlparse(path).query)
+            token = params.get('t', [''])[0]
+            
+            result = {
+                "input": {
+                    "path": path,
+                    "params": params,
+                    "token": token,
+                    "token_len": len(token)
+                },
+                "db_direct": None,
+                "function_result": None,
+                "error": None
+            }
+            
+            # Test 1: Lecture directe DB
+            try:
+                conn = get_db_connection()
+                if conn:
+                    cur = conn.cursor()
+                    cur.execute("SELECT token, messages FROM conversations_sdr WHERE token = %s", (token,))
+                    row = cur.fetchone()
+                    cur.close()
+                    conn.close()
+                    result["db_direct"] = {
+                        "found": row is not None,
+                        "token": row[0] if row else None,
+                        "messages": row[1] if row else None,
+                        "messages_type": str(type(row[1])) if row else None
+                    }
+            except Exception as e:
+                result["db_direct"] = {"error": str(e)}
+            
+            # Test 2: Via la fonction
+            try:
+                conv = get_conversation_sdr(token)
+                result["function_result"] = {
+                    "type": str(type(conv)),
+                    "len": len(conv) if conv else 0,
+                    "value": conv
+                }
+            except Exception as e:
+                result["function_result"] = {"error": str(e)}
+            
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(result, indent=2, ensure_ascii=False).encode('utf-8'))
+        
         # Creer prospect de test
         elif path == '/api/prospect/test':
             token = creer_prospect(
