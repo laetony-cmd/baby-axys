@@ -1781,84 +1781,38 @@ class AxiHandler(BaseHTTPRequestHandler):
         elif path.startswith('/chat/card/'):
             card_shortid = path.split('/chat/card/')[-1].split('?')[0]
             
-            # Récupérer les infos de la carte Trello
             try:
+                # ===== MÉTHODE 1: Chercher dans prospects.json (prioritaire) =====
+                prospects = charger_prospects_sdr()
+                token = prospects.get(f"card_{card_shortid}")
+                
+                if token and token in prospects:
+                    # Prospect trouvé dans notre cache - UTILISER CES DONNÉES
+                    prospect = prospects[token]
+                    print(f"[CHAT CARD] Prospect trouvé dans cache: {token}")
+                    
+                    html = generer_page_chat_prospect(token, prospect)
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'text/html; charset=utf-8')
+                    self.end_headers()
+                    self.wfile.write(html.encode())
+                    return
+                
+                # ===== MÉTHODE 2: Fallback sur Trello (pour anciennes cartes) =====
+                print(f"[CHAT CARD] Prospect pas en cache, fallback Trello: {card_shortid}")
                 card_url = f"https://api.trello.com/1/cards/{card_shortid}?key={TRELLO_KEY}&token={TRELLO_TOKEN}"
                 req = urllib.request.Request(card_url)
                 with urllib.request.urlopen(req, timeout=10) as resp:
                     card_data = json.loads(resp.read().decode())
                 
-                # Extraire les infos du prospect depuis la description
+                # Extraire les infos basiques depuis Trello
                 desc = card_data.get("desc", "")
                 name_parts = card_data.get("name", "PROSPECT").split()
                 
-                # Chercher email et téléphone dans la description
                 email_match = re.search(r'Email\s*:\s*([^\s\n]+)', desc)
                 tel_match = re.search(r'Tél\s*:\s*([^\s\n]+)', desc)
                 
-                # ===== EXTRACTION INFOS BIEN MATCHÉ =====
-                bien_titre = "Bien immobilier"
-                bien_commune = ""
-                bien_prix = ""
-                bien_proprietaire = ""
-                bien_trello_url = ""
-                match_score = 0
-                match_confidence = ""
-                bien_identifie = False
-                
-                # Vérifier si bien identifié
-                if "🏠 BIEN IDENTIFIÉ" in desc:
-                    bien_identifie = True
-                    
-                    # Extraire propriétaire
-                    proprio_match = re.search(r'Propriétaire\s*:\s*([^\n]+)', desc)
-                    if proprio_match:
-                        bien_proprietaire = proprio_match.group(1).strip()
-                    
-                    # Extraire URL Trello du bien
-                    trello_bien_match = re.search(r'Trello BIENS\s*:\s*(https://trello\.com/c/[^\s\n]+)', desc)
-                    if trello_bien_match:
-                        bien_trello_url = trello_bien_match.group(1).strip()
-                    
-                    # Extraire score et confidence
-                    score_match = re.search(r'Score matching\s*:\s*(\d+)\s*\((\w+)\)', desc)
-                    if score_match:
-                        match_score = int(score_match.group(1))
-                        match_confidence = score_match.group(2)
-                
-                # Extraire infos de la demande depuis le message original
-                # Format: "maison 90m² secteur Le Bugue max 180k" ou similaire
-                msg_match = re.search(r'--- MESSAGE ORIGINAL ---\s*(.*?)\s*--- FIN MESSAGE ---', desc, re.DOTALL)
-                if msg_match:
-                    msg_original = msg_match.group(1)
-                    
-                    # Extraire commune (après "secteur" ou "à")
-                    commune_match = re.search(r'(?:secteur|à)\s+([A-Za-zÀ-ÿ\s\-]+?)(?:\s+max|\s+environ|\s+pour|\s*$)', msg_original, re.IGNORECASE)
-                    if commune_match:
-                        bien_commune = commune_match.group(1).strip()
-                    
-                    # Extraire prix (avant k€ ou €)
-                    prix_match = re.search(r'(\d+)\s*(?:000\s*€|k€?|k\s*€)', msg_original, re.IGNORECASE)
-                    if prix_match:
-                        prix_val = int(prix_match.group(1))
-                        if prix_val < 1000:  # c'est en k€
-                            prix_val *= 1000
-                        bien_prix = f"{prix_val:,}€".replace(",", " ")
-                
-                # Si on a le prix depuis la description directe (ex: "Prix : 242000")
-                prix_desc_match = re.search(r'Prix\s*:\s*(\d+)', desc)
-                if prix_desc_match and not bien_prix:
-                    bien_prix = f"{int(prix_desc_match.group(1)):,}€".replace(",", " ")
-                
-                # Construire le titre du bien
-                if bien_identifie and bien_proprietaire:
-                    bien_titre = f"Bien {bien_proprietaire.split()[0]}"
-                    if bien_commune:
-                        bien_titre = f"Maison à {bien_commune}"
-                elif bien_commune:
-                    bien_titre = f"Recherche à {bien_commune}"
-                
-                # ===== CONSTRUIRE LE PROSPECT ENRICHI =====
+                # Construire un prospect minimal
                 prospect = {
                     "prenom": name_parts[-1] if len(name_parts) > 1 else name_parts[0],
                     "nom": " ".join(name_parts[:-1]) if len(name_parts) > 1 else "",
@@ -1866,23 +1820,17 @@ class AxiHandler(BaseHTTPRequestHandler):
                     "tel": tel_match.group(1) if tel_match else "",
                     "trello_card_url": card_data.get("shortUrl", ""),
                     "bien_ref": card_shortid,
-                    # Infos du bien matché
-                    "bien_titre": bien_titre,
-                    "bien_commune": bien_commune,
-                    "bien_prix": bien_prix,
-                    "bien_proprietaire": bien_proprietaire,
-                    "bien_trello_url": bien_trello_url,
-                    "match_score": match_score,
-                    "match_confidence": match_confidence,
-                    "bien_identifie": bien_identifie
+                    "bien_titre": "Bien immobilier",
+                    "bien_commune": "",
+                    "bien_prix": "",
+                    "bien_identifie": False,
+                    "match_score": 0
                 }
                 
-                # Générer ou récupérer le token pour ce prospect
+                # Générer token et sauvegarder
                 token = generer_token_prospect(prospect["email"] or card_shortid, card_shortid)
-                
-                # Sauvegarder dans prospects.json pour le chat
-                prospects = charger_prospects_sdr()
-                prospects[token] = prospect  # Toujours mettre à jour avec les dernières infos
+                prospects[token] = prospect
+                prospects[f"card_{card_shortid}"] = token
                 sauver_prospects_sdr(prospects)
                 
                 html = generer_page_chat_prospect(token, prospect)
@@ -2308,6 +2256,53 @@ class AxiHandler(BaseHTTPRequestHandler):
                     data = json.loads(post_data)
                     result = matching_engine.process_prospect(data)
                     
+                    # ===== STOCKER LES INFOS POUR LE CHATBOT =====
+                    # (Indépendant du Butler Trello qui écrase les descriptions)
+                    if result.get("success") and result.get("card_url"):
+                        card_shortid = result["card_url"].split("/c/")[-1] if "/c/" in result["card_url"] else ""
+                        if card_shortid:
+                            # Extraire infos du bien
+                            bien_info = {}
+                            match_data = result.get("match", {})
+                            bien = match_data.get("bien", {})
+                            
+                            if bien:
+                                bien_info = {
+                                    "bien_titre": f"Bien {bien.get('proprietaire', '').split()[0]}" if bien.get('proprietaire') else "Bien immobilier",
+                                    "bien_commune": data.get("commune", ""),
+                                    "bien_prix": f"{bien.get('prix', data.get('prix', 0)):,}€".replace(",", " ") if bien.get('prix') or data.get('prix') else "",
+                                    "bien_proprietaire": bien.get("proprietaire", ""),
+                                    "bien_trello_url": bien.get("trello_url", ""),
+                                    "bien_identifie": True,
+                                    "match_score": match_data.get("score", 0),
+                                    "match_confidence": match_data.get("confidence", "")
+                                }
+                            else:
+                                bien_info = {
+                                    "bien_titre": "Recherche immobilière",
+                                    "bien_commune": data.get("commune", ""),
+                                    "bien_prix": f"{data.get('prix', 0):,}€".replace(",", " ") if data.get("prix") else "",
+                                    "bien_identifie": False,
+                                    "match_score": 0
+                                }
+                            
+                            # Générer token et sauvegarder
+                            token = generer_token_prospect(data.get("email", card_shortid), card_shortid)
+                            prospects = charger_prospects_sdr()
+                            prospects[token] = {
+                                "prenom": data.get("prenom", ""),
+                                "nom": data.get("nom", ""),
+                                "email": data.get("email", ""),
+                                "tel": data.get("tel", ""),
+                                "trello_card_url": result["card_url"],
+                                "bien_ref": card_shortid,
+                                **bien_info
+                            }
+                            # Aussi indexer par card_shortid pour lookup rapide
+                            prospects[f"card_{card_shortid}"] = token
+                            sauver_prospects_sdr(prospects)
+                            print(f"[MATCH-BIEN] Prospect sauvé: {token} (card: {card_shortid})")
+                    
                     self.send_response(200)
                     self.send_header('Content-Type', 'application/json')
                     self.send_header('Access-Control-Allow-Origin', '*')
@@ -2332,6 +2327,8 @@ class AxiHandler(BaseHTTPRequestHandler):
                     self.wfile.write(json.dumps(response, ensure_ascii=False).encode())
                     
                 except Exception as e:
+                    import traceback
+                    traceback.print_exc()
                     self.send_response(500)
                     self.send_header('Content-Type', 'application/json')
                     self.send_header('Access-Control-Allow-Origin', '*')
