@@ -38,7 +38,7 @@
         <div class="status-dot"></div>
     </div>
     
-    <div class="bien-info"><strong>__BIEN_TITRE__</strong><br>📍 __BIEN_COMMUNE__</div>
+    <div class="bien-info"><strong>__BIEN_TITRE__</strong><br>📍 __BIEN_COMMUNE__ __BIEN_PRIX__</div>
     
     <div class="chat" id="chat"></div>
     <div class="typing" id="typing"><span></span><span></span><span></span></div>
@@ -53,23 +53,60 @@
         const TOKEN = "__TOKEN__";
         const BIEN_TITRE = "__BIEN_TITRE__";
         const BIEN_COMMUNE = "__BIEN_COMMUNE__";
+        const BIEN_PRIX = "__BIEN_PRIX__";
+        const PRENOM = "__PRENOM__";
+        const BIEN_IDENTIFIE = __BIEN_IDENTIFIE__;
+        const MATCH_SCORE = __MATCH_SCORE__;
         
         const chat = document.getElementById('chat');
         const input = document.getElementById('input');
         const typing = document.getElementById('typing');
         
-        // Message d'accueil multilingue
-        const MSG_ACCUEIL = `Merci de nous avoir contactés pour ${BIEN_TITRE} à ${BIEN_COMMUNE} ! 🏠
+        // Message d'accueil PERSONNALISÉ selon le score
+        let MSG_ACCUEIL;
+        
+        if (BIEN_IDENTIFIE && MATCH_SCORE >= 90) {
+            // GOLDEN TICKET - Match certain
+            MSG_ACCUEIL = `Bonjour${PRENOM ? ' ' + PRENOM : ''} ! 🎉
 
-Je suis Axis, votre assistant ICI Dordogne.
+Excellente nouvelle : j'ai trouvé **le bien qui correspond à votre recherche** !
 
-N'hésitez pas à me poser vos questions sur ce bien, ou définissons ensemble un rendez-vous de visite.
+🏠 ${BIEN_TITRE}${BIEN_COMMUNE ? ' à ' + BIEN_COMMUNE : ''}${BIEN_PRIX ? '\n💰 ' + BIEN_PRIX : ''}
 
-🇫🇷 Je parle français
-🇬🇧 I speak English
-🇳🇱 Ik spreek Nederlands
-🇩🇪 Ich spreche Deutsch
-🇵🇹 Eu falo português`;
+Ce bien est disponible et je peux vous organiser une visite très rapidement.
+
+**Souhaitez-vous :**
+• Recevoir plus de photos ?
+• Organiser une visite ?
+• En savoir plus sur ce bien ?`;
+        } else if (BIEN_IDENTIFIE) {
+            // Match partiel - besoin de confirmer
+            MSG_ACCUEIL = `Bonjour${PRENOM ? ' ' + PRENOM : ''} ! 👋
+
+Merci pour votre demande ! J'ai identifié un bien qui pourrait correspondre :
+
+🏠 ${BIEN_TITRE}${BIEN_COMMUNE ? ' à ' + BIEN_COMMUNE : ''}${BIEN_PRIX ? '\n💰 ' + BIEN_PRIX : ''}
+
+Pour vous proposer exactement ce qui vous convient, j'aurais quelques questions :
+
+• Quel est votre budget maximum ?
+• Combien de chambres minimum ?
+• Quelle surface habitable recherchez-vous ?`;
+        } else {
+            // Pas de match - qualification nécessaire
+            MSG_ACCUEIL = `Bonjour${PRENOM ? ' ' + PRENOM : ''} ! 👋
+
+Merci de votre intérêt pour nos biens${BIEN_COMMUNE ? ' dans le secteur de ' + BIEN_COMMUNE : ''} !
+
+Je suis Axis, votre assistant ICI Dordogne. Je vais vous aider à trouver le bien idéal.
+
+Pour affiner ma recherche, pourriez-vous me préciser :
+• Votre budget ?
+• La surface souhaitée ?
+• Le nombre de chambres ?
+
+🇫🇷 Je parle français | 🇬🇧 English | 🇳🇱 Nederlands | 🇩🇪 Deutsch`;
+        }
         
         // Chargement historique
         fetch('/api/prospect-chat/history?token=' + TOKEN)
