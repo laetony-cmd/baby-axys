@@ -50,7 +50,7 @@ EMAIL_FROM_NAME = "Ici Dordogne"
 EMAIL_REPLY_TO = "agence@icidordogne.fr"
 
 # URL de base du chatbot Railway
-CHATBOT_BASE_URL = "https://baby-axys-production.up.railway.app/chat-prospect"
+CHATBOT_BASE_URL = "https://baby-axys-production.up.railway.app/chat/card"
 
 
 def send_hook_email(prospect_email, prospect_prenom, score, card_url, bien_info=None):
@@ -68,9 +68,10 @@ def send_hook_email(prospect_email, prospect_prenom, score, card_url, bien_info=
         return False, "Pas d'email"
     
     try:
-        # Générer l'URL du chatbot avec l'ID de la carte
-        card_id = card_url.split("/")[-1] if card_url else ""
-        chat_url = f"{CHATBOT_BASE_URL}?card={card_id}"
+        # Générer l'URL du chatbot avec l'ID de la carte (shortlink Trello)
+        # card_url format: https://trello.com/c/SHORTID
+        card_id = card_url.split("/c/")[-1] if card_url and "/c/" in card_url else ""
+        chat_url = f"{CHATBOT_BASE_URL}/{card_id}"
         
         # Construire le message selon le scénario
         if score >= 90:
