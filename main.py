@@ -52,6 +52,16 @@ except:
     SCHEDULER_OK = False
     print("[WARNING] APScheduler non installÃ© - cron dÃ©sactivÃ©")
 
+
+# Import Matching Engine V13.1 (SDR Automatisé)
+try:
+    import matching_engine
+    MATCHING_OK = True
+    print("[OK] Matching Engine V13.1 chargé")
+except Exception as e:
+    MATCHING_OK = False
+    print(f"[WARNING] Matching Engine non chargé: {e}")
+
 # ============================================================
 # CONFIGURATION
 # ============================================================
@@ -1981,6 +1991,153 @@ class AxiHandler(BaseHTTPRequestHandler):
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": str(e)}).encode())
+        
+
+        # ============================================================
+        # MATCHING ENGINE V13.1 - ENDPOINTS ADMIN
+        # ============================================================
+        
+        elif path == '/admin/init-db':
+            # Initialiser les tables PostgreSQL
+            if MATCHING_OK:
+                try:
+                    result = matching_engine.init_database()
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        "status": "ok",
+                        "message": "Tables PostgreSQL initialisées",
+                        "result": result
+                    }).encode())
+                except Exception as e:
+                    self.send_response(500)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": str(e)}).encode())
+            else:
+                self.send_response(503)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "Matching Engine non chargé"}).encode())
+        
+        elif path == '/admin/sync':
+            # Synchroniser Trello + Site Web -> PostgreSQL
+            if MATCHING_OK:
+                try:
+                    result = matching_engine.run_sync_cron()
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        "status": "ok",
+                        "message": "Synchronisation terminée",
+                        "trello_count": result.get("trello", 0),
+                        "site_count": result.get("site", 0),
+                        "timestamp": result.get("timestamp", "")
+                    }).encode())
+                except Exception as e:
+                    self.send_response(500)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": str(e)}).encode())
+            else:
+                self.send_response(503)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "Matching Engine non chargé"}).encode())
+        
+        elif path == '/admin/test-match':
+            # Tester le matching avec RUOTTE
+            if MATCHING_OK:
+                try:
+                    criteres = {
+                        "ref": "41544",
+                        "prix": 239000,
+                        "surface": 91,
+                        "commune": "Saint-Antoine-d'Auberoche",
+                        "mots_cles": ["piscine"]
+                    }
+                    result = matching_engine.find_best_match(criteres)
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    
+                    # Convertir le bien en format serializable
+                    bien_info = None
+                    if result.get("bien"):
+                        bien = result["bien"]
+                        bien_info = {
+                            "proprietaire": bien.get("proprietaire"),
+                            "trello_url": bien.get("trello_url"),
+                            "prix": bien.get("prix"),
+                            "surface": bien.get("surface"),
+                            "commune": bien.get("commune")
+                        }
+                    
+                    self.wfile.write(json.dumps({
+                        "test": "RUOTTE",
+                        "criteres": criteres,
+                        "match_found": result["match_found"],
+                        "score": result["score"],
+                        "confidence": result["confidence"],
+                        "needs_verification": result["needs_verification"],
+                        "details": result["details"],
+                        "bien": bien_info
+                    }, ensure_ascii=False).encode())
+                except Exception as e:
+                    self.send_response(500)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": str(e)}).encode())
+            else:
+                self.send_response(503)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "Matching Engine non chargé"}).encode())
+
+
+        elif path == '/match-bien':
+            # Matching complet: trouve le bien et crée la carte Trello
+            if MATCHING_OK:
+                try:
+                    data = json.loads(post_data)
+                    result = matching_engine.process_prospect(data)
+                    
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    
+                    # Préparer réponse
+                    response = {
+                        "success": result.get("success", False),
+                        "card_url": result.get("card_url", ""),
+                        "match_score": result.get("match_score", 0),
+                        "confidence": result.get("confidence", ""),
+                        "needs_verification": result.get("needs_verification", True)
+                    }
+                    
+                    if result.get("match"):
+                        match = result["match"]
+                        if match.get("bien"):
+                            response["bien_proprietaire"] = match["bien"].get("proprietaire")
+                            response["bien_trello_url"] = match["bien"].get("trello_url")
+                        response["match_details"] = match.get("details", [])
+                    
+                    self.wfile.write(json.dumps(response, ensure_ascii=False).encode())
+                    
+                except Exception as e:
+                    self.send_response(500)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": str(e)}).encode())
+            else:
+                self.send_response(503)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "Matching Engine non chargé"}).encode())
         
         else:
             self.send_response(404)
