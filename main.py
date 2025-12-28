@@ -1081,6 +1081,8 @@ def generer_page_chat_prospect(token, prospect):
         prenom = prospect.get('prenom', '')
         bien_identifie = 'true' if prospect.get('bien_identifie', False) else 'false'
         match_score = str(prospect.get('match_score', 0))
+        photo_url = prospect.get('bien_photo_url', '')
+        site_url = prospect.get('bien_site_url', '')
         
         html_content = html_content.replace('__TOKEN__', token)
         html_content = html_content.replace('__BIEN_TITRE__', str(bien_titre))
@@ -1089,6 +1091,8 @@ def generer_page_chat_prospect(token, prospect):
         html_content = html_content.replace('__PRENOM__', str(prenom))
         html_content = html_content.replace('__BIEN_IDENTIFIE__', bien_identifie)
         html_content = html_content.replace('__MATCH_SCORE__', match_score)
+        html_content = html_content.replace('__PHOTO_URL__', str(photo_url))
+        html_content = html_content.replace('__SITE_URL__', str(site_url))
         
         return html_content
         
@@ -2267,11 +2271,42 @@ class AxiHandler(BaseHTTPRequestHandler):
                             bien = match_data.get("bien", {})
                             
                             if bien:
+                                # Construire titre DESCRIPTIF (jamais le nom du proprio!)
+                                surface = bien.get('surface') or data.get('surface', 0)
+                                commune = bien.get('commune') or data.get('commune', '')
+                                prix = bien.get('prix') or bien.get('site_prix') or data.get('prix', 0)
+                                
+                                # Titre: "Maison 120m²" ou "Propriété 200m²"
+                                if surface:
+                                    bien_titre = f"Maison {surface}m²"
+                                else:
+                                    bien_titre = "Bien immobilier"
+                                
+                                # Récupérer la photo principale depuis Trello
+                                photo_url = ""
+                                if bien.get('trello_url'):
+                                    try:
+                                        bien_trello_id = bien['trello_url'].split('/c/')[-1] if '/c/' in bien['trello_url'] else ""
+                                        if bien_trello_id:
+                                            att_url = f"https://api.trello.com/1/cards/{bien_trello_id}/attachments?key={TRELLO_KEY}&token={TRELLO_TOKEN}"
+                                            req = urllib.request.Request(att_url)
+                                            with urllib.request.urlopen(req, timeout=5) as resp:
+                                                attachments = json.loads(resp.read().decode())
+                                                # Première image
+                                                for att in attachments:
+                                                    if att.get('mimeType', '').startswith('image/'):
+                                                        photo_url = att.get('url', '')
+                                                        break
+                                    except Exception as e:
+                                        print(f"[PHOTO] Erreur récup photo: {e}")
+                                
                                 bien_info = {
-                                    "bien_titre": f"Bien {bien.get('proprietaire', '').split()[0]}" if bien.get('proprietaire') else "Bien immobilier",
-                                    "bien_commune": data.get("commune", ""),
-                                    "bien_prix": f"{bien.get('prix', data.get('prix', 0)):,}€".replace(",", " ") if bien.get('prix') or data.get('prix') else "",
-                                    "bien_proprietaire": bien.get("proprietaire", ""),
+                                    "bien_titre": bien_titre,
+                                    "bien_commune": commune,
+                                    "bien_prix": f"{prix:,}€".replace(",", " ") if prix else "",
+                                    "bien_surface": surface,
+                                    "bien_photo_url": photo_url,
+                                    "bien_site_url": bien.get("site_url", ""),
                                     "bien_trello_url": bien.get("trello_url", ""),
                                     "bien_identifie": True,
                                     "match_score": match_data.get("score", 0),
