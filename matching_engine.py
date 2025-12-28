@@ -272,6 +272,23 @@ def trello_post(endpoint, params=None):
     params["token"] = TRELLO_TOKEN
     return http_post(url, params)
 
+def trello_put(endpoint, params=None):
+    """PUT Trello API pour mise à jour"""
+    url = f"https://api.trello.com/1{endpoint}"
+    if params is None:
+        params = {}
+    params["key"] = TRELLO_KEY
+    params["token"] = TRELLO_TOKEN
+    # PUT request
+    url_with_params = f"{url}?{urllib.parse.urlencode(params)}"
+    req = urllib.request.Request(url_with_params, method='PUT')
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read().decode('utf-8'))
+    except Exception as e:
+        print(f"[TRELLO PUT] Erreur {url}: {e}")
+        return None
+
 # ============================================================================
 # BASE DE DONNÉES POSTGRESQL
 # ============================================================================
@@ -935,6 +952,10 @@ def creer_carte_acquereur(prospect, match_result, message_original):
     
     card_id = result["id"]
     card_url = result.get("shortUrl", "")
+    
+    # FORCE UPDATE de la description (contournement du template Trello)
+    trello_put(f"/cards/{card_id}", {"desc": description})
+    print(f"[TRELLO] Carte créée: {card_url} - Description forcée")
     
     # Ajouter Julie comme membre
     trello_post(f"/cards/{card_id}/idMembers", {"value": JULIE_ID})
