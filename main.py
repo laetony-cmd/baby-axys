@@ -2205,6 +2205,64 @@ class AxiHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": "Matching Engine non chargé"}).encode())
         
+        elif path == '/admin/cleanup-test-cards':
+            # Nettoyer les cartes de test (pattern: TEST, SMARTTEST, GOLDEN, etc.)
+            if MATCHING_OK:
+                try:
+                    # Récupérer les cartes de la liste TEST ACQUÉREURS
+                    list_id = "694f52e6238e9746b814cae9"
+                    cards_url = f"https://api.trello.com/1/lists/{list_id}/cards?key={TRELLO_KEY}&token={TRELLO_TOKEN}&fields=id,name,shortUrl"
+                    req = urllib.request.Request(cards_url)
+                    with urllib.request.urlopen(req, timeout=15) as resp:
+                        cards = json.loads(resp.read().decode())
+                    
+                    # Patterns de cartes de test à supprimer
+                    test_patterns = ['TEST', 'SMARTTEST', 'GOLDEN', 'PHOTOTEST', 'FIXTEST', 
+                                    'VRAITEST', 'SITETEST', 'URLTEST', 'FINALURL', 'DESCFIX']
+                    
+                    deleted = []
+                    kept = []
+                    
+                    for card in cards:
+                        name = card.get('name', '').upper()
+                        is_test = any(pattern in name for pattern in test_patterns)
+                        
+                        if is_test:
+                            # Supprimer la carte
+                            del_url = f"https://api.trello.com/1/cards/{card['id']}?key={TRELLO_KEY}&token={TRELLO_TOKEN}"
+                            del_req = urllib.request.Request(del_url, method='DELETE')
+                            try:
+                                urllib.request.urlopen(del_req, timeout=10)
+                                deleted.append(card['name'])
+                            except Exception as e:
+                                kept.append(f"{card['name']} (erreur: {e})")
+                        else:
+                            kept.append(card['name'])
+                    
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        "status": "ok",
+                        "deleted_count": len(deleted),
+                        "deleted": deleted,
+                        "kept_count": len(kept),
+                        "kept": kept
+                    }, ensure_ascii=False).encode())
+                    
+                except Exception as e:
+                    import traceback
+                    traceback.print_exc()
+                    self.send_response(500)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": str(e)}).encode())
+            else:
+                self.send_response(503)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "Matching Engine non chargé"}).encode())
+        
         elif path == '/admin/test-match':
             # Tester le matching avec RUOTTE
             if MATCHING_OK:
