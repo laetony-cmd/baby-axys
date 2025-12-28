@@ -1747,6 +1747,56 @@ class AxiHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(b"<html><body><h1>Lien invalide ou expire</h1></body></html>")
         
+        # === Chat via ID carte Trello (pour emails hook) ===
+        elif path.startswith('/chat/card/'):
+            card_shortid = path.split('/chat/card/')[-1].split('?')[0]
+            
+            # Récupérer les infos de la carte Trello
+            try:
+                card_url = f"https://api.trello.com/1/cards/{card_shortid}?key={TRELLO_KEY}&token={TRELLO_TOKEN}"
+                req = urllib.request.Request(card_url)
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    card_data = json.loads(resp.read().decode())
+                
+                # Extraire les infos du prospect depuis la description
+                desc = card_data.get("desc", "")
+                name_parts = card_data.get("name", "PROSPECT").split()
+                
+                # Chercher email et téléphone dans la description
+                email_match = re.search(r'Email\s*:\s*([^\s\n]+)', desc)
+                tel_match = re.search(r'Tél\s*:\s*([^\s\n]+)', desc)
+                
+                prospect = {
+                    "prenom": name_parts[-1] if len(name_parts) > 1 else name_parts[0],
+                    "nom": " ".join(name_parts[:-1]) if len(name_parts) > 1 else "",
+                    "email": email_match.group(1) if email_match else "",
+                    "tel": tel_match.group(1) if tel_match else "",
+                    "trello_card_url": card_data.get("shortUrl", ""),
+                    "bien_ref": card_shortid
+                }
+                
+                # Générer ou récupérer le token pour ce prospect
+                token = generer_token_prospect(prospect["email"] or card_shortid, card_shortid)
+                
+                # Sauvegarder dans prospects.json pour le chat
+                prospects = charger_prospects_sdr()
+                if token not in prospects:
+                    prospects[token] = prospect
+                    sauvegarder_prospects_sdr(prospects)
+                
+                html = generer_page_chat_prospect(token, prospect)
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(html.encode())
+                
+            except Exception as e:
+                print(f"[CHAT CARD] Erreur: {e}")
+                self.send_response(404)
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(f"<html><body><h1>Carte introuvable</h1><p>{e}</p></body></html>".encode())
+        
         elif path.startswith('/api/prospect-chat/history'):
             query = urllib.parse.urlparse(self.path).query
             params = urllib.parse.parse_qs(query)
