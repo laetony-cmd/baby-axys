@@ -53,7 +53,7 @@
             <div class="bien-details">
                 <strong>__BIEN_TITRE__</strong>
                 <span>📍 __BIEN_COMMUNE__ • __BIEN_PRIX__</span>
-                <a href="__SITE_URL__" target="_blank" id="siteLink" class="site-link">🔗 Voir l'annonce complète</a>
+                <a href="#" target="_blank" id="siteLink" class="site-link hidden">🔗 Voir l'annonce complète</a>
             </div>
         </div>
     </div>
@@ -78,18 +78,29 @@
         const PHOTO_URL = "__PHOTO_URL__";
         const SITE_URL = "__SITE_URL__";
         
-        // Afficher photo si disponible
+        // Afficher photo si disponible et accessible
         const photoEl = document.getElementById('bienPhoto');
-        if (PHOTO_URL && PHOTO_URL !== '') {
-            photoEl.style.backgroundImage = `url(${PHOTO_URL})`;
+        if (PHOTO_URL && PHOTO_URL !== '' && PHOTO_URL.startsWith('http')) {
+            // Tester si l'image est accessible
+            const testImg = new Image();
+            testImg.onload = () => {
+                photoEl.style.backgroundImage = `url(${PHOTO_URL})`;
+            };
+            testImg.onerror = () => {
+                // Image non accessible, utiliser placeholder
+                photoEl.style.backgroundImage = 'url(https://www.icidordogne.fr/files/2021/03/cropped-Logo-haut-270x270.jpg)';
+            };
+            testImg.src = PHOTO_URL;
         } else {
-            photoEl.classList.add('no-photo');
+            // Pas de photo, utiliser logo ICI Dordogne
+            photoEl.style.backgroundImage = 'url(https://www.icidordogne.fr/files/2021/03/cropped-Logo-haut-270x270.jpg)';
         }
         
-        // Masquer lien site si pas disponible
+        // Afficher lien site seulement si URL valide
         const siteLink = document.getElementById('siteLink');
-        if (!SITE_URL || SITE_URL === '') {
-            siteLink.classList.add('hidden');
+        if (SITE_URL && SITE_URL !== '' && SITE_URL !== 'None' && SITE_URL.startsWith('http')) {
+            siteLink.href = SITE_URL;
+            siteLink.classList.remove('hidden');
         }
         
         const chat = document.getElementById('chat');
