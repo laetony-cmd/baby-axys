@@ -379,6 +379,7 @@ def extraire_donnees_carte(card):
     attachments_names = []
     site_url = None
     
+    # Méthode 1: Chercher dans les attachments
     for att in card.get("attachments", []):
         filename = att.get("name", "")
         att_url = att.get("url", "")
@@ -389,7 +390,14 @@ def extraire_donnees_carte(card):
         # Chercher lien icidordogne.fr dans les attachments
         if not site_url and 'icidordogne.fr' in att_url:
             site_url = att_url
-            print(f"[SYNC] Site URL trouvé: {site_url}")
+            print(f"[SYNC] Site URL trouvé (attachment): {site_url}")
+    
+    # Méthode 2: Chercher dans la description (pattern "Lien site : https://...")
+    if not site_url:
+        site_match = re.search(r'(?:Lien site|Site)\s*:\s*\[?(https?://[^\s\]]+icidordogne\.fr[^\s\]]*)', desc, re.IGNORECASE)
+        if site_match:
+            site_url = site_match.group(1).strip()
+            print(f"[SYNC] Site URL trouvé (description): {site_url}")
     
     refs = list(set(refs))
     
