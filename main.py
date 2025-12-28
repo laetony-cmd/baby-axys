@@ -110,7 +110,8 @@ TRELLO_BOARD_BIENS = "6249623e53c07a131c916e59"
 TRELLO_LIST_TEST_ACQUEREURS = "694f52e6238e9746b814cae9"
 
 # Base URL
-BASE_URL = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "https://baby-axys-production.up.railway.app")
+# FIX 28/12: Forcer URL Railway (axi.symbine.fr pointe vers ancien serveur)
+BASE_URL = "https://baby-axys-production.up.railway.app"
 if not BASE_URL.startswith("http"):
     BASE_URL = f"https://{BASE_URL}"
 
