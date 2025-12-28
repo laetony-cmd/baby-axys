@@ -1,10 +1,11 @@
-# AXI ICI DORDOGNE v11 SDR
+# AXI ICI DORDOGNE v12.8 MATCHING ENGINE
 # Requirements Railway
+# Déployé: 2025-12-28T05:40:05Z
 
 # Claude API
 anthropic>=0.18.0
 
-# PostgreSQL (OBLIGATOIRE pour persistence SDR)
+# PostgreSQL (OBLIGATOIRE pour Matching Engine V13.1)
 psycopg2-binary>=2.9.9
 
 # Excel exports
@@ -13,3 +14,7 @@ openpyxl>=3.1.2
 # Scheduler (cron jobs)
 APScheduler>=3.10.4
 pytz>=2024.1
+
+# Web scraping (Matching Engine)
+beautifulsoup4>=4.12.0
+
