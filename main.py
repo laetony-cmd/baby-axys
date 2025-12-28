@@ -2096,17 +2096,30 @@ class AxiHandler(BaseHTTPRequestHandler):
             try:
                 data = json.loads(post_data)
                 
+                # --- DÉBUT NORMALISATION ROBUSTE (FORTERESSE V14) ---
+                # On accepte toutes les variantes pour garantir que la donnée rentre.
+                
+                # 1. Nettoyage du téléphone (Accepte tel, telephone, mobile, phone)
+                raw_tel = data.get('tel') or data.get('telephone') or data.get('mobile') or data.get('phone') or ''
+                
+                # 2. Nettoyage de la ville (Accepte bien_commune, ville, city)
+                raw_ville = data.get('bien_commune') or data.get('ville') or data.get('city') or ''
+                
+                # 3. Nettoyage du message (Accepte message, message_initial, msg)
+                raw_message = data.get('message_initial') or data.get('message') or data.get('msg') or ''
+                
+                # 4. Construction de l'objet Prospect unifié
                 prospect_data = {
                     "prenom": data.get('prenom', data.get('nom', 'Prospect').split()[0] if data.get('nom') else 'Prospect'),
                     "nom": data.get('nom', 'Prospect'),
                     "email": data.get('email', ''),
-                    "tel": data.get('tel', ''),
-                    "message_initial": data.get('message', ''),
+                    "tel": raw_tel,  # <--- Donnée sécurisée
+                    "message_initial": raw_message,  # <--- Donnée sécurisée
                     "source": data.get('source', 'Leboncoin'),
                     "ref_source": data.get('ref_source', ''),
                     "bien_ref": data.get('bien_ref', ''),
                     "bien_titre": data.get('bien_titre', ''),
-                    "bien_commune": data.get('bien_commune', ''),
+                    "bien_commune": raw_ville,  # <--- Donnée sécurisée
                     "bien_prix": data.get('bien_prix', ''),
                     "bien_surface": data.get('bien_surface', ''),
                     "trello_biens_url": data.get('trello_biens_url', ''),
@@ -2114,6 +2127,7 @@ class AxiHandler(BaseHTTPRequestHandler):
                     "proprio_nom": data.get('proprio_nom', ''),
                     "qualification": {}
                 }
+                # --- FIN NORMALISATION ROBUSTE ---
                 
                 # Génération token et URL chat
                 token = generer_token_prospect(prospect_data['email'], prospect_data['bien_ref'])
