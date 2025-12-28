@@ -2284,8 +2284,10 @@ class AxiHandler(BaseHTTPRequestHandler):
                                 else:
                                     bien_titre = "Bien immobilier"
                                 
-                                # Récupérer la photo principale depuis Trello
+                                # Récupérer photo ET lien site depuis Trello
                                 photo_url = ""
+                                site_url = bien.get("site_url") or ""
+                                
                                 if bien.get('trello_url'):
                                     try:
                                         bien_trello_id = bien['trello_url'].split('/c/')[-1] if '/c/' in bien['trello_url'] else ""
@@ -2294,13 +2296,21 @@ class AxiHandler(BaseHTTPRequestHandler):
                                             req = urllib.request.Request(att_url)
                                             with urllib.request.urlopen(req, timeout=5) as resp:
                                                 attachments = json.loads(resp.read().decode())
-                                                # Première image
+                                                
                                                 for att in attachments:
-                                                    if att.get('mimeType', '').startswith('image/'):
-                                                        photo_url = att.get('url', '')
-                                                        break
+                                                    att_url_val = att.get('url', '')
+                                                    
+                                                    # Chercher la première image
+                                                    if not photo_url and att.get('mimeType', '').startswith('image/'):
+                                                        photo_url = att_url_val
+                                                    
+                                                    # Chercher lien icidordogne.fr
+                                                    if not site_url and 'icidordogne.fr' in att_url_val:
+                                                        site_url = att_url_val
+                                                        print(f"[SITE URL] Trouvé: {site_url}")
+                                                
                                     except Exception as e:
-                                        print(f"[PHOTO] Erreur récup photo: {e}")
+                                        print(f"[ATTACHMENTS] Erreur: {e}")
                                 
                                 bien_info = {
                                     "bien_titre": bien_titre,
@@ -2308,7 +2318,7 @@ class AxiHandler(BaseHTTPRequestHandler):
                                     "bien_prix": f"{prix:,}€".replace(",", " ") if prix else "",
                                     "bien_surface": surface,
                                     "bien_photo_url": photo_url,
-                                    "bien_site_url": bien.get("site_url") or "",
+                                    "bien_site_url": site_url,
                                     "bien_trello_url": bien.get("trello_url", ""),
                                     "bien_identifie": True,
                                     "match_score": match_data.get("score", 0),
