@@ -15,6 +15,10 @@ import re
 import json
 import urllib.request
 import urllib.parse
+import smtplib
+import ssl
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
 # ============================================================================
@@ -33,6 +37,125 @@ SITE_URL = "https://www.icidordogne.fr"
 
 # PostgreSQL via variable d'environnement Railway
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
+
+# ============================================================================
+# CONFIGURATION EMAIL HOOK
+# ============================================================================
+
+SMTP_HOST = "smtp.gmail.com"
+SMTP_PORT = 465
+SMTP_EMAIL = "u5050786429@gmail.com"
+SMTP_PASSWORD = "izemquwmmqjdasrk"
+EMAIL_FROM_NAME = "Ici Dordogne"
+EMAIL_REPLY_TO = "agence@icidordogne.fr"
+
+# URL de base du chatbot Railway
+CHATBOT_BASE_URL = "https://baby-axys-production.up.railway.app/chat-prospect"
+
+
+def send_hook_email(prospect_email, prospect_prenom, score, card_url, bien_info=None):
+    """
+    Envoie l'email d'engagement au prospect après création de la carte Trello.
+    
+    SCÉNARIO A (score >= 90) : "Bonne nouvelle, j'ai trouvé votre bien"
+    SCÉNARIO B (score < 90) : "J'ai reçu votre demande, plusieurs biens correspondent"
+    
+    Sécurisé : si l'envoi échoue, le script ne plante pas.
+    """
+    
+    if not prospect_email:
+        print("[HOOK EMAIL] Pas d'email prospect, envoi ignoré")
+        return False, "Pas d'email"
+    
+    try:
+        # Générer l'URL du chatbot avec l'ID de la carte
+        card_id = card_url.split("/")[-1] if card_url else ""
+        chat_url = f"{CHATBOT_BASE_URL}?card={card_id}"
+        
+        # Construire le message selon le scénario
+        if score >= 90:
+            # SCÉNARIO A : Match certain
+            sujet = "🏠 Bonne nouvelle pour votre recherche immobilière"
+            
+            prix_info = ""
+            if bien_info and bien_info.get("prix"):
+                prix_info = f" à {bien_info['prix']}€"
+            
+            corps_html = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; color: #333;">
+                <h2 style="color: #2e7d32;">Bonjour {prospect_prenom},</h2>
+                
+                <p>Excellente nouvelle ! J'ai identifié <strong>le bien qui correspond à votre demande</strong>{prix_info}.</p>
+                
+                <p>Ce bien est actuellement disponible et je peux vous organiser une visite très rapidement.</p>
+                
+                <p style="margin: 25px 0;">
+                    <a href="{chat_url}" style="background-color: #2e7d32; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                        📸 Voir les photos et organiser la visite
+                    </a>
+                </p>
+                
+                <p>À très bientôt,</p>
+                <p><strong>L'équipe Ici Dordogne</strong><br>
+                <a href="mailto:agence@icidordogne.fr">agence@icidordogne.fr</a></p>
+            </body>
+            </html>
+            """
+        else:
+            # SCÉNARIO B : Match incertain, besoin d'affiner
+            sujet = "🏡 J'ai reçu votre demande - Discutons de votre projet"
+            
+            prix_mention = ""
+            if bien_info and bien_info.get("prix"):
+                prix_mention = f", dont un à {bien_info['prix']}€"
+            
+            corps_html = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; color: #333;">
+                <h2 style="color: #1976d2;">Bonjour {prospect_prenom},</h2>
+                
+                <p>J'ai bien reçu votre demande et je vous en remercie !</p>
+                
+                <p>J'ai <strong>plusieurs biens{prix_mention}</strong> qui pourraient correspondre à vos critères.</p>
+                
+                <p>Pour vous proposer les meilleures options, j'aurais besoin d'échanger rapidement avec vous pour affiner votre recherche.</p>
+                
+                <p style="margin: 25px 0;">
+                    <a href="{chat_url}" style="background-color: #1976d2; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                        💬 Discutons de votre projet
+                    </a>
+                </p>
+                
+                <p>À très bientôt,</p>
+                <p><strong>L'équipe Ici Dordogne</strong><br>
+                <a href="mailto:agence@icidordogne.fr">agence@icidordogne.fr</a></p>
+            </body>
+            </html>
+            """
+        
+        # Construire l'email
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = sujet
+        msg["From"] = f"{EMAIL_FROM_NAME} <{SMTP_EMAIL}>"
+        msg["To"] = prospect_email
+        msg["Reply-To"] = EMAIL_REPLY_TO
+        
+        msg.attach(MIMEText(corps_html, "html"))
+        
+        # Envoyer via SMTP SSL
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, context=context) as server:
+            server.login(SMTP_EMAIL, SMTP_PASSWORD)
+            server.sendmail(SMTP_EMAIL, prospect_email, msg.as_string())
+        
+        scenario = "A (QUALIFIÉ)" if score >= 90 else "B (À AFFINER)"
+        print(f"[HOOK EMAIL] ✅ Envoyé à {prospect_email} - Scénario {scenario}")
+        return True, None
+        
+    except Exception as e:
+        print(f"[HOOK EMAIL] ❌ Erreur envoi à {prospect_email}: {e}")
+        return False, str(e)
 
 # ============================================================================
 # DICTIONNAIRE SYNONYMES COMMUNES DORDOGNE
@@ -912,6 +1035,27 @@ def process_prospect(data):
     except Exception as e:
         print(f"[HISTORY] Erreur: {e}")
     
+    # ===== ENVOI EMAIL HOOK AU PROSPECT =====
+    if result.get("success") and data.get("email"):
+        bien_info = None
+        if match_result.get("bien"):
+            bien_info = {
+                "prix": match_result["bien"].get("prix"),
+                "commune": match_result["bien"].get("commune")
+            }
+        
+        email_ok, email_err = send_hook_email(
+            prospect_email=data.get("email"),
+            prospect_prenom=data.get("prenom", ""),
+            score=match_result["score"],
+            card_url=result.get("card_url", ""),
+            bien_info=bien_info
+        )
+        
+        result["hook_email_sent"] = email_ok
+        if email_err:
+            result["hook_email_error"] = email_err
+    
     return result
 
 
@@ -929,5 +1073,6 @@ __all__ = [
     'creer_carte_acquereur',
     'get_or_create_labels',
     'normaliser_commune',
+    'send_hook_email',
     'SYNONYMES_COMMUNES'
 ]
