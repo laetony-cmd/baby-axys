@@ -1012,7 +1012,10 @@ def creer_carte_trello_acquereur_sdr(prospect, conversation=None):
             content = msg.get('content', '')[:200]
             desc += f"**{role}** : {content}\n\n"
     
-    nom_carte = f"{prospect.get('nom', 'Prospect')} - {prospect.get('bien_commune', '')} - REF {prospect.get('bien_ref', '?')}"
+    # Format titre : NOM Prénom (majuscule/minuscule)
+    nom = prospect.get('nom', 'PROSPECT').upper()
+    prenom = prospect.get('prenom', '').capitalize()
+    nom_carte = f"{nom} {prenom}".strip()
     
     try:
         url = f"https://api.trello.com/1/cards?key={TRELLO_KEY}&token={TRELLO_TOKEN}"
