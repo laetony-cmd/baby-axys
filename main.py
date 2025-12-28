@@ -2025,6 +2025,56 @@ class AxiHandler(BaseHTTPRequestHandler):
             try:
                 data = json.loads(post_data)
                 token = data.get('token', '')
+                action = data.get('action', '')  # init, update_first, append, ou vide (chat normal)
+                
+                # === ACTIONS SMART OVERWRITE ===
+                if action in ['init', 'update_first', 'append']:
+                    role = data.get('role', 'assistant')
+                    content = data.get('content', '')
+                    
+                    conversations = charger_conversations_sdr()
+                    if token not in conversations:
+                        conversations[token] = []
+                    
+                    if action == 'init':
+                        # Initialiser avec le premier message
+                        conversations[token] = [{
+                            "role": role,
+                            "content": content,
+                            "timestamp": datetime.now().isoformat()
+                        }]
+                    elif action == 'update_first':
+                        # Écraser le premier message assistant
+                        if conversations[token]:
+                            conversations[token][0] = {
+                                "role": role,
+                                "content": content,
+                                "timestamp": datetime.now().isoformat()
+                            }
+                        else:
+                            conversations[token] = [{
+                                "role": role,
+                                "content": content,
+                                "timestamp": datetime.now().isoformat()
+                            }]
+                    elif action == 'append':
+                        # Ajouter sans appeler l'IA
+                        conversations[token].append({
+                            "role": role,
+                            "content": content,
+                            "timestamp": datetime.now().isoformat()
+                        })
+                    
+                    sauver_conversations_sdr(conversations)
+                    
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"ok": True, "action": action}).encode())
+                    return
+                
+                # === CHAT NORMAL (avec IA) ===
                 message = data.get('message', '')
                 
                 prospects = charger_prospects_sdr()
