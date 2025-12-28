@@ -1077,10 +1077,18 @@ def generer_page_chat_prospect(token, prospect):
         # Remplacement sécurisé des variables
         bien_titre = prospect.get('bien_titre', 'Bien immobilier')
         bien_commune = prospect.get('bien_commune', '')
+        bien_prix = prospect.get('bien_prix', '')
+        prenom = prospect.get('prenom', '')
+        bien_identifie = 'true' if prospect.get('bien_identifie', False) else 'false'
+        match_score = str(prospect.get('match_score', 0))
         
         html_content = html_content.replace('__TOKEN__', token)
         html_content = html_content.replace('__BIEN_TITRE__', str(bien_titre))
         html_content = html_content.replace('__BIEN_COMMUNE__', str(bien_commune))
+        html_content = html_content.replace('__BIEN_PRIX__', str(bien_prix))
+        html_content = html_content.replace('__PRENOM__', str(prenom))
+        html_content = html_content.replace('__BIEN_IDENTIFIE__', bien_identifie)
+        html_content = html_content.replace('__MATCH_SCORE__', match_score)
         
         return html_content
         
@@ -1766,13 +1774,85 @@ class AxiHandler(BaseHTTPRequestHandler):
                 email_match = re.search(r'Email\s*:\s*([^\s\n]+)', desc)
                 tel_match = re.search(r'Tél\s*:\s*([^\s\n]+)', desc)
                 
+                # ===== EXTRACTION INFOS BIEN MATCHÉ =====
+                bien_titre = "Bien immobilier"
+                bien_commune = ""
+                bien_prix = ""
+                bien_proprietaire = ""
+                bien_trello_url = ""
+                match_score = 0
+                match_confidence = ""
+                bien_identifie = False
+                
+                # Vérifier si bien identifié
+                if "🏠 BIEN IDENTIFIÉ" in desc:
+                    bien_identifie = True
+                    
+                    # Extraire propriétaire
+                    proprio_match = re.search(r'Propriétaire\s*:\s*([^\n]+)', desc)
+                    if proprio_match:
+                        bien_proprietaire = proprio_match.group(1).strip()
+                    
+                    # Extraire URL Trello du bien
+                    trello_bien_match = re.search(r'Trello BIENS\s*:\s*(https://trello\.com/c/[^\s\n]+)', desc)
+                    if trello_bien_match:
+                        bien_trello_url = trello_bien_match.group(1).strip()
+                    
+                    # Extraire score et confidence
+                    score_match = re.search(r'Score matching\s*:\s*(\d+)\s*\((\w+)\)', desc)
+                    if score_match:
+                        match_score = int(score_match.group(1))
+                        match_confidence = score_match.group(2)
+                
+                # Extraire infos de la demande depuis le message original
+                # Format: "maison 90m² secteur Le Bugue max 180k" ou similaire
+                msg_match = re.search(r'--- MESSAGE ORIGINAL ---\s*(.*?)\s*--- FIN MESSAGE ---', desc, re.DOTALL)
+                if msg_match:
+                    msg_original = msg_match.group(1)
+                    
+                    # Extraire commune (après "secteur" ou "à")
+                    commune_match = re.search(r'(?:secteur|à)\s+([A-Za-zÀ-ÿ\s\-]+?)(?:\s+max|\s+environ|\s+pour|\s*$)', msg_original, re.IGNORECASE)
+                    if commune_match:
+                        bien_commune = commune_match.group(1).strip()
+                    
+                    # Extraire prix (avant k€ ou €)
+                    prix_match = re.search(r'(\d+)\s*(?:000\s*€|k€?|k\s*€)', msg_original, re.IGNORECASE)
+                    if prix_match:
+                        prix_val = int(prix_match.group(1))
+                        if prix_val < 1000:  # c'est en k€
+                            prix_val *= 1000
+                        bien_prix = f"{prix_val:,}€".replace(",", " ")
+                
+                # Si on a le prix depuis la description directe (ex: "Prix : 242000")
+                prix_desc_match = re.search(r'Prix\s*:\s*(\d+)', desc)
+                if prix_desc_match and not bien_prix:
+                    bien_prix = f"{int(prix_desc_match.group(1)):,}€".replace(",", " ")
+                
+                # Construire le titre du bien
+                if bien_identifie and bien_proprietaire:
+                    bien_titre = f"Bien {bien_proprietaire.split()[0]}"
+                    if bien_commune:
+                        bien_titre = f"Maison à {bien_commune}"
+                elif bien_commune:
+                    bien_titre = f"Recherche à {bien_commune}"
+                
+                # ===== CONSTRUIRE LE PROSPECT ENRICHI =====
                 prospect = {
                     "prenom": name_parts[-1] if len(name_parts) > 1 else name_parts[0],
                     "nom": " ".join(name_parts[:-1]) if len(name_parts) > 1 else "",
                     "email": email_match.group(1) if email_match else "",
                     "tel": tel_match.group(1) if tel_match else "",
                     "trello_card_url": card_data.get("shortUrl", ""),
-                    "bien_ref": card_shortid
+                    "bien_ref": card_shortid,
+                    # Infos du bien matché
+                    "bien_titre": bien_titre,
+                    "bien_commune": bien_commune,
+                    "bien_prix": bien_prix,
+                    "bien_proprietaire": bien_proprietaire,
+                    "bien_trello_url": bien_trello_url,
+                    "match_score": match_score,
+                    "match_confidence": match_confidence,
+                    "bien_identifie": bien_identifie
                 }
                 
                 # Générer ou récupérer le token pour ce prospect
@@ -1780,9 +1860,8 @@ class AxiHandler(BaseHTTPRequestHandler):
                 
                 # Sauvegarder dans prospects.json pour le chat
                 prospects = charger_prospects_sdr()
-                if token not in prospects:
-                    prospects[token] = prospect
-                    sauver_prospects_sdr(prospects)
+                prospects[token] = prospect  # Toujours mettre à jour avec les dernières infos
+                sauver_prospects_sdr(prospects)
                 
                 html = generer_page_chat_prospect(token, prospect)
                 self.send_response(200)
@@ -1792,6 +1871,8 @@ class AxiHandler(BaseHTTPRequestHandler):
                 
             except Exception as e:
                 print(f"[CHAT CARD] Erreur: {e}")
+                import traceback
+                traceback.print_exc()
                 self.send_response(404)
                 self.send_header('Content-Type', 'text/html; charset=utf-8')
                 self.end_headers()
