@@ -1081,8 +1081,10 @@ def generer_page_chat_prospect(token, prospect):
         prenom = prospect.get('prenom', '')
         bien_identifie = 'true' if prospect.get('bien_identifie', False) else 'false'
         match_score = str(prospect.get('match_score', 0))
-        photo_url = prospect.get('bien_photo_url', '')
-        site_url = prospect.get('bien_site_url', '')
+        photo_url = prospect.get('bien_photo_url') or ''
+        site_url = prospect.get('bien_site_url') or ''
+        if site_url == 'None':
+            site_url = ''
         
         html_content = html_content.replace('__TOKEN__', token)
         html_content = html_content.replace('__BIEN_TITRE__', str(bien_titre))
@@ -2306,7 +2308,7 @@ class AxiHandler(BaseHTTPRequestHandler):
                                     "bien_prix": f"{prix:,}€".replace(",", " ") if prix else "",
                                     "bien_surface": surface,
                                     "bien_photo_url": photo_url,
-                                    "bien_site_url": bien.get("site_url", ""),
+                                    "bien_site_url": bien.get("site_url") or "",
                                     "bien_trello_url": bien.get("trello_url", ""),
                                     "bien_identifie": True,
                                     "match_score": match_data.get("score", 0),
