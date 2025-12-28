@@ -375,12 +375,21 @@ def extraire_donnees_carte(card):
     refs.extend(re.findall(r'\b(4\d{4}|3\d{4})\b', name))
     refs.extend(re.findall(r'\b(4\d{4}|3\d{4})\b', desc))
     
-    # Extraire REF des noms de pièces jointes
+    # Extraire REF des noms de pièces jointes + chercher site_url
     attachments_names = []
+    site_url = None
+    
     for att in card.get("attachments", []):
         filename = att.get("name", "")
+        att_url = att.get("url", "")
+        
         attachments_names.append(filename)
         refs.extend(re.findall(r'\b(4\d{4}|3\d{4})\b', filename))
+        
+        # Chercher lien icidordogne.fr dans les attachments
+        if not site_url and 'icidordogne.fr' in att_url:
+            site_url = att_url
+            print(f"[SYNC] Site URL trouvé: {site_url}")
     
     refs = list(set(refs))
     
@@ -444,7 +453,8 @@ def extraire_donnees_carte(card):
         "commune": commune_raw,
         "commune_normalisee": commune_normalisee,
         "mots_cles": mots_cles,
-        "attachments_names": attachments_names
+        "attachments_names": attachments_names,
+        "site_url": site_url
     }
 
 def sync_biens_from_trello():
@@ -477,11 +487,11 @@ def sync_biens_from_trello():
             INSERT INTO biens_cache (
                 trello_id, trello_url, proprietaire, description,
                 refs_trouvees, prix, surface, commune, commune_normalisee,
-                mots_cles, attachments_names, updated_at
+                mots_cles, attachments_names, site_url, updated_at
             ) VALUES (
                 %(trello_id)s, %(trello_url)s, %(proprietaire)s, %(description)s,
                 %(refs_trouvees)s, %(prix)s, %(surface)s, %(commune)s, %(commune_normalisee)s,
-                %(mots_cles)s, %(attachments_names)s, NOW()
+                %(mots_cles)s, %(attachments_names)s, %(site_url)s, NOW()
             )
             ON CONFLICT (trello_id) DO UPDATE SET
                 trello_url = EXCLUDED.trello_url,
@@ -494,6 +504,7 @@ def sync_biens_from_trello():
                 commune_normalisee = EXCLUDED.commune_normalisee,
                 mots_cles = EXCLUDED.mots_cles,
                 attachments_names = EXCLUDED.attachments_names,
+                site_url = EXCLUDED.site_url,
                 updated_at = NOW()
         """, bien)
         count += 1
