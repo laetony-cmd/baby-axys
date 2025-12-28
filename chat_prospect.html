@@ -108,16 +108,76 @@ Pour affiner ma recherche, pourriez-vous me préciser :
 🇫🇷 Je parle français | 🇬🇧 English | 🇳🇱 Nederlands | 🇩🇪 Deutsch`;
         }
         
-        // Chargement historique
+        // Message de re-bienvenue pour les retours
+        const MSG_REBIENVENUE = `Re-bonjour${PRENOM ? ' ' + PRENOM : ''} ! 👋
+
+Je vois que vous revenez sur le dossier **${BIEN_TITRE}**${BIEN_COMMUNE ? ' à ' + BIEN_COMMUNE : ''}${BIEN_PRIX ? ' (' + BIEN_PRIX + ')' : ''}.
+
+Je suis à votre disposition. Comment puis-je vous aider ?`;
+        
+        // SMART OVERWRITE - Logique Lumo
         fetch('/api/prospect-chat/history?token=' + TOKEN)
             .then(r => r.json())
             .then(data => {
-                if (data.messages && data.messages.length > 0) {
-                    data.messages.forEach(m => addMessage(m.role, m.content));
-                } else {
+                const messages = data.messages || [];
+                
+                // Vérifier si le prospect a déjà répondu (message user présent)
+                const hasUserMessage = messages.some(m => m.role === 'user');
+                
+                if (messages.length === 0) {
+                    // CAS A1 : Prospect vierge - Premier contact
                     addMessage('assistant', MSG_ACCUEIL);
+                    // Sauvegarder ce message comme premier message
+                    saveFirstMessage(MSG_ACCUEIL);
+                    
+                } else if (!hasUserMessage) {
+                    // CAS A2 : Historique existe mais chatbot muet (que des assistant)
+                    // ÉCRASE avec le nouveau MSG_ACCUEIL contextuel
+                    addMessage('assistant', MSG_ACCUEIL);
+                    // Mettre à jour le premier message en base
+                    updateFirstMessage(MSG_ACCUEIL);
+                    
+                } else {
+                    // CAS B : Conversation engagée (user a répondu)
+                    // Afficher l'historique complet
+                    messages.forEach(m => addMessage(m.role, m.content));
+                    // AJOUTER message de re-bienvenue
+                    addMessage('assistant', MSG_REBIENVENUE);
+                    // Sauvegarder ce nouveau message
+                    appendMessage('assistant', MSG_REBIENVENUE);
                 }
             })
+            .catch(e => {
+                console.error("Erreur historique:", e);
+                addMessage('assistant', MSG_ACCUEIL);
+            });
+        
+        // Sauvegarder le premier message
+        function saveFirstMessage(content) {
+            fetch('/api/prospect-chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({token: TOKEN, role: 'assistant', content: content, action: 'init'})
+            }).catch(e => console.error("Erreur save:", e));
+        }
+        
+        // Mettre à jour le premier message (écrasement)
+        function updateFirstMessage(content) {
+            fetch('/api/prospect-chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({token: TOKEN, role: 'assistant', content: content, action: 'update_first'})
+            }).catch(e => console.error("Erreur update:", e));
+        }
+        
+        // Ajouter un message à l'historique
+        function appendMessage(role, content) {
+            fetch('/api/prospect-chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({token: TOKEN, role: role, content: content, action: 'append'})
+            }).catch(e => console.error("Erreur append:", e));
+        }
             .catch(e => console.error("Erreur historique:", e));
         
         function addMessage(role, content) {
