@@ -1081,10 +1081,12 @@ def generer_page_chat_prospect(token, prospect):
         prenom = prospect.get('prenom', '')
         bien_identifie = 'true' if prospect.get('bien_identifie', False) else 'false'
         match_score = str(prospect.get('match_score', 0))
-        photo_url = prospect.get('bien_photo_url') or ''
         site_url = prospect.get('bien_site_url') or ''
         if site_url == 'None':
             site_url = ''
+        
+        # Masquer le lien si pas d'URL valide
+        site_hidden = '' if (site_url and site_url.startswith('http')) else 'hidden'
         
         html_content = html_content.replace('__TOKEN__', token)
         html_content = html_content.replace('__BIEN_TITRE__', str(bien_titre))
@@ -1093,8 +1095,8 @@ def generer_page_chat_prospect(token, prospect):
         html_content = html_content.replace('__PRENOM__', str(prenom))
         html_content = html_content.replace('__BIEN_IDENTIFIE__', bien_identifie)
         html_content = html_content.replace('__MATCH_SCORE__', match_score)
-        html_content = html_content.replace('__PHOTO_URL__', str(photo_url))
         html_content = html_content.replace('__SITE_URL__', str(site_url))
+        html_content = html_content.replace('__SITE_HIDDEN__', site_hidden)
         
         return html_content
         
