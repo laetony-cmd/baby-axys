@@ -1061,6 +1061,19 @@ def creer_carte_trello_acquereur_sdr(prospect, conversation=None):
                             urllib.request.urlopen(req, timeout=10)
                         except:
                             pass
+                
+                # FORTERESSE V14.5: Mise à jour description APRÈS création 
+                # (contourne l'automatisation Butler qui écrase la description)
+                try:
+                    import time
+                    time.sleep(0.5)  # Attendre que Butler finisse
+                    update_url = f"https://api.trello.com/1/cards/{card_id}?key={TRELLO_KEY}&token={TRELLO_TOKEN}"
+                    update_data = urllib.parse.urlencode({"desc": desc}).encode()
+                    update_req = urllib.request.Request(update_url, data=update_data, method='PUT')
+                    urllib.request.urlopen(update_req, timeout=10)
+                    print(f"[SDR] Description mise à jour pour carte {card_id}")
+                except Exception as e:
+                    print(f"[SDR WARNING] Échec mise à jour description: {e}")
             
             return card_id, card_url
     except Exception as e:
