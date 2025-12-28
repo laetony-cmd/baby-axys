@@ -1627,6 +1627,28 @@ class AxiHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(result).encode())
         
+        elif path.startswith('/debug-card/'):
+            card_shortid = path.split('/debug-card/')[-1].split('?')[0]
+            try:
+                card_url = f"https://api.trello.com/1/cards/{card_shortid}?key={TRELLO_KEY}&token={TRELLO_TOKEN}"
+                req = urllib.request.Request(card_url)
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    card_data = json.loads(resp.read().decode())
+                
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "name": card_data.get("name"),
+                    "desc": card_data.get("desc"),
+                    "shortUrl": card_data.get("shortUrl")
+                }, indent=2, ensure_ascii=False).encode())
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
+        
         elif path == '/test-veille':
             # Test sans email
             print("[TEST] Veille DPE (mode test)")
