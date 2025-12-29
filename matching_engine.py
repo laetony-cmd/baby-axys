@@ -697,10 +697,12 @@ def find_best_match(criteres):
                 "needs_verification": False
             }
     
-    # ===== GOLDEN TICKET 2: PRIX UNIQUE =====
+    # ===== GOLDEN TICKET 2: PRIX UNIQUE (±10%) =====
+    # RÈGLE D'OR: Un prospect contacte = bien FORCÉMENT dans notre stock
+    # On élargit à ±10% car le prix Leboncoin peut différer du prix Trello
     if prix_prospect:
-        prix_min = int(prix_prospect * 0.95)
-        prix_max = int(prix_prospect * 1.05)
+        prix_min = int(prix_prospect * 0.90)
+        prix_max = int(prix_prospect * 1.10)
         
         cur.execute("""
             SELECT * FROM biens_cache 
