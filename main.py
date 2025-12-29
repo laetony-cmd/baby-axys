@@ -1,6 +1,6 @@
-# VERSION: V14.4 FORTERESSE - {"timestamp": "2025-12-28T16:00:00"}
+# VERSION: V14.7 - CÂBLAGE SDR - {"timestamp": "2025-12-29T05:00:00"}
 """
-AXI ICI DORDOGNE v10 UNIFIÃ‰ - Service complet Railway
+AXI ICI DORDOGNE V14.7 CÂBLAGE SDR - Service complet Railway
 ======================================================
 - Chat Axi avec Claude API + recherche web
 - Interface web conversation (/, /trio)
@@ -1636,7 +1636,7 @@ class AxiHandler(BaseHTTPRequestHandler):
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             status = {
-                "service": "Axi ICI Dordogne v10 UNIFIÃ‰",
+                "service": "Axi ICI Dordogne V14.7 CÂBLAGE SDR",
                 "status": "ok",
                 "features": ["Chat", "DPE", "Concurrence", "DVF"],
                 "endpoints": ["/", "/trio", "/chat", "/briefing", "/memory", "/status",
@@ -2145,6 +2145,51 @@ class AxiHandler(BaseHTTPRequestHandler):
                     "qualification": {}
                 }
                 # --- FIN NORMALISATION ROBUSTE ---
+                # --- DÉBUT CÂBLAGE MATCHING V14.7 ---
+                # Enrichir le prospect avec le Matching Engine (si disponible)
+                if MATCHING_OK:
+                    try:
+                        # Extraire les critères de recherche
+                        criteres = {
+                            "ref": data.get('bien_ref', ''),
+                            "prix": int(prospect_data.get('bien_prix', 0) or 0),
+                            "surface": int(prospect_data.get('bien_surface', 0) or 0),
+                            "commune": prospect_data.get('bien_commune', ''),
+                        }
+                        
+                        print(f"[SDR MATCHING] Recherche avec critères: {criteres}")
+                        match_result = matching_engine.find_best_match(criteres)
+                        
+                        if match_result.get('match_found'):
+                            bien = match_result['bien']
+                            refs = bien.get('refs_trouvees', [])
+                            
+                            # Enrichir prospect_data
+                            prospect_data['bien_ref'] = refs[0] if refs else ''
+                            prospect_data['trello_biens_url'] = bien.get('trello_url', '')
+                            prospect_data['site_url'] = bien.get('site_url', '')
+                            prospect_data['proprio_nom'] = bien.get('proprietaire', '')
+                            prospect_data['bien_identifie'] = True
+                            prospect_data['match_score'] = match_result.get('score', 0)
+                            prospect_data['match_confidence'] = match_result.get('confidence', 'LOW')
+                            
+                            print(f"[SDR MATCHING] ✅ Match trouvé: REF={prospect_data['bien_ref']}, Score={prospect_data['match_score']}")
+                        else:
+                            prospect_data['bien_identifie'] = False
+                            prospect_data['match_score'] = 0
+                            prospect_data['match_confidence'] = 'NONE'
+                            print("[SDR MATCHING] ⚠️ Aucun match trouvé - carte générique")
+                            
+                    except Exception as match_err:
+                        print(f"[SDR MATCHING] ❌ Erreur matching (continue sans): {match_err}")
+                        prospect_data['bien_identifie'] = False
+                        prospect_data['match_score'] = 0
+                else:
+                    print("[SDR MATCHING] ⚠️ Matching Engine non chargé - carte générique")
+                    prospect_data['bien_identifie'] = False
+                    prospect_data['match_score'] = 0
+                # --- FIN CÂBLAGE MATCHING V14.7 ---
+
                 
                 # Génération token et URL chat
                 token = generer_token_prospect(prospect_data['email'], prospect_data['bien_ref'])
@@ -2502,7 +2547,7 @@ def main():
     
     print(f"""
 â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
-â•‘         AXI ICI DORDOGNE v10 UNIFIÃ‰                        â•‘
+â•‘         AXI ICI DORDOGNE V14.7 CÂBLAGE SDR                        â•‘
 â•‘         Chat + Veilles + DVF                               â•‘
 â• â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•£
 â•‘  Endpoints:                                                â•‘
