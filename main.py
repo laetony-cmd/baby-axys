@@ -1840,6 +1840,14 @@ def scheduler_loop():
 # ============================================================
 
 class AxiHandler(BaseHTTPRequestHandler):
+    def _send_json(self, data, status=200):
+        """Helper pour envoyer JSON"""
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps(data).encode())
+    
+
     
     def do_GET(self):
         path = self.path.split('?')[0]
@@ -1899,9 +1907,9 @@ class AxiHandler(BaseHTTPRequestHandler):
                     "count": count,
                     "last_sync": engine.scraper.last_sync
                 }
-                self._envoyer_json(response)
+                self._send_json(response)
             except Exception as e:
-                self._envoyer_json({"success": False, "error": str(e)})
+                self._send_json({"success": False, "error": str(e)})
         
         # ============================================================
         # ENDPOINT V15: TEST MATCHING
@@ -1914,14 +1922,14 @@ class AxiHandler(BaseHTTPRequestHandler):
                 surface = int(params.get('surface', [0])[0]) if params.get('surface') else None
                 
                 if not prix:
-                    self._envoyer_json({"error": "Parametre 'prix' requis"})
+                    self._send_json({"error": "Parametre 'prix' requis"})
                     return
                 
                 engine = get_matching_v15()
                 result = engine.match_prospect(prix=prix, surface=surface)
-                self._envoyer_json(result)
+                self._send_json(result)
             except Exception as e:
-                self._envoyer_json({"error": str(e)})
+                self._send_json({"error": str(e)})
         
         elif path == '/status' or path == '/':
             self.send_response(200)
