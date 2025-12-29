@@ -70,6 +70,10 @@ except Exception as e:
 # Gmail SMTP
 GMAIL_USER = "u5050786429@gmail.com"
 GMAIL_APP_PASSWORD = "izemquwmmqjdasrk"
+
+# Gmail ICI Dordogne (officiel)
+GMAIL_ICI_USER = "agence@icidordogne.fr"
+GMAIL_ICI_PASSWORD = "logrqinzbgzibyrt"
 EMAIL_TO = "agence@icidordogne.fr"
 EMAIL_CC = "laetony@gmail.com"
 
@@ -1527,6 +1531,37 @@ def envoyer_email_sdr(destinataire, sujet, corps_html, copie=None):
         return False, str(e)
 
 
+
+def envoyer_email_ici_dordogne(to_email, subject, body, cc_email=None):
+    """Envoie un email depuis agence@icidordogne.fr"""
+    import ssl
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = f"ICI DORDOGNE <{GMAIL_ICI_USER}>"
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        if cc_email:
+            msg['Cc'] = cc_email
+        
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+        
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465, context=context) as server:
+            server.login(GMAIL_ICI_USER, GMAIL_ICI_PASSWORD)
+            recipients = [to_email]
+            if cc_email:
+                recipients.append(cc_email)
+            server.sendmail(GMAIL_ICI_USER, recipients, msg.as_string())
+        
+        print(f"[EMAIL] Envoyé à {to_email} - Objet: {subject[:50]}...")
+        return True, None
+    except Exception as e:
+        print(f"[EMAIL ERROR] {e}")
+        return False, str(e)
+
 def envoyer_email_remerciement_sdr(prospect):
     """EMAIL 1 : Remerciement + lien chat"""
     sujet = f"Votre demande pour {prospect.get('bien_titre', 'un bien')} - ICI Dordogne"
@@ -2866,6 +2901,49 @@ class AxiHandler(BaseHTTPRequestHandler):
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": "Matching Engine non chargé"}).encode())
+        
+        
+        elif path == '/send-email':
+            # Endpoint pour envoyer un email depuis agence@icidordogne.fr
+            try:
+                data = json.loads(post_data)
+                
+                to_email = data.get('to', '')
+                subject = data.get('subject', '')
+                body = data.get('body', '')
+                cc_email = data.get('cc', 'laetony@gmail.com')  # Toujours en copie par défaut
+                
+                if not to_email or not subject or not body:
+                    self.send_response(400)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": "Champs requis: to, subject, body"}).encode())
+                    return
+                
+                # Envoyer l'email
+                success, error = envoyer_email_ici_dordogne(to_email, subject, body, cc_email)
+                
+                if success:
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        "success": True,
+                        "message": f"Email envoyé à {to_email}",
+                        "from": GMAIL_ICI_USER,
+                        "cc": cc_email
+                    }).encode())
+                else:
+                    self.send_response(500)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"success": False, "error": error}).encode())
+                    
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
         
         else:
             self.send_response(404)
