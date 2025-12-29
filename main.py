@@ -109,6 +109,7 @@ TRELLO_KEY = os.environ.get("TRELLO_KEY", "")
 TRELLO_TOKEN = os.environ.get("TRELLO_TOKEN", "")
 TRELLO_BOARD_BIENS = "6249623e53c07a131c916e59"
 TRELLO_LIST_TEST_ACQUEREURS = "694f52e6238e9746b814cae9"
+JULIE_MEMBER_ID = "59db340040eb2c01fb7d4851"  # Julie DUPERIER - toujours assignée
 
 # Base URL
 # FIX 28/12: Forcer URL Railway (axi.symbine.fr pointe vers ancien serveur)
@@ -1278,6 +1279,17 @@ def creer_carte_trello_acquereur_sdr(prospect, conversation=None):
                             urllib.request.urlopen(req, timeout=10)
                         except:
                             pass
+                
+                
+                # V15.1: Assignation automatique Julie
+                try:
+                    julie_url = f"https://api.trello.com/1/cards/{card_id}/idMembers?key={TRELLO_KEY}&token={TRELLO_TOKEN}"
+                    julie_data = urllib.parse.urlencode({"value": JULIE_MEMBER_ID}).encode()
+                    julie_req = urllib.request.Request(julie_url, data=julie_data, method='POST')
+                    urllib.request.urlopen(julie_req, timeout=10)
+                    print(f"[SDR] Julie assignée à la carte {card_id}")
+                except Exception as e:
+                    print(f"[SDR WARNING] Échec assignation Julie: {e}")
                 
                 # FORTERESSE V14.5: Mise à jour description APRÈS création 
                 # (contourne l'automatisation Butler qui écrase la description)
