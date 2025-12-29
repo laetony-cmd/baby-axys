@@ -1192,32 +1192,40 @@ def creer_carte_trello_acquereur_sdr(prospect, conversation=None):
     """Crée une carte Trello acquéreur complète"""
     qualification = prospect.get('qualification', {})
     
+    # V15.3: Format compatible Butler
+    bien_info = f"{prospect.get('bien_commune', '')} - {prospect.get('bien_titre', '')} - {prospect.get('bien_prix', '')}€"
+    
     desc = f"""**Tél :** {prospect.get('tel', '-')}
 **Email :** {prospect.get('email', '-')}
-**Langue :** {prospect.get('langue', 'FR')}
-**Canal préféré :** {prospect.get('canal_prefere', '-')}
 
 **Source du contact :** {prospect.get('source', 'Leboncoin')}
-**Adresse du bien :** {prospect.get('bien_commune', '')} - {prospect.get('bien_titre', '')} - {prospect.get('bien_prix', '')}
+**Adresse du bien :** {bien_info}
 
-**RDV PROPOSÉ :** {prospect.get('rdv_date', '-')} à {prospect.get('rdv_heure', '-')}
+**Moyen de visite :** 
+**Moyen de compte-rendu :** 
+
+**Nb de chambres :** 
+**Chauffage :** 
+**Voisinage :** 
+**Travaux éventuels :** 
+
+**Estimation :** :
+
+**Informations complémentaires :**
+💬 Message: "{prospect.get('message_initial', '-')}"
+🏠 REF: {prospect.get('bien_ref', '-')}
+👤 Proprio: {prospect.get('proprio_nom', '-')}
+📋 Trello BIENS: {prospect.get('trello_biens_url', '-')}
+🌐 Site: {prospect.get('site_url', '-')}
 
 ---
-**📊 QUALIFICATION**
-- Budget : {qualification.get('budget', '-')}
-- Surface min : {qualification.get('surface_min', '-')}
-- Chambres min : {qualification.get('chambres_min', '-')}
-- Critères : {', '.join(qualification.get('criteres', [])) or '-'}
 
----
-**🏠 BIEN IDENTIFIÉ**
-- REF : {prospect.get('bien_ref', '-')}
-- Proprio : {prospect.get('proprio_nom', '-')}
-- Trello BIENS : {prospect.get('trello_biens_url', '-')}
-- Site : {prospect.get('site_url', '-')}
+**Liens** :
 
----
-**Message initial :** "{prospect.get('message_initial', '-')}"
+- Localisation
+- Sweepbright
+- Site internet
+- Visite virtuelle
 """
     
     if conversation:
@@ -1315,7 +1323,7 @@ def creer_carte_trello_acquereur_sdr(prospect, conversation=None):
                 # (contourne l'automatisation Butler qui écrase la description)
                 try:
                     import time
-                    time.sleep(0.5)  # Attendre que Butler finisse
+                    time.sleep(1.5)  # Attendre que Butler finisse (V15.3)
                     update_url = f"https://api.trello.com/1/cards/{card_id}?key={TRELLO_KEY}&token={TRELLO_TOKEN}"
                     update_data = urllib.parse.urlencode({"desc": desc}).encode()
                     update_req = urllib.request.Request(update_url, data=update_data, method='PUT')
