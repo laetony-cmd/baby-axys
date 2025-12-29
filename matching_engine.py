@@ -1,5 +1,5 @@
 """
-MATCHING ENGINE V14.8 MATCHING GARANTI - ICI DORDOGNE
+MATCHING ENGINE V14.9 PRIORITÉS CLAIRES - ICI DORDOGNE
 ===============================================
 Module séparé pour le matching Bien/Propriétaire
 - PostgreSQL cache (biens_cache)
@@ -651,78 +651,331 @@ def get_or_create_labels(board_id):
 
 def find_best_match(criteres):
     """
-    Trouve le meilleur match depuis PostgreSQL
+    ══════════════════════════════════════════════════════════════════════════
+    MATCHING V14.9 - RÈGLE D'OR ICI DORDOGNE
+    ══════════════════════════════════════════════════════════════════════════
     
-    Golden Tickets (1000 pts):
-    - REF exacte trouvée
-    - Prix unique dans le stock (±5%)
+    Si un prospect nous contacte pour un bien, ce bien est FORCÉMENT :
+    - Sur notre site icidordogne.fr
+    - Dans notre Trello BIENS
     
-    Scoring:
-    - Prix ±8% = 40 pts
-    - Surface ±15% = 30 pts
-    - Commune (normalisée) = 30 pts
-    - Mots-clés = 10 pts/mot
+    PRIORITÉS DE MATCHING (dans l'ordre) :
+    
+    1. REF ICI DORDOGNE (format 3xxxx ou 4xxxx)
+       → Match DIRECT et CERTAIN
+       → Ignorer les refs Leboncoin (ex: IV9Y-K07-RLM)
+    
+    2. PRIX UNIQUE (±10%)
+       → Très rare d'avoir 2 biens au même prix
+       → Si UN SEUL bien à ce prix → Match CERTAIN
+    
+    3. COMMUNE
+       → Peu de biens par commune (statistiquement)
+       → Combiné avec prix/surface → Match quasi-certain
+    
+    Le matching NE PEUT PAS échouer. Si échec = bug de notre côté.
+    ══════════════════════════════════════════════════════════════════════════
     """
-    conn = get_db_connection()
-    if not conn:
-        print("[MATCH] Pas de connexion DB - fallback Trello direct")
-        return find_best_match_fallback(criteres)
     
-    cur = conn.cursor()
-    
-    ref_prospect = criteres.get("ref")
+    ref_prospect = criteres.get("ref", "")
     prix_prospect = criteres.get("prix")
     surface_prospect = criteres.get("surface")
     commune_prospect = normaliser_commune(criteres.get("commune", ""))
-    mots_cles_prospect = criteres.get("mots_cles", [])
     
-    # ===== GOLDEN TICKET 1: REF EXACTE =====
+    print(f"[MATCH V14.9] Critères: REF={ref_prospect}, Prix={prix_prospect}, Surface={surface_prospect}, Commune={commune_prospect}")
+    
+    # ═══════════════════════════════════════════════════════════════════════
+    # PRIORITÉ 1: REF ICI DORDOGNE (format 3xxxx ou 4xxxx)
+    # ═══════════════════════════════════════════════════════════════════════
+    
+    # Détecter si c'est une REF ICI Dordogne (5 chiffres commençant par 3 ou 4)
+    ref_ici = None
     if ref_prospect:
-        cur.execute("""
-            SELECT * FROM biens_cache 
-            WHERE %s = ANY(refs_trouvees)
-            LIMIT 1
-        """, (ref_prospect,))
-        
-        row = cur.fetchone()
-        if row:
+        import re
+        match = re.search(r'\b([34]\d{4})\b', str(ref_prospect))
+        if match:
+            ref_ici = match.group(1)
+            print(f"[MATCH V14.9] REF ICI Dordogne détectée: {ref_ici}")
+    
+    if ref_ici:
+        # Chercher dans PostgreSQL
+        conn = get_db_connection()
+        if conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT * FROM biens_cache 
+                WHERE %s = ANY(refs_trouvees)
+                LIMIT 1
+            """, (ref_ici,))
+            row = cur.fetchone()
             cur.close()
             conn.close()
+            
+            if row:
+                print(f"[MATCH V14.9] 🎫 GOLDEN TICKET REF: {ref_ici} trouvée en DB")
+                return {
+                    "match_found": True,
+                    "score": 1000,
+                    "confidence": "CERTAIN",
+                    "bien": dict(row),
+                    "details": [f"🎫 PRIORITÉ 1: REF ICI Dordogne {ref_ici}"],
+                    "needs_verification": False
+                }
+        
+        # Fallback: chercher dans Trello directement
+        result = _search_trello_by_ref(ref_ici)
+        if result:
+            print(f"[MATCH V14.9] 🎫 GOLDEN TICKET REF: {ref_ici} trouvée en Trello")
+            return result
+    
+    # ═══════════════════════════════════════════════════════════════════════
+    # PRIORITÉ 2: PRIX UNIQUE (±10%)
+    # ═══════════════════════════════════════════════════════════════════════
+    
+    if prix_prospect and prix_prospect > 0:
+        print(f"[MATCH V14.9] Recherche par prix unique: {prix_prospect}€ (±10%)")
+        
+        # D'abord en DB
+        conn = get_db_connection()
+        if conn:
+            cur = conn.cursor()
+            prix_min = int(prix_prospect * 0.90)
+            prix_max = int(prix_prospect * 1.10)
+            
+            cur.execute("""
+                SELECT * FROM biens_cache 
+                WHERE prix BETWEEN %s AND %s
+            """, (prix_min, prix_max))
+            rows = cur.fetchall()
+            cur.close()
+            conn.close()
+            
+            if len(rows) == 1:
+                print(f"[MATCH V14.9] 🎫 GOLDEN TICKET PRIX: UN SEUL bien à {prix_prospect}€ en DB")
+                return {
+                    "match_found": True,
+                    "score": 1000,
+                    "confidence": "CERTAIN",
+                    "bien": dict(rows[0]),
+                    "details": [f"🎫 PRIORITÉ 2: Prix unique {prix_prospect}€"],
+                    "needs_verification": False
+                }
+            elif len(rows) > 1:
+                print(f"[MATCH V14.9] {len(rows)} biens à ce prix en DB, passage à commune...")
+        
+        # Fallback: chercher dans Trello directement
+        result = _search_trello_by_price(prix_prospect)
+        if result and result.get("unique"):
+            print(f"[MATCH V14.9] 🎫 GOLDEN TICKET PRIX: UN SEUL bien à {prix_prospect}€ en Trello")
+            return result
+    
+    # ═══════════════════════════════════════════════════════════════════════
+    # PRIORITÉ 3: COMMUNE (+ prix si disponible)
+    # ═══════════════════════════════════════════════════════════════════════
+    
+    if commune_prospect:
+        print(f"[MATCH V14.9] Recherche par commune: {commune_prospect}")
+        
+        conn = get_db_connection()
+        if conn:
+            cur = conn.cursor()
+            
+            # Chercher les biens dans cette commune
+            cur.execute("""
+                SELECT * FROM biens_cache 
+                WHERE LOWER(commune) LIKE %s OR LOWER(commune) LIKE %s
+            """, (f"%{commune_prospect.lower()}%", f"%{commune_prospect.lower().replace('-', ' ')}%"))
+            rows = cur.fetchall()
+            cur.close()
+            conn.close()
+            
+            if len(rows) == 1:
+                print(f"[MATCH V14.9] 🎫 GOLDEN TICKET COMMUNE: UN SEUL bien à {commune_prospect}")
+                return {
+                    "match_found": True,
+                    "score": 900,
+                    "confidence": "HIGH",
+                    "bien": dict(rows[0]),
+                    "details": [f"🎫 PRIORITÉ 3: Commune unique {commune_prospect}"],
+                    "needs_verification": False
+                }
+            elif len(rows) > 1 and prix_prospect:
+                # Plusieurs biens, filtrer par prix
+                best = None
+                best_ecart = float('inf')
+                for row in rows:
+                    bien = dict(row)
+                    if bien.get("prix"):
+                        ecart = abs(bien["prix"] - prix_prospect) / prix_prospect
+                        if ecart < best_ecart:
+                            best_ecart = ecart
+                            best = bien
+                
+                if best and best_ecart < 0.15:
+                    print(f"[MATCH V14.9] Match COMMUNE+PRIX: {commune_prospect} + prix proche")
+                    return {
+                        "match_found": True,
+                        "score": 850,
+                        "confidence": "HIGH",
+                        "bien": best,
+                        "details": [f"PRIORITÉ 3: Commune {commune_prospect} + prix proche (écart {best_ecart*100:.1f}%)"],
+                        "needs_verification": False
+                    }
+        
+        # Fallback Trello
+        result = _search_trello_by_commune(commune_prospect, prix_prospect)
+        if result:
+            return result
+    
+    # ═══════════════════════════════════════════════════════════════════════
+    # DERNIER RECOURS: Scoring pondéré
+    # ═══════════════════════════════════════════════════════════════════════
+    
+    print("[MATCH V14.9] ⚠️ Aucun Golden Ticket, passage au scoring...")
+    return _scoring_fallback(criteres)
+
+
+def _search_trello_by_ref(ref):
+    """Recherche directe dans Trello par REF"""
+    try:
+        cards = trello_get(f"/boards/{BOARD_BIENS}/cards", {"fields": "name,desc,shortUrl", "attachments": "true"})
+        if not cards:
+            return None
+        
+        for card in cards:
+            if ref in card.get("name", "") or ref in card.get("desc", ""):
+                bien = extraire_donnees_carte(card)
+                return {
+                    "match_found": True,
+                    "score": 1000,
+                    "confidence": "CERTAIN",
+                    "bien": bien,
+                    "details": [f"🎫 PRIORITÉ 1: REF {ref} (Trello direct)"],
+                    "needs_verification": False
+                }
+    except Exception as e:
+        print(f"[MATCH] Erreur Trello REF: {e}")
+    return None
+
+
+def _search_trello_by_price(prix):
+    """Recherche directe dans Trello par prix unique"""
+    import re
+    try:
+        cards = trello_get(f"/boards/{BOARD_BIENS}/cards", {"fields": "name,desc,shortUrl", "attachments": "true"})
+        if not cards:
+            return None
+        
+        prix_min = int(prix * 0.90)
+        prix_max = int(prix * 1.10)
+        matches = []
+        
+        for card in cards:
+            desc = card.get("desc", "")
+            # Extraire prix de la description
+            prix_match = re.search(r'(\d{2,3})\s*(\d{3})\s*€', desc)
+            if prix_match:
+                card_prix = int(prix_match.group(1) + prix_match.group(2))
+                if prix_min <= card_prix <= prix_max:
+                    matches.append((card, card_prix))
+        
+        if len(matches) == 1:
+            card, card_prix = matches[0]
+            bien = extraire_donnees_carte(card)
             return {
                 "match_found": True,
                 "score": 1000,
-                "confidence": "HIGH",
-                "bien": dict(row),
-                "details": ["🎫 GOLDEN TICKET: REF exacte trouvée"],
-                "needs_verification": False
+                "confidence": "CERTAIN",
+                "bien": bien,
+                "details": [f"🎫 PRIORITÉ 2: Prix unique {card_prix}€ (Trello direct)"],
+                "needs_verification": False,
+                "unique": True
             }
-    
-    # ===== GOLDEN TICKET 2: PRIX UNIQUE (±10%) =====
-    # RÈGLE D'OR: Un prospect contacte = bien FORCÉMENT dans notre stock
-    # On élargit à ±10% car le prix Leboncoin peut différer du prix Trello
-    if prix_prospect:
-        prix_min = int(prix_prospect * 0.90)
-        prix_max = int(prix_prospect * 1.10)
+    except Exception as e:
+        print(f"[MATCH] Erreur Trello Prix: {e}")
+    return None
+
+
+def _search_trello_by_commune(commune, prix=None):
+    """Recherche directe dans Trello par commune"""
+    try:
+        cards = trello_get(f"/boards/{BOARD_BIENS}/cards", {"fields": "name,desc,shortUrl", "attachments": "true"})
+        if not cards:
+            return None
         
-        cur.execute("""
-            SELECT * FROM biens_cache 
-            WHERE prix BETWEEN %s AND %s
-        """, (prix_min, prix_max))
+        matches = []
+        commune_lower = commune.lower()
         
-        rows = cur.fetchall()
-        if len(rows) == 1:
-            cur.close()
-            conn.close()
+        for card in cards:
+            content = (card.get("name", "") + " " + card.get("desc", "")).lower()
+            if commune_lower in content or commune_lower.replace("-", " ") in content:
+                matches.append(card)
+        
+        if len(matches) == 1:
+            bien = extraire_donnees_carte(matches[0])
             return {
                 "match_found": True,
-                "score": 1000,
+                "score": 900,
                 "confidence": "HIGH",
-                "bien": dict(rows[0]),
-                "details": ["🎫 GOLDEN TICKET: Prix unique dans le stock"],
+                "bien": bien,
+                "details": [f"🎫 PRIORITÉ 3: Commune unique {commune} (Trello direct)"],
                 "needs_verification": False
             }
+        elif len(matches) > 1 and prix:
+            # Filtrer par prix
+            import re
+            best = None
+            best_ecart = float('inf')
+            
+            for card in matches:
+                desc = card.get("desc", "")
+                prix_match = re.search(r'(\d{2,3})\s*(\d{3})\s*€', desc)
+                if prix_match:
+                    card_prix = int(prix_match.group(1) + prix_match.group(2))
+                    ecart = abs(card_prix - prix) / prix
+                    if ecart < best_ecart:
+                        best_ecart = ecart
+                        best = card
+            
+            if best and best_ecart < 0.15:
+                bien = extraire_donnees_carte(best)
+                return {
+                    "match_found": True,
+                    "score": 850,
+                    "confidence": "HIGH",
+                    "bien": bien,
+                    "details": [f"PRIORITÉ 3: Commune {commune} + prix proche (Trello direct)"],
+                    "needs_verification": False
+                }
+    except Exception as e:
+        print(f"[MATCH] Erreur Trello Commune: {e}")
+    return None
+
+
+def _scoring_fallback(criteres):
+    """
+    Scoring pondéré si aucun Golden Ticket.
+    ATTENTION: Selon la RÈGLE D'OR, ce cas ne devrait JAMAIS arriver.
+    Si on arrive ici, c'est un bug de synchronisation.
+    """
+    print("[MATCH V14.9] ⚠️ ATTENTION: Scoring fallback activé - vérifier la synchro!")
     
-    # ===== SCORING PONDÉRÉ =====
+    prix_prospect = criteres.get("prix")
+    surface_prospect = criteres.get("surface")
+    commune_prospect = normaliser_commune(criteres.get("commune", ""))
+    
+    conn = get_db_connection()
+    if not conn:
+        return {
+            "match_found": False,
+            "score": 0,
+            "confidence": "NONE",
+            "bien": None,
+            "details": ["❌ Pas de connexion DB"],
+            "needs_verification": True
+        }
+    
+    cur = conn.cursor()
     cur.execute("SELECT * FROM biens_cache")
     all_biens = cur.fetchall()
     cur.close()
@@ -737,65 +990,42 @@ def find_best_match(criteres):
         score = 0
         details = []
         
-        # Prix ±8%
+        # Prix ±15%
         if prix_prospect and bien.get("prix"):
             ecart = abs(bien["prix"] - prix_prospect) / prix_prospect
-            if ecart <= 0.08:
+            if ecart <= 0.10:
                 score += 40
-                details.append(f"Prix OK: {bien['prix']}€ (écart {ecart*100:.1f}%)")
-            elif ecart <= 0.15:
+                details.append(f"Prix: {bien['prix']}€ (±10%)")
+            elif ecart <= 0.20:
                 score += 20
                 details.append(f"Prix proche: {bien['prix']}€")
         
-        # Surface ±15%
+        # Surface ±20%
         if surface_prospect and bien.get("surface"):
             ecart = abs(bien["surface"] - surface_prospect) / surface_prospect
             if ecart <= 0.15:
                 score += 30
-                details.append(f"Surface OK: {bien['surface']}m²")
-            elif ecart <= 0.25:
-                score += 15
-                details.append(f"Surface proche: {bien['surface']}m²")
+                details.append(f"Surface: {bien['surface']}m²")
         
-        # Commune (normalisée)
-        if commune_prospect and bien.get("commune_normalisee"):
-            if bien["commune_normalisee"] == commune_prospect:
+        # Commune
+        if commune_prospect and bien.get("commune"):
+            if commune_prospect.lower() in bien["commune"].lower():
                 score += 30
-                details.append(f"Commune OK: {bien.get('commune', '')}")
-            elif commune_prospect in (bien.get("description") or "").lower():
-                score += 25
-                details.append("Commune dans description")
-        
-        # Mots-clés
-        mots_bien = bien.get("mots_cles") or []
-        for mot in mots_cles_prospect:
-            if mot.lower() in [m.lower() for m in mots_bien]:
-                score += 10
-                details.append(f"Mot-clé: {mot}")
+                details.append(f"Commune: {bien['commune']}")
         
         if score > best_score:
             best_score = score
             best_match = bien
             best_details = details
     
-    if best_match:
-        if best_score >= 90:
-            confidence = "HIGH"
-            needs_verification = False
-        elif best_score >= 60:
-            confidence = "MEDIUM"
-            needs_verification = True
-        else:
-            confidence = "LOW"
-            needs_verification = True
-        
+    if best_match and best_score >= 50:
         return {
             "match_found": True,
             "score": best_score,
-            "confidence": confidence,
+            "confidence": "MEDIUM" if best_score >= 70 else "LOW",
             "bien": best_match,
             "details": best_details,
-            "needs_verification": needs_verification
+            "needs_verification": True
         }
     
     return {
@@ -803,7 +1033,7 @@ def find_best_match(criteres):
         "score": 0,
         "confidence": "NONE",
         "bien": None,
-        "details": ["Aucun match trouvé"],
+        "details": ["❌ Aucun match - RÈGLE D'OR VIOLÉE - vérifier synchro!"],
         "needs_verification": True
     }
 
