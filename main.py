@@ -185,6 +185,220 @@ _enrichisseur_dvf = None
 # UTILITAIRES FICHIERS
 # ============================================================
 
+
+# ============================================================================
+# MATCHING ENGINE V15 BLINDÉ - PROTOCOLE SWEEPBRIGHT
+# ============================================================================
+# RÈGLE D'OR: Si demande avec prix X → bien EXISTE sur le site
+# CORRECTION CRITIQUE: Scraping jusqu'à 404 (plus de limite 10 pages)
+# ALGORITHME: Prix Exact (0€) > Surface (±5m²) > Ville
+# ============================================================================
+
+class ScraperV15:
+    """Scraper blindé - Scan exhaustif jusqu'à HTTP 404"""
+    
+    BASE_URL = "https://www.icidordogne.fr/immobilier/"
+    
+    def __init__(self):
+        self.cache = []
+        self.last_sync = None
+    
+    def scrape_all_pages(self):
+        """Scrape TOUTES les pages jusqu'à 404 - PLUS DE LIMITE 10 PAGES"""
+        all_biens = []
+        page = 1
+        
+        print(f"[V15] Scraping exhaustif démarré...")
+        
+        while True:
+            url = self.BASE_URL if page == 1 else f"{self.BASE_URL}page/{page}/"
+            
+            try:
+                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    if resp.status != 200:
+                        break
+                    html = resp.read().decode('utf-8')
+                
+                biens_page = self._extract_from_listing(html)
+                
+                if not biens_page:
+                    print(f"[V15] Page {page}: FIN PAGINATION")
+                    break
+                
+                all_biens.extend(biens_page)
+                print(f"[V15] Page {page}: {len(biens_page)} biens ({len(all_biens)} total)")
+                
+                page += 1
+                if page > 50:  # Sécurité
+                    break
+                    
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    print(f"[V15] Page {page}: 404 FIN")
+                break
+            except Exception as e:
+                print(f"[V15] Erreur page {page}: {e}")
+                break
+        
+        self.cache = all_biens
+        self.last_sync = datetime.now().isoformat()
+        print(f"[V15] ✅ {len(all_biens)} biens indexés")
+        return all_biens
+    
+    def _extract_from_listing(self, html):
+        """Extrait biens depuis page liste"""
+        biens = []
+        refs = re.findall(r'Ref\.\s*(\d{5})', html)
+        prix_matches = re.findall(r'Prix\s*:\s*([\d\s]+)\s*€', html)
+        urls = re.findall(r'href="(https://www\.icidordogne\.fr/immobilier/[a-z0-9\-]+/)"', html)
+        urls = list(dict.fromkeys([u for u in urls if '/page/' not in u and '/feed/' not in u]))
+        surfaces = re.findall(r'Surface\s*:\s*(\d+)m', html)
+        
+        for i, ref in enumerate(refs):
+            bien = {'ref': ref}
+            if i < len(prix_matches):
+                try:
+                    bien['prix'] = int(prix_matches[i].replace(' ', '').replace('\xa0', ''))
+                except:
+                    pass
+            if i < len(urls):
+                bien['url'] = urls[i]
+            if i < len(surfaces):
+                try:
+                    bien['surface'] = int(surfaces[i])
+                except:
+                    pass
+            if bien.get('ref') and bien.get('prix'):
+                biens.append(bien)
+        return biens
+    
+    def find_by_prix_exact(self, prix):
+        """Prix EXACT - tolérance 0€"""
+        resultats = [b for b in self.cache if b.get('prix') == prix]
+        if not resultats:
+            print(f"[V15] Prix {prix}€ non trouvé - SCRAPING D'URGENCE")
+            self.scrape_all_pages()
+            resultats = [b for b in self.cache if b.get('prix') == prix]
+        return resultats
+
+
+class MatchingEngineV15:
+    """Moteur matching V15 - Algorithme LUDO"""
+    
+    BOARD_BIENS = "6249623e53c07a131c916e59"
+    BOARD_VENTES = "57b2d3e7d3cc8d150eeebddf"
+    
+    def __init__(self):
+        self.scraper = ScraperV15()
+        print("[V15] Init MatchingEngine...")
+        self.scraper.scrape_all_pages()
+    
+    def match_prospect(self, prix, surface=None, ville_bien=None):
+        """Matching LUDO: Prix exact → Surface → Ville → Trello"""
+        result = {'success': False, 'bien_site': None, 'bien_trello': None, 'error': None}
+        
+        print(f"\n[V15] === MATCHING {prix}€ ===")
+        
+        # PHASE 1: PRIX EXACT
+        biens = self.scraper.find_by_prix_exact(prix)
+        if not biens:
+            result['error'] = f"Aucun bien à {prix}€"
+            return result
+        
+        print(f"[V15] ✅ {len(biens)} bien(s) à {prix}€")
+        
+        # PHASE 2: TRI
+        if len(biens) > 1 and surface:
+            filtered = [b for b in biens if b.get('surface') and abs(b['surface'] - surface) <= 5]
+            if filtered:
+                biens = filtered
+        
+        if len(biens) > 1 and ville_bien:
+            filtered = [b for b in biens if b.get('ville') and ville_bien.lower() in b['ville'].lower()]
+            if filtered:
+                biens = filtered
+        
+        bien_site = biens[0]
+        result['bien_site'] = bien_site
+        print(f"[V15] 🎯 REF {bien_site.get('ref')}")
+        
+        # PHASE 3: TRELLO
+        ref = bien_site.get('ref')
+        url_site = bien_site.get('url')
+        trello_card = self._find_trello(ref, url_site)
+        
+        if trello_card:
+            result['bien_trello'] = trello_card
+            result['success'] = True
+        else:
+            result['error'] = f"REF {ref} non trouvée Trello"
+        
+        return result
+    
+    def _find_trello(self, ref, url_site=None):
+        """Cherche Trello: REF titre → URL desc → Global"""
+        # Priorité 1: REF dans titre
+        for board_id in [self.BOARD_BIENS, self.BOARD_VENTES]:
+            try:
+                url = f"https://api.trello.com/1/boards/{board_id}/cards?key={TRELLO_KEY}&token={TRELLO_TOKEN}&fields=name,desc,shortUrl"
+                req = urllib.request.Request(url)
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    cards = json.loads(resp.read().decode())
+                for card in cards:
+                    if ref in card.get('name', ''):
+                        return {'name': card['name'], 'url': card['shortUrl']}
+            except:
+                pass
+        
+        # Priorité 2: URL dans desc
+        if url_site:
+            slug = url_site.rstrip('/').split('/')[-1]
+            for board_id in [self.BOARD_BIENS, self.BOARD_VENTES]:
+                try:
+                    url = f"https://api.trello.com/1/boards/{board_id}/cards?key={TRELLO_KEY}&token={TRELLO_TOKEN}&fields=name,desc,shortUrl"
+                    req = urllib.request.Request(url)
+                    with urllib.request.urlopen(req, timeout=10) as resp:
+                        cards = json.loads(resp.read().decode())
+                    for card in cards:
+                        if slug in card.get('desc', '').lower():
+                            return {'name': card['name'], 'url': card['shortUrl']}
+                except:
+                    pass
+        
+        # Priorité 3: Global
+        try:
+            url = f"https://api.trello.com/1/search?query={ref}&key={TRELLO_KEY}&token={TRELLO_TOKEN}&modelTypes=cards&cards_limit=3"
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode())
+            if data.get('cards'):
+                c = data['cards'][0]
+                return {'name': c.get('name'), 'url': c.get('shortUrl')}
+        except:
+            pass
+        
+        return None
+    
+    def sync(self):
+        """Force sync cache"""
+        return self.scraper.scrape_all_pages()
+
+
+# Instance globale V15
+_matching_v15 = None
+
+def get_matching_v15():
+    """Singleton MatchingEngineV15"""
+    global _matching_v15
+    if _matching_v15 is None:
+        _matching_v15 = MatchingEngineV15()
+    return _matching_v15
+
+# ============================================================================
+# FIN MODULE V15
+# ============================================================================
+
 def lire_fichier(chemin):
     try:
         with open(chemin, 'r', encoding='utf-8') as f:
@@ -1329,18 +1543,59 @@ def envoyer_email_alerte_agence_sdr(prospect):
 
 def workflow_sdr_complet(prospect_data):
     """
-    Workflow SDR complet :
+    Workflow SDR V15 complet :
+    0. MATCHING V15 (identifier bien + proprio)
     1. Créer carte Trello
     2. Envoyer EMAIL 1 (remerciement)
     3. Envoyer EMAIL 3 (alerte agence)
-    
-    EMAIL 2 (confirmation RDV) envoyé plus tard quand RDV défini
     """
     resultats = {
+        "matching_v15": {"ok": False, "ref": None, "proprio": None},
         "trello": {"ok": False, "url": None},
         "email_remerciement": {"ok": False, "error": None},
         "email_alerte": {"ok": False, "error": None}
     }
+    
+    # 0. MATCHING V15 - Identifier le bien et le proprio
+    try:
+        prix = prospect_data.get('bien_prix')
+        if prix:
+            # Nettoyer le prix
+            if isinstance(prix, str):
+                prix = int(prix.replace('€', '').replace(' ', '').replace('\xa0', '').strip())
+            
+            surface = prospect_data.get('bien_surface')
+            if surface and isinstance(surface, str):
+                surface = int(surface.replace('m²', '').replace('m2', '').strip())
+            
+            print(f"[SDR V15] Matching pour prix {prix}€, surface {surface}m²")
+            
+            engine = get_matching_v15()
+            match_result = engine.match_prospect(prix=prix, surface=surface)
+            
+            if match_result['success']:
+                bien_site = match_result['bien_site']
+                bien_trello = match_result['bien_trello']
+                
+                # Enrichir prospect_data
+                prospect_data['bien_ref'] = bien_site.get('ref')
+                prospect_data['site_url'] = bien_site.get('url')
+                prospect_data['proprio_nom'] = bien_trello.get('name', '').split(' - ')[0] if bien_trello else None
+                prospect_data['trello_biens_url'] = bien_trello.get('url') if bien_trello else None
+                
+                resultats["matching_v15"] = {
+                    "ok": True, 
+                    "ref": bien_site.get('ref'),
+                    "proprio": prospect_data.get('proprio_nom'),
+                    "trello_url": prospect_data.get('trello_biens_url')
+                }
+                print(f"[SDR V15] Match: REF {bien_site.get('ref')} -> {prospect_data.get('proprio_nom')}")
+            else:
+                print(f"[SDR V15] Pas de match: {match_result.get('error')}")
+                resultats["matching_v15"]["error"] = match_result.get('error')
+    except Exception as e:
+        print(f"[SDR V15] Erreur matching: {e}")
+        resultats["matching_v15"]["error"] = str(e)
     
     # 1. Carte Trello
     card_id, card_url = creer_carte_trello_acquereur_sdr(prospect_data)
@@ -1348,7 +1603,7 @@ def workflow_sdr_complet(prospect_data):
         resultats["trello"] = {"ok": True, "url": card_url}
         prospect_data['trello_acquereur_url'] = card_url
     
-    # 2. Email remerciement (si SDR_AUTO_EMAILS activé)
+    # 2. Email remerciement (si SDR_AUTO_EMAILS actif)
     if SDR_AUTO_EMAILS:
         ok, err = envoyer_email_remerciement_sdr(prospect_data)
         resultats["email_remerciement"] = {"ok": ok, "error": err if not ok else None}
@@ -1357,7 +1612,7 @@ def workflow_sdr_complet(prospect_data):
         ok, err = envoyer_email_alerte_agence_sdr(prospect_data)
         resultats["email_alerte"] = {"ok": ok, "error": err if not ok else None}
     else:
-        print("[SDR] Emails désactivés (SDR_AUTO_EMAILS=false)")
+        print("[SDR] Emails desactives (SDR_AUTO_EMAILS=false)")
         resultats["email_remerciement"] = {"ok": False, "error": "SDR_AUTO_EMAILS=false"}
         resultats["email_alerte"] = {"ok": False, "error": "SDR_AUTO_EMAILS=false"}
     
@@ -1631,6 +1886,43 @@ class AxiHandler(BaseHTTPRequestHandler):
             self.wfile.write(MEMORY_CONTENT.encode())
         
         # === STATUS ET ENDPOINTS VEILLES ===
+        # ============================================================
+        # ENDPOINT V15: SYNC SITE
+        # ============================================================
+        elif path == '/sync-site':
+            try:
+                engine = get_matching_v15()
+                count = engine.sync()
+                response = {
+                    "success": True,
+                    "message": f"Cache site synchronise: {count} biens indexes",
+                    "count": count,
+                    "last_sync": engine.scraper.last_sync
+                }
+                self._envoyer_json(response)
+            except Exception as e:
+                self._envoyer_json({"success": False, "error": str(e)})
+        
+        # ============================================================
+        # ENDPOINT V15: TEST MATCHING
+        # ============================================================
+        elif path == '/match-test':
+            try:
+                # Parser query params
+                params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                prix = int(params.get('prix', [0])[0])
+                surface = int(params.get('surface', [0])[0]) if params.get('surface') else None
+                
+                if not prix:
+                    self._envoyer_json({"error": "Parametre 'prix' requis"})
+                    return
+                
+                engine = get_matching_v15()
+                result = engine.match_prospect(prix=prix, surface=surface)
+                self._envoyer_json(result)
+            except Exception as e:
+                self._envoyer_json({"error": str(e)})
+        
         elif path == '/status' or path == '/':
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
