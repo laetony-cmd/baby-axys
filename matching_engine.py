@@ -1,5 +1,5 @@
 """
-MATCHING ENGINE V13.1 FORTERESSE - ICI DORDOGNE
+MATCHING ENGINE V14.8 MATCHING GARANTI - ICI DORDOGNE
 ===============================================
 Module séparé pour le matching Bien/Propriétaire
 - PostgreSQL cache (biens_cache)
@@ -397,7 +397,15 @@ def extraire_donnees_carte(card):
         site_match = re.search(r'(?:Lien site|Site)\s*:\s*\[?(https?://[^\s\]]+icidordogne\.fr[^\s\]]*)', desc, re.IGNORECASE)
         if site_match:
             site_url = site_match.group(1).strip()
-            print(f"[SYNC] Site URL trouvé (description): {site_url}")
+            print(f"[SYNC] Site URL trouvé (description pattern 1): {site_url}")
+    
+    # Méthode 3: Chercher N'IMPORTE QUEL lien icidordogne.fr (Markdown ou texte brut)
+    # RÈGLE D'OR V14.8: Un prospect qui contacte = bien FORCÉMENT sur notre site
+    if not site_url:
+        site_match = re.search(r'https?://(?:www\.)?icidordogne\.fr/[^\s\)\]"<>]*', desc)
+        if site_match:
+            site_url = site_match.group(0).strip().rstrip(')')
+            print(f"[SYNC] Site URL trouvé (format libre): {site_url}")
     
     refs = list(set(refs))
     
