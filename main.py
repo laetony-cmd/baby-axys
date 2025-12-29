@@ -1291,6 +1291,26 @@ def creer_carte_trello_acquereur_sdr(prospect, conversation=None):
                 except Exception as e:
                     print(f"[SDR WARNING] Échec assignation Julie: {e}")
                 
+                
+                # V15.1: Échéance automatique (J+0 à 18h)
+                try:
+                    from datetime import datetime, timedelta
+                    # Échéance = aujourd'hui 18h00
+                    now = datetime.now()
+                    due_date = now.replace(hour=18, minute=0, second=0, microsecond=0)
+                    # Si déjà passé 18h, mettre demain 18h
+                    if now.hour >= 18:
+                        due_date = due_date + timedelta(days=1)
+                    due_iso = due_date.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+                    
+                    due_url = f"https://api.trello.com/1/cards/{card_id}?key={TRELLO_KEY}&token={TRELLO_TOKEN}"
+                    due_data = urllib.parse.urlencode({"due": due_iso}).encode()
+                    due_req = urllib.request.Request(due_url, data=due_data, method='PUT')
+                    urllib.request.urlopen(due_req, timeout=10)
+                    print(f"[SDR] Échéance définie: {due_iso}")
+                except Exception as e:
+                    print(f"[SDR WARNING] Échec définition échéance: {e}")
+
                 # FORTERESSE V14.5: Mise à jour description APRÈS création 
                 # (contourne l'automatisation Butler qui écrase la description)
                 try:
