@@ -1,6 +1,6 @@
-# VERSION: V14.8 - MATCHING GARANTI - {"timestamp": "2025-12-29T06:00:00"}
+# VERSION: V14.8 - MATCHING GARANTI - {"timestamp": "2025-12-29T05:30:00"}
 """
-AXI ICI DORDOGNE V14.8 MATCHING GARANTI - Service complet Railway
+AXI ICI DORDOGNE V14.9 PRIORITÉS CLAIRES - Service complet Railway
 ======================================================
 - Chat Axi avec Claude API + recherche web
 - Interface web conversation (/, /trio)
@@ -1636,7 +1636,7 @@ class AxiHandler(BaseHTTPRequestHandler):
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             status = {
-                "service": "Axi ICI Dordogne V14.8 MATCHING GARANTI",
+                "service": "Axi ICI Dordogne V14.9 PRIORITÉS CLAIRES",
                 "status": "ok",
                 "features": ["Chat", "DPE", "Concurrence", "DVF"],
                 "endpoints": ["/", "/trio", "/chat", "/briefing", "/memory", "/status",
@@ -2145,7 +2145,7 @@ class AxiHandler(BaseHTTPRequestHandler):
                     "qualification": {}
                 }
                 # --- FIN NORMALISATION ROBUSTE ---
-                # --- DÉBUT CÂBLAGE MATCHING V14.8 ---
+                # --- DÉBUT CÂBLAGE MATCHING V14.9 ---
                 # ══════════════════════════════════════════════════════════════
                 # RÈGLE D'OR: Si prospect contacte = bien EXISTE sur site/Trello
                 # Le matching DOIT réussir. Sinon = bug de notre côté.
@@ -2192,7 +2192,7 @@ class AxiHandler(BaseHTTPRequestHandler):
                     print("[SDR MATCHING] ⚠️ Matching Engine non chargé - carte générique")
                     prospect_data['bien_identifie'] = False
                     prospect_data['match_score'] = 0
-                # --- FIN CÂBLAGE MATCHING V14.8 ---
+                # --- FIN CÂBLAGE MATCHING V14.9 ---
 
                 
                 # Génération token et URL chat
@@ -2551,7 +2551,7 @@ def main():
     
     print(f"""
 â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
-â•‘         AXI ICI DORDOGNE V14.8 MATCHING GARANTI                        â•‘
+â•‘         AXI ICI DORDOGNE V14.9 PRIORITÉS CLAIRES                        â•‘
 â•‘         Chat + Veilles + DVF                               â•‘
 â• â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•£
 â•‘  Endpoints:                                                â•‘
