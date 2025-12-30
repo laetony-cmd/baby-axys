@@ -60,7 +60,7 @@ except:
 
 # Gmail SMTP
 GMAIL_USER = "u5050786429@gmail.com"
-GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
+GMAIL_APP_PASSWORD = "izemquwmmqjdasrk"
 EMAIL_TO = "agence@icidordogne.fr"
 EMAIL_CC = "laetony@gmail.com"
 
