@@ -1485,7 +1485,10 @@ Sois enthousiaste mais honnête sur les caractéristiques du bien."""
     return prompt
 
 def generer_page_visite_virtuelle(bien_id):
-    """Génère la page HTML split-view visite virtuelle + Vapi"""
+    """Génère la page HTML split-view visite virtuelle + Vapi
+    
+    Version 2.0 - Fix CDN + Status-log visible (recommandation Lumo)
+    """
     
     # 1. Charger les données du bien
     biens = charger_biens_visite()
@@ -1515,7 +1518,7 @@ def generer_page_visite_virtuelle(bien_id):
     prix_fmt = f"{bien.get('prix', 0):,}".replace(",", " ")
     titre = f"{bien.get('type_bien', 'Bien')} - {bien.get('commune', '')}"
     
-    # 6. HTML complet
+    # 6. HTML complet - CDN unpkg (recommandation Lumo) + status-log visible
     html = f'''<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -1523,7 +1526,7 @@ def generer_page_visite_virtuelle(bien_id):
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Visite Privée - {titre} - ICI DORDOGNE</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@vapi-ai/web@latest/dist/vapi.umd.min.js"></script>
+    <script src="https://unpkg.com/@vapi-ai/web/dist/vapi.min.js"></script>
     <style>
         body, html {{ height: 100%; margin: 0; overflow: hidden; font-family: system-ui, sans-serif; }}
         .split-container {{ display: flex; height: 100vh; }}
@@ -1543,6 +1546,7 @@ def generer_page_visite_virtuelle(bien_id):
         .piece-btn {{ transition: all 0.2s; }}
         .piece-btn:hover {{ background: #f3f4f6; border-color: #8B1538; }}
         .piece-btn.active {{ background: #8B1538; color: white; border-color: #8B1538; }}
+        .vapi-btn-disabled {{ background-color: #94a3b8 !important; cursor: not-allowed; }}
     </style>
 </head>
 <body class="bg-gray-900">
@@ -1574,12 +1578,15 @@ def generer_page_visite_virtuelle(bien_id):
                         <span class="text-4xl">🤖</span>
                     </div>
                 </div>
-                <p id="agent-status" class="text-gray-600 font-medium mb-6">Prêt à vous accompagner</p>
+                
+                <!-- Status Log Visible (recommandation Lumo) -->
+                <p id="status-log" class="text-xs text-gray-500 font-mono mb-2">Chargement...</p>
+                <p id="agent-status" class="text-gray-600 font-medium mb-6">Initialisation...</p>
 
                 <!-- Bouton principal -->
-                <button id="toggle-call-btn" onclick="toggleCall()" class="w-full max-w-xs px-6 py-4 bg-[#8B1538] text-white rounded-xl font-bold shadow-lg hover:bg-[#6d1029] transition-all flex items-center justify-center gap-3">
-                    <span id="btn-icon" class="text-xl">🎙️</span>
-                    <span id="btn-text">Démarrer la visite vocale</span>
+                <button id="toggle-call-btn" class="w-full max-w-xs px-6 py-4 bg-[#8B1538] text-white rounded-xl font-bold shadow-lg hover:bg-[#6d1029] transition-all flex items-center justify-center gap-3 vapi-btn-disabled" disabled>
+                    <span id="btn-icon" class="text-xl">⏳</span>
+                    <span id="btn-text">Chargement...</span>
                 </button>
 
                 <!-- Questions suggérées -->
@@ -1620,75 +1627,137 @@ def generer_page_visite_virtuelle(bien_id):
         let vapi = null;
         let isCallActive = false;
 
-        // === INIT ===
-        document.addEventListener('DOMContentLoaded', function() {{
-            if (VAPI_PUBLIC_KEY && window.Vapi) {{
-                vapi = new window.Vapi(VAPI_PUBLIC_KEY);
-                setupVapiListeners();
-            }} else {{
-                console.warn('Vapi non configuré - clé manquante');
-                document.getElementById('agent-status').textContent = "Service vocal indisponible";
+        // === ÉLÉMENTS DOM ===
+        const btn = document.getElementById('toggle-call-btn');
+        const btnText = document.getElementById('btn-text');
+        const btnIcon = document.getElementById('btn-icon');
+        const statusLog = document.getElementById('status-log');
+        const agentStatus = document.getElementById('agent-status');
+        const statusIndicator = document.getElementById('status-indicator');
+
+        // === INIT (window.addEventListener recommandé par Lumo) ===
+        window.addEventListener('load', function() {{
+            // Vérifier si le SDK Vapi est chargé
+            if (!window.Vapi) {{
+                statusLog.innerText = "❌ SDK Vapi non chargé";
+                statusLog.style.color = "red";
+                agentStatus.textContent = "Service vocal indisponible";
+                return;
             }}
+
+            // Vérifier si les clés sont configurées
+            if (!VAPI_PUBLIC_KEY || !VAPI_ASSISTANT_ID) {{
+                statusLog.innerText = "❌ Clés Vapi non configurées";
+                statusLog.style.color = "red";
+                agentStatus.textContent = "Configuration manquante";
+                return;
+            }}
+
+            try {{
+                // Créer l'instance Vapi
+                vapi = new window.Vapi(VAPI_PUBLIC_KEY);
+                
+                // Succès
+                statusLog.innerText = "✅ Système vocal prêt";
+                statusLog.style.color = "green";
+                agentStatus.textContent = "Prêt à vous accompagner";
+                
+                // Activer le bouton
+                btn.disabled = false;
+                btn.classList.remove('vapi-btn-disabled');
+                btnText.textContent = "Démarrer la visite vocale";
+                btnIcon.textContent = "🎙️";
+                
+                // Setup des listeners
+                setupVapiListeners();
+                
+            }} catch (err) {{
+                console.error("Init error:", err);
+                statusLog.innerText = "❌ Erreur Init: " + err.message;
+                statusLog.style.color = "red";
+                agentStatus.textContent = "Erreur d'initialisation";
+            }}
+            
+            // Render les pièces
             renderPieces();
         }});
 
         function setupVapiListeners() {{
             vapi.on('call-start', () => {{
                 isCallActive = true;
+                statusLog.innerText = "🔊 Appel en cours";
+                statusLog.style.color = "green";
                 updateUI(true);
             }});
             
             vapi.on('call-end', () => {{
                 isCallActive = false;
+                statusLog.innerText = "✅ Appel terminé";
+                statusLog.style.color = "gray";
                 updateUI(false);
             }});
             
             vapi.on('speech-start', () => {{
                 document.getElementById('avatar-ring').classList.add('pulse-ring');
                 document.getElementById('avatar-ring').style.background = '#dcfce7';
-                document.getElementById('agent-status').textContent = "Je vous parle...";
+                agentStatus.textContent = "Je vous parle...";
             }});
             
             vapi.on('speech-end', () => {{
                 document.getElementById('avatar-ring').classList.remove('pulse-ring');
                 document.getElementById('avatar-ring').style.background = '#f3f4f6';
-                document.getElementById('agent-status').textContent = "Je vous écoute...";
+                agentStatus.textContent = "Je vous écoute...";
             }});
             
             vapi.on('error', (e) => {{
                 console.error('Vapi error:', e);
-                document.getElementById('agent-status').textContent = "Erreur - Réessayez";
+                statusLog.innerText = "⚠️ Erreur: " + (e.error?.message || e.message || JSON.stringify(e));
+                statusLog.style.color = "red";
+                agentStatus.textContent = "Erreur - Réessayez";
+                isCallActive = false;
+                updateUI(false);
             }});
         }}
 
         // === ACTIONS ===
         function toggleCall() {{
             if (!vapi) {{
-                alert('Service vocal non disponible. Appelez le 05 53 13 33 33');
+                statusLog.innerText = "❌ Vapi non initialisé";
+                statusLog.style.color = "red";
                 return;
             }}
             
             if (isCallActive) {{
                 vapi.stop();
             }} else {{
-                document.getElementById('agent-status').textContent = "Connexion...";
-                document.getElementById('toggle-call-btn').disabled = true;
+                statusLog.innerText = "📞 Connexion en cours...";
+                statusLog.style.color = "orange";
+                agentStatus.textContent = "Connexion...";
+                btn.disabled = true;
                 
-                vapi.start(VAPI_ASSISTANT_ID, {{
+                const assistantOverrides = {{
                     model: {{
                         messages: [{{ role: "system", content: SYSTEM_PROMPT }}]
                     }}
-                }}).catch(err => {{
-                    console.error('Start error:', err);
-                    document.getElementById('agent-status').textContent = "Erreur micro - Vérifiez les permissions";
-                    document.getElementById('toggle-call-btn').disabled = false;
-                }});
+                }};
+                
+                vapi.start(VAPI_ASSISTANT_ID, assistantOverrides)
+                    .catch(err => {{
+                        console.error('Start error:', err);
+                        statusLog.innerText = "❌ Échec: " + (err.message || "Vérifiez le micro");
+                        statusLog.style.color = "red";
+                        agentStatus.textContent = "Échec connexion";
+                        btn.disabled = false;
+                    }});
             }}
         }}
+        
+        // Ajouter l'event listener au bouton
+        btn.addEventListener('click', toggleCall);
 
-        function selectRoom(roomName, btn) {{
+        function selectRoom(roomName, roomBtn) {{
             document.querySelectorAll('.piece-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
+            roomBtn.classList.add('active');
             
             if (isCallActive && vapi) {{
                 vapi.send({{
@@ -1698,9 +1767,9 @@ def generer_page_visite_virtuelle(bien_id):
                         content: "L'utilisateur indique qu'il visite maintenant: " + roomName + ". Adapte tes réponses à cette pièce."
                     }}
                 }});
-                document.getElementById('agent-status').textContent = "📍 " + roomName;
+                agentStatus.textContent = "📍 " + roomName;
                 setTimeout(() => {{
-                    if (isCallActive) document.getElementById('agent-status').textContent = "Je vous écoute...";
+                    if (isCallActive) agentStatus.textContent = "Je vous écoute...";
                 }}, 2000);
             }}
         }}
@@ -1721,11 +1790,6 @@ def generer_page_visite_virtuelle(bien_id):
         }}
 
         function updateUI(active) {{
-            const btn = document.getElementById('toggle-call-btn');
-            const btnText = document.getElementById('btn-text');
-            const btnIcon = document.getElementById('btn-icon');
-            const status = document.getElementById('status-indicator');
-            
             btn.disabled = false;
             
             if (active) {{
@@ -1733,17 +1797,17 @@ def generer_page_visite_virtuelle(bien_id):
                 btn.classList.add('bg-red-600', 'hover:bg-red-700');
                 btnText.textContent = "Raccrocher";
                 btnIcon.textContent = "📞";
-                status.classList.remove('bg-gray-300');
-                status.classList.add('bg-green-500');
-                document.getElementById('agent-status').textContent = "Je vous écoute...";
+                statusIndicator.classList.remove('bg-gray-300');
+                statusIndicator.classList.add('bg-green-500');
+                agentStatus.textContent = "Je vous écoute...";
             }} else {{
                 btn.classList.remove('bg-red-600', 'hover:bg-red-700');
                 btn.classList.add('bg-[#8B1538]', 'hover:bg-[#6d1029]');
                 btnText.textContent = "Démarrer la visite vocale";
                 btnIcon.textContent = "🎙️";
-                status.classList.remove('bg-green-500');
-                status.classList.add('bg-gray-300');
-                document.getElementById('agent-status').textContent = "Prêt à vous accompagner";
+                statusIndicator.classList.remove('bg-green-500');
+                statusIndicator.classList.add('bg-gray-300');
+                agentStatus.textContent = "Prêt à vous accompagner";
                 document.getElementById('avatar-ring').classList.remove('pulse-ring');
                 document.getElementById('avatar-ring').style.background = '#f3f4f6';
             }}
