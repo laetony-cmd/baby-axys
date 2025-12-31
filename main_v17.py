@@ -1487,7 +1487,9 @@ Sois enthousiaste mais honnête sur les caractéristiques du bien."""
 def generer_page_visite_virtuelle(bien_id):
     """Génère la page HTML split-view visite virtuelle + Vapi
     
-    Version 2.0 - Fix CDN + Status-log visible (recommandation Lumo)
+    Version 3.0 - Utilise l'approche officielle Vapi Script Tag
+    CDN: https://cdn.jsdelivr.net/gh/VapiAI/html-script-tag@latest/dist/assets/index.js
+    API: window.vapiSDK.run()
     """
     
     # 1. Charger les données du bien
@@ -1507,7 +1509,7 @@ def generer_page_visite_virtuelle(bien_id):
     vapi_public_key = os.environ.get('VAPI_PUBLIC_KEY', '')
     vapi_assistant_id = os.environ.get('VAPI_ASSISTANT_ID', '')
     
-    # 3. Générer le prompt
+    # 3. Générer le prompt système
     system_prompt = generer_prompt_vapi(bien)
     system_prompt_escaped = json.dumps(system_prompt, ensure_ascii=False)
     
@@ -1518,7 +1520,7 @@ def generer_page_visite_virtuelle(bien_id):
     prix_fmt = f"{bien.get('prix', 0):,}".replace(",", " ")
     titre = f"{bien.get('type_bien', 'Bien')} - {bien.get('commune', '')}"
     
-    # 6. HTML complet - CDN unpkg (recommandation Lumo) + status-log visible
+    # 6. HTML avec approche officielle Vapi Script Tag
     html = f'''<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -1526,7 +1528,6 @@ def generer_page_visite_virtuelle(bien_id):
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Visite Privée - {titre} - ICI DORDOGNE</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/@vapi-ai/web/dist/vapi.min.js"></script>
     <style>
         body, html {{ height: 100%; margin: 0; overflow: hidden; font-family: system-ui, sans-serif; }}
         .split-container {{ display: flex; height: 100vh; }}
@@ -1546,7 +1547,13 @@ def generer_page_visite_virtuelle(bien_id):
         .piece-btn {{ transition: all 0.2s; }}
         .piece-btn:hover {{ background: #f3f4f6; border-color: #8B1538; }}
         .piece-btn.active {{ background: #8B1538; color: white; border-color: #8B1538; }}
-        .vapi-btn-disabled {{ background-color: #94a3b8 !important; cursor: not-allowed; }}
+        .vapi-btn {{ 
+            background: linear-gradient(135deg, #8B1538 0%, #6d1029 100%);
+            transition: all 0.3s ease;
+        }}
+        .vapi-btn:hover {{ transform: scale(1.02); box-shadow: 0 8px 25px rgba(139, 21, 56, 0.3); }}
+        .vapi-btn:disabled {{ background: #94a3b8; cursor: not-allowed; transform: none; }}
+        .vapi-btn.active {{ background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); }}
     </style>
 </head>
 <body class="bg-gray-900">
@@ -1579,12 +1586,12 @@ def generer_page_visite_virtuelle(bien_id):
                     </div>
                 </div>
                 
-                <!-- Status Log Visible (recommandation Lumo) -->
-                <p id="status-log" class="text-xs text-gray-500 font-mono mb-2">Chargement...</p>
+                <!-- Status Log -->
+                <p id="status-log" class="text-xs text-gray-500 font-mono mb-2">Chargement SDK Vapi...</p>
                 <p id="agent-status" class="text-gray-600 font-medium mb-6">Initialisation...</p>
 
                 <!-- Bouton principal -->
-                <button id="toggle-call-btn" class="w-full max-w-xs px-6 py-4 bg-[#8B1538] text-white rounded-xl font-bold shadow-lg hover:bg-[#6d1029] transition-all flex items-center justify-center gap-3 vapi-btn-disabled" disabled>
+                <button id="vapi-btn" class="vapi-btn w-full max-w-xs px-6 py-4 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-3" disabled>
                     <span id="btn-icon" class="text-xl">⏳</span>
                     <span id="btn-text">Chargement...</span>
                 </button>
@@ -1616,209 +1623,183 @@ def generer_page_visite_virtuelle(bien_id):
         </div>
     </div>
 
+    <!-- VAPI SCRIPT TAG OFFICIEL -->
     <script>
-        // === CONFIGURATION ===
+        // Configuration
         const VAPI_PUBLIC_KEY = "{vapi_public_key}";
         const VAPI_ASSISTANT_ID = "{vapi_assistant_id}";
         const SYSTEM_PROMPT = {system_prompt_escaped};
         const PIECES = {pieces_json};
 
-        // === STATE ===
-        let vapi = null;
-        let isCallActive = false;
-
-        // === ÉLÉMENTS DOM ===
-        const btn = document.getElementById('toggle-call-btn');
+        // Elements DOM
+        const btn = document.getElementById('vapi-btn');
         const btnText = document.getElementById('btn-text');
         const btnIcon = document.getElementById('btn-icon');
         const statusLog = document.getElementById('status-log');
         const agentStatus = document.getElementById('agent-status');
         const statusIndicator = document.getElementById('status-indicator');
+        const avatarRing = document.getElementById('avatar-ring');
 
-        // === INIT (window.addEventListener recommandé par Lumo) ===
-        window.addEventListener('load', function() {{
-            // Vérifier si le SDK Vapi est chargé
-            if (!window.Vapi) {{
-                statusLog.innerText = "❌ SDK Vapi non chargé";
-                statusLog.style.color = "red";
-                agentStatus.textContent = "Service vocal indisponible";
-                return;
-            }}
+        // State
+        let vapiInstance = null;
+        let isCallActive = false;
 
-            // Vérifier si les clés sont configurées
-            if (!VAPI_PUBLIC_KEY || !VAPI_ASSISTANT_ID) {{
-                statusLog.innerText = "❌ Clés Vapi non configurées";
-                statusLog.style.color = "red";
-                agentStatus.textContent = "Configuration manquante";
-                return;
-            }}
-
-            try {{
-                // Créer l'instance Vapi
-                vapi = new window.Vapi(VAPI_PUBLIC_KEY);
-                
-                // Succès
-                statusLog.innerText = "✅ Système vocal prêt";
-                statusLog.style.color = "green";
-                agentStatus.textContent = "Prêt à vous accompagner";
-                
-                // Activer le bouton
-                btn.disabled = false;
-                btn.classList.remove('vapi-btn-disabled');
-                btnText.textContent = "Démarrer la visite vocale";
-                btnIcon.textContent = "🎙️";
-                
-                // Setup des listeners
-                setupVapiListeners();
-                
-            }} catch (err) {{
-                console.error("Init error:", err);
-                statusLog.innerText = "❌ Erreur Init: " + err.message;
-                statusLog.style.color = "red";
-                agentStatus.textContent = "Erreur d'initialisation";
-            }}
-            
-            // Render les pièces
-            renderPieces();
-        }});
-
-        function setupVapiListeners() {{
-            vapi.on('call-start', () => {{
-                isCallActive = true;
-                statusLog.innerText = "🔊 Appel en cours";
-                statusLog.style.color = "green";
-                updateUI(true);
-            }});
-            
-            vapi.on('call-end', () => {{
-                isCallActive = false;
-                statusLog.innerText = "✅ Appel terminé";
-                statusLog.style.color = "gray";
-                updateUI(false);
-            }});
-            
-            vapi.on('speech-start', () => {{
-                document.getElementById('avatar-ring').classList.add('pulse-ring');
-                document.getElementById('avatar-ring').style.background = '#dcfce7';
-                agentStatus.textContent = "Je vous parle...";
-            }});
-            
-            vapi.on('speech-end', () => {{
-                document.getElementById('avatar-ring').classList.remove('pulse-ring');
-                document.getElementById('avatar-ring').style.background = '#f3f4f6';
-                agentStatus.textContent = "Je vous écoute...";
-            }});
-            
-            vapi.on('error', (e) => {{
-                console.error('Vapi error:', e);
-                statusLog.innerText = "⚠️ Erreur: " + (e.error?.message || e.message || JSON.stringify(e));
-                statusLog.style.color = "red";
-                agentStatus.textContent = "Erreur - Réessayez";
-                isCallActive = false;
-                updateUI(false);
-            }});
-        }}
-
-        // === ACTIONS ===
-        function toggleCall() {{
-            if (!vapi) {{
-                statusLog.innerText = "❌ Vapi non initialisé";
-                statusLog.style.color = "red";
-                return;
-            }}
-            
-            if (isCallActive) {{
-                vapi.stop();
-            }} else {{
-                statusLog.innerText = "📞 Connexion en cours...";
-                statusLog.style.color = "orange";
-                agentStatus.textContent = "Connexion...";
-                btn.disabled = true;
-                
-                const assistantOverrides = {{
-                    model: {{
-                        messages: [{{ role: "system", content: SYSTEM_PROMPT }}]
-                    }}
-                }};
-                
-                vapi.start(VAPI_ASSISTANT_ID, assistantOverrides)
-                    .catch(err => {{
-                        console.error('Start error:', err);
-                        statusLog.innerText = "❌ Échec: " + (err.message || "Vérifiez le micro");
-                        statusLog.style.color = "red";
-                        agentStatus.textContent = "Échec connexion";
-                        btn.disabled = false;
-                    }});
-            }}
-        }}
-        
-        // Ajouter l'event listener au bouton
-        btn.addEventListener('click', toggleCall);
-
-        function selectRoom(roomName, roomBtn) {{
-            document.querySelectorAll('.piece-btn').forEach(b => b.classList.remove('active'));
-            roomBtn.classList.add('active');
-            
-            if (isCallActive && vapi) {{
-                vapi.send({{
-                    type: "add-message",
-                    message: {{
-                        role: "system",
-                        content: "L'utilisateur indique qu'il visite maintenant: " + roomName + ". Adapte tes réponses à cette pièce."
-                    }}
-                }});
-                agentStatus.textContent = "📍 " + roomName;
-                setTimeout(() => {{
-                    if (isCallActive) agentStatus.textContent = "Je vous écoute...";
-                }}, 2000);
-            }}
-        }}
-
-        // === UI ===
+        // Render pièces
         function renderPieces() {{
             const container = document.getElementById('pieces-container');
             if (!PIECES || PIECES.length === 0) {{
                 container.innerHTML = '<span class="text-xs text-gray-400">Données non disponibles</span>';
                 return;
             }}
-            
             container.innerHTML = PIECES.map(p => 
-                `<button onclick="selectRoom('${{p.nom}}', this)" class="piece-btn px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs whitespace-nowrap hover:border-[#8B1538]">
+                `<button onclick="selectRoom('${{p.nom}}')" class="piece-btn px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs whitespace-nowrap">
                     ${{p.nom}}
                 </button>`
             ).join('');
         }}
 
-        function updateUI(active) {{
-            btn.disabled = false;
-            
-            if (active) {{
-                btn.classList.remove('bg-[#8B1538]', 'hover:bg-[#6d1029]');
-                btn.classList.add('bg-red-600', 'hover:bg-red-700');
-                btnText.textContent = "Raccrocher";
-                btnIcon.textContent = "📞";
-                statusIndicator.classList.remove('bg-gray-300');
-                statusIndicator.classList.add('bg-green-500');
-                agentStatus.textContent = "Je vous écoute...";
-            }} else {{
-                btn.classList.remove('bg-red-600', 'hover:bg-red-700');
-                btn.classList.add('bg-[#8B1538]', 'hover:bg-[#6d1029]');
-                btnText.textContent = "Démarrer la visite vocale";
-                btnIcon.textContent = "🎙️";
-                statusIndicator.classList.remove('bg-green-500');
-                statusIndicator.classList.add('bg-gray-300');
-                agentStatus.textContent = "Prêt à vous accompagner";
-                document.getElementById('avatar-ring').classList.remove('pulse-ring');
-                document.getElementById('avatar-ring').style.background = '#f3f4f6';
-            }}
+        function selectRoom(roomName) {{
+            document.querySelectorAll('.piece-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            agentStatus.textContent = "📍 " + roomName;
         }}
+
+        // Charger le SDK Vapi officiel
+        (function (d, t) {{
+            var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+            g.src = "https://cdn.jsdelivr.net/gh/VapiAI/html-script-tag@latest/dist/assets/index.js";
+            g.defer = true;
+            g.async = true;
+            s.parentNode.insertBefore(g, s);
+
+            g.onload = function () {{
+                statusLog.innerText = "✅ SDK Vapi chargé";
+                statusLog.style.color = "green";
+                
+                if (!window.vapiSDK) {{
+                    statusLog.innerText = "❌ window.vapiSDK non trouvé";
+                    statusLog.style.color = "red";
+                    return;
+                }}
+
+                try {{
+                    // Configuration du bouton Vapi (caché car on a notre propre UI)
+                    const buttonConfig = {{
+                        position: "bottom-right",
+                        offset: "40px",
+                        width: "50px",
+                        height: "50px",
+                        idle: {{ 
+                            color: "transparent",
+                            type: "round",
+                            icon: ""
+                        }},
+                        loading: {{ color: "transparent" }},
+                        active: {{ color: "transparent" }}
+                    }};
+
+                    // Assistant overrides avec notre prompt personnalisé
+                    const assistantOverrides = {{
+                        model: {{
+                            messages: [{{ role: "system", content: SYSTEM_PROMPT }}]
+                        }}
+                    }};
+
+                    // Initialiser Vapi SDK
+                    vapiInstance = window.vapiSDK.run({{
+                        apiKey: VAPI_PUBLIC_KEY,
+                        assistant: VAPI_ASSISTANT_ID,
+                        assistantOverrides: assistantOverrides,
+                        config: buttonConfig
+                    }});
+
+                    // UI prête
+                    agentStatus.textContent = "Prêt à vous accompagner";
+                    btn.disabled = false;
+                    btnText.textContent = "Démarrer la visite vocale";
+                    btnIcon.textContent = "🎙️";
+
+                    // Event listeners Vapi
+                    if (vapiInstance) {{
+                        vapiInstance.on('call-start', () => {{
+                            isCallActive = true;
+                            btn.classList.add('active');
+                            btnText.textContent = "Raccrocher";
+                            btnIcon.textContent = "📞";
+                            statusIndicator.classList.remove('bg-gray-300');
+                            statusIndicator.classList.add('bg-green-500');
+                            statusLog.innerText = "🔊 Appel en cours";
+                            agentStatus.textContent = "Je vous écoute...";
+                        }});
+
+                        vapiInstance.on('call-end', () => {{
+                            isCallActive = false;
+                            btn.classList.remove('active');
+                            btnText.textContent = "Démarrer la visite vocale";
+                            btnIcon.textContent = "🎙️";
+                            statusIndicator.classList.remove('bg-green-500');
+                            statusIndicator.classList.add('bg-gray-300');
+                            statusLog.innerText = "✅ Appel terminé";
+                            agentStatus.textContent = "Prêt à vous accompagner";
+                            avatarRing.classList.remove('pulse-ring');
+                            avatarRing.style.background = '#f3f4f6';
+                        }});
+
+                        vapiInstance.on('speech-start', () => {{
+                            avatarRing.classList.add('pulse-ring');
+                            avatarRing.style.background = '#dcfce7';
+                            agentStatus.textContent = "Je vous parle...";
+                        }});
+
+                        vapiInstance.on('speech-end', () => {{
+                            avatarRing.classList.remove('pulse-ring');
+                            avatarRing.style.background = '#f3f4f6';
+                            agentStatus.textContent = "Je vous écoute...";
+                        }});
+
+                        vapiInstance.on('error', (e) => {{
+                            console.error('Vapi error:', e);
+                            statusLog.innerText = "⚠️ " + (e.message || JSON.stringify(e));
+                            statusLog.style.color = "red";
+                        }});
+                    }}
+
+                }} catch (err) {{
+                    console.error("Init error:", err);
+                    statusLog.innerText = "❌ Erreur: " + err.message;
+                    statusLog.style.color = "red";
+                }}
+            }};
+
+            g.onerror = function() {{
+                statusLog.innerText = "❌ Échec chargement SDK";
+                statusLog.style.color = "red";
+            }};
+        }})(document, "script");
+
+        // Gestion du bouton
+        btn.addEventListener('click', function() {{
+            if (!vapiInstance) {{
+                statusLog.innerText = "❌ Vapi non initialisé";
+                return;
+            }}
+
+            if (isCallActive) {{
+                vapiInstance.stop();
+            }} else {{
+                statusLog.innerText = "📞 Connexion...";
+                statusLog.style.color = "orange";
+                vapiInstance.start();
+            }}
+        }});
+
+        // Init pièces
+        renderPieces();
     </script>
 </body>
 </html>'''
     
     return html
-
-
 # ============================================================
 # TEMPLATES EMAILS SDR
 # ============================================================
