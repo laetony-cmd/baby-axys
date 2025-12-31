@@ -1421,9 +1421,19 @@ BIENS_VISITE_FILE = "biens_visite.json"
 def charger_biens_visite():
     """Charge les données des biens pour la visite virtuelle"""
     try:
-        with open(BIENS_VISITE_FILE, 'r', encoding='utf-8') as f:
+        # Chercher le fichier dans le même répertoire que le script
+        import os
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        filepath = os.path.join(script_dir, BIENS_VISITE_FILE)
+        
+        # Fallback sur le répertoire courant
+        if not os.path.exists(filepath):
+            filepath = BIENS_VISITE_FILE
+        
+        with open(filepath, 'r', encoding='utf-8') as f:
             return json.load(f)
-    except:
+    except Exception as e:
+        print(f"[VISITE] Erreur chargement biens_visite.json: {e}")
         return {}
 
 def generer_prompt_vapi(bien):
