@@ -1,0 +1,37 @@
+{
+  "41789": {
+    "reference": "41789",
+    "type_bien": "Maison de plain-pied",
+    "commune": "Manzac-sur-Vern",
+    "prix": 198000,
+    "surface": 99,
+    "terrain": 1876,
+    "chambres": 3,
+    "sdb": 1,
+    "dpe": "D",
+    "dpe_valeur": "192",
+    "chauffage": "Pompe à chaleur air/air + poêle à bois",
+    "taxe_fonciere": 850,
+    "localisation": "Village calme à 15 min de Périgueux, proche commodités",
+    "url_visite": "https://envisite.net/vtour/fr/p73bwt/frame",
+    "url_site": "https://www.icidordogne.fr/immobilier/maison-manzac-sur-vern-41789/",
+    "pieces": [
+      {"nom": "Pièce de vie", "surface": 42, "description": "Salon/séjour ouvert sur cuisine équipée"},
+      {"nom": "Cuisine", "surface": 12, "description": "Équipée et aménagée, ouverte sur séjour"},
+      {"nom": "Chambre 1", "surface": 14, "description": "Chambre parentale avec placard"},
+      {"nom": "Chambre 2", "surface": 12, "description": "Avec vue sur jardin"},
+      {"nom": "Chambre 3", "surface": 10, "description": "Bureau ou chambre d'appoint"},
+      {"nom": "Salle de bains", "surface": 6, "description": "Baignoire, meuble vasque"},
+      {"nom": "WC", "surface": 2, "description": "Séparé"},
+      {"nom": "Garage", "surface": 20, "description": "Attenant à la maison"}
+    ],
+    "points_forts": [
+      "Plain-pied sans travaux",
+      "Pompe à chaleur récente (économique)",
+      "Grand terrain clos et arboré",
+      "Garage attenant",
+      "Calme absolu, sans vis-à-vis",
+      "15 minutes de Périgueux"
+    ]
+  }
+}
