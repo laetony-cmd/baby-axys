@@ -1413,6 +1413,339 @@ ICI Dordogne - Tél : 05 53 03 01 14 | www.icidordogne.fr
 
 
 # ============================================================
+# VISITE VIRTUELLE SPLIT-VIEW (Vapi + EnVisite)
+# ============================================================
+
+BIENS_VISITE_FILE = "biens_visite.json"
+
+def charger_biens_visite():
+    """Charge les données des biens pour la visite virtuelle"""
+    try:
+        with open(BIENS_VISITE_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except:
+        return {}
+
+def generer_prompt_vapi(bien):
+    """Génère le system prompt pour l'assistant Vapi"""
+    # Formatage prix
+    prix_fmt = f"{bien.get('prix', 0):,}".replace(",", " ")
+    
+    # Liste des pièces
+    pieces_txt = ""
+    for p in bien.get('pieces', []):
+        surface = int(p['surface']) if p['surface'] == int(p['surface']) else p['surface']
+        pieces_txt += f"- {p['nom']}: {surface} m²"
+        if p.get('description'):
+            pieces_txt += f" ({p['description']})"
+        pieces_txt += "\n"
+    
+    # Points forts
+    points_txt = "\n".join([f"- {pf}" for pf in bien.get('points_forts', [])])
+    
+    prompt = f"""Tu es l'assistant vocal d'ICI Dordogne pour cette {bien.get('type_bien', 'maison')} à {bien.get('commune', 'Dordogne')}.
+Référence: {bien.get('reference', 'NC')} | Prix: {prix_fmt} euros FAI (frais d'agence inclus)
+
+DONNÉES CLÉS À CONNAÎTRE PAR CŒUR:
+- Surface habitable: {int(bien.get('surface', 0))} mètres carrés
+- Terrain: {int(bien.get('terrain', 0))} mètres carrés
+- {bien.get('chambres', 0)} chambres, {bien.get('sdb', 1)} salle de bains
+- DPE: {bien.get('dpe', 'NC')} ({bien.get('dpe_valeur', '')} kWh/m²/an)
+- Chauffage: {bien.get('chauffage', 'Non précisé')}
+- Localisation: {bien.get('localisation', '')}
+- Taxe foncière: environ {bien.get('taxe_fonciere', 'NC')} euros/an
+
+DÉTAIL DES PIÈCES:
+{pieces_txt}
+POINTS FORTS À METTRE EN AVANT:
+{points_txt}
+
+RÈGLES DE CONVERSATION:
+1. Réponds en français, phrases courtes, ton chaleureux et professionnel
+2. Si tu ne sais pas une information → "Je n'ai pas ce détail, mais l'agence pourra vous répondre"
+3. Ne JAMAIS inventer de données (prix, surfaces, diagnostics)
+4. Pour le prix → rester ferme, c'est FAI (frais inclus)
+5. Pour organiser une visite → proposer d'appeler l'agence au 05 53 13 33 33
+6. Si une pièce n'est pas dans ta liste, dis que tu n'as pas le détail
+
+Tu accompagnes le visiteur pendant sa visite virtuelle 360°.
+Quand il t'indique dans quelle pièce il se trouve, adapte tes réponses.
+Sois enthousiaste mais honnête sur les caractéristiques du bien."""
+    
+    return prompt
+
+def generer_page_visite_virtuelle(bien_id):
+    """Génère la page HTML split-view visite virtuelle + Vapi"""
+    
+    # 1. Charger les données du bien
+    biens = charger_biens_visite()
+    bien = biens.get(bien_id)
+    
+    if not bien:
+        return """<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Bien introuvable</title></head>
+<body style="font-family:Arial;text-align:center;padding:50px;">
+<h1>Bien introuvable</h1>
+<p>Ce bien n'existe pas ou n'a pas de visite virtuelle configurée.</p>
+<p><a href="https://www.icidordogne.fr">Retour au site ICI Dordogne</a></p>
+</body></html>"""
+    
+    # 2. Variables Vapi
+    vapi_public_key = os.environ.get('VAPI_PUBLIC_KEY', '')
+    vapi_assistant_id = os.environ.get('VAPI_ASSISTANT_ID', '')
+    
+    # 3. Générer le prompt
+    system_prompt = generer_prompt_vapi(bien)
+    system_prompt_escaped = json.dumps(system_prompt, ensure_ascii=False)
+    
+    # 4. Générer les boutons des pièces
+    pieces_json = json.dumps([{"nom": p["nom"], "surface": p["surface"]} for p in bien.get("pieces", [])], ensure_ascii=False)
+    
+    # 5. Infos affichage
+    prix_fmt = f"{bien.get('prix', 0):,}".replace(",", " ")
+    titre = f"{bien.get('type_bien', 'Bien')} - {bien.get('commune', '')}"
+    
+    # 6. HTML complet
+    html = f'''<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visite Privée - {titre} - ICI DORDOGNE</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@vapi-ai/web@latest/dist/vapi.umd.min.js"></script>
+    <style>
+        body, html {{ height: 100%; margin: 0; overflow: hidden; font-family: system-ui, sans-serif; }}
+        .split-container {{ display: flex; height: 100vh; }}
+        .tour-frame {{ flex: 2; border: none; height: 100%; background: #1a1a2e; }}
+        .sidebar {{ flex: 1; background: #fff; display: flex; flex-direction: column; border-left: 2px solid #e5e7eb; max-width: 380px; min-width: 320px; }}
+        @media (max-width: 768px) {{
+            .split-container {{ flex-direction: column; }}
+            .tour-frame {{ flex: 1; min-height: 50vh; }}
+            .sidebar {{ flex: none; height: 50vh; max-width: 100%; border-left: none; border-top: 2px solid #e5e7eb; }}
+        }}
+        .pulse-ring {{ animation: pulse-ring 2s ease-out infinite; }}
+        @keyframes pulse-ring {{
+            0% {{ box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }}
+            70% {{ box-shadow: 0 0 0 15px rgba(34, 197, 94, 0); }}
+            100% {{ box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }}
+        }}
+        .piece-btn {{ transition: all 0.2s; }}
+        .piece-btn:hover {{ background: #f3f4f6; border-color: #8B1538; }}
+        .piece-btn.active {{ background: #8B1538; color: white; border-color: #8B1538; }}
+    </style>
+</head>
+<body class="bg-gray-900">
+    <div class="split-container">
+        
+        <!-- IFRAME ENVISITE (66%) -->
+        <iframe src="{bien.get('url_visite', '')}" class="tour-frame" allowfullscreen></iframe>
+
+        <!-- PANNEAU ASSISTANT (34%) -->
+        <div class="sidebar">
+            
+            <!-- Header -->
+            <div class="p-4 border-b bg-gradient-to-r from-gray-50 to-white">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-lg font-bold text-gray-800">🏠 Votre Guide Privé</h2>
+                        <p class="text-sm text-gray-500">{bien.get('commune', '')} • {int(bien.get('surface', 0))} m² • {prix_fmt} €</p>
+                    </div>
+                    <div id="status-indicator" class="w-3 h-3 rounded-full bg-gray-300"></div>
+                </div>
+            </div>
+
+            <!-- Zone principale -->
+            <div class="flex-1 p-5 overflow-y-auto flex flex-col items-center justify-center text-center">
+                
+                <!-- Avatar -->
+                <div class="relative mb-4">
+                    <div id="avatar-ring" class="w-24 h-24 rounded-full bg-gray-100 flex items-center justify-center border-4 border-white shadow-xl">
+                        <span class="text-4xl">🤖</span>
+                    </div>
+                </div>
+                <p id="agent-status" class="text-gray-600 font-medium mb-6">Prêt à vous accompagner</p>
+
+                <!-- Bouton principal -->
+                <button id="toggle-call-btn" onclick="toggleCall()" class="w-full max-w-xs px-6 py-4 bg-[#8B1538] text-white rounded-xl font-bold shadow-lg hover:bg-[#6d1029] transition-all flex items-center justify-center gap-3">
+                    <span id="btn-icon" class="text-xl">🎙️</span>
+                    <span id="btn-text">Démarrer la visite vocale</span>
+                </button>
+
+                <!-- Questions suggérées -->
+                <div class="w-full mt-6 text-left">
+                    <p class="text-xs text-gray-400 uppercase font-bold tracking-wider mb-2">Questions fréquentes</p>
+                    <div class="flex flex-wrap gap-2">
+                        <span class="px-3 py-1.5 bg-gray-100 rounded-full text-xs text-gray-600">💰 Taxe foncière ?</span>
+                        <span class="px-3 py-1.5 bg-gray-100 rounded-full text-xs text-gray-600">🌡️ Type de chauffage ?</span>
+                        <span class="px-3 py-1.5 bg-gray-100 rounded-full text-xs text-gray-600">📐 Surface pièces ?</span>
+                        <span class="px-3 py-1.5 bg-gray-100 rounded-full text-xs text-gray-600">📅 Organiser visite</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Barre des pièces -->
+            <div class="p-3 border-t bg-gray-50">
+                <p class="text-xs text-gray-500 mb-2 font-medium">📍 Je suis dans :</p>
+                <div id="pieces-container" class="flex gap-2 overflow-x-auto pb-1"></div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="p-3 border-t bg-white text-center">
+                <a href="tel:0553133333" class="text-sm text-[#8B1538] font-semibold hover:underline">📞 05 53 13 33 33</a>
+                <span class="text-gray-300 mx-2">|</span>
+                <a href="{bien.get('url_site', 'https://www.icidordogne.fr')}" target="_blank" class="text-sm text-gray-500 hover:underline">Voir la fiche</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // === CONFIGURATION ===
+        const VAPI_PUBLIC_KEY = "{vapi_public_key}";
+        const VAPI_ASSISTANT_ID = "{vapi_assistant_id}";
+        const SYSTEM_PROMPT = {system_prompt_escaped};
+        const PIECES = {pieces_json};
+
+        // === STATE ===
+        let vapi = null;
+        let isCallActive = false;
+
+        // === INIT ===
+        document.addEventListener('DOMContentLoaded', function() {{
+            if (VAPI_PUBLIC_KEY && window.Vapi) {{
+                vapi = new window.Vapi(VAPI_PUBLIC_KEY);
+                setupVapiListeners();
+            }} else {{
+                console.warn('Vapi non configuré - clé manquante');
+                document.getElementById('agent-status').textContent = "Service vocal indisponible";
+            }}
+            renderPieces();
+        }});
+
+        function setupVapiListeners() {{
+            vapi.on('call-start', () => {{
+                isCallActive = true;
+                updateUI(true);
+            }});
+            
+            vapi.on('call-end', () => {{
+                isCallActive = false;
+                updateUI(false);
+            }});
+            
+            vapi.on('speech-start', () => {{
+                document.getElementById('avatar-ring').classList.add('pulse-ring');
+                document.getElementById('avatar-ring').style.background = '#dcfce7';
+                document.getElementById('agent-status').textContent = "Je vous parle...";
+            }});
+            
+            vapi.on('speech-end', () => {{
+                document.getElementById('avatar-ring').classList.remove('pulse-ring');
+                document.getElementById('avatar-ring').style.background = '#f3f4f6';
+                document.getElementById('agent-status').textContent = "Je vous écoute...";
+            }});
+            
+            vapi.on('error', (e) => {{
+                console.error('Vapi error:', e);
+                document.getElementById('agent-status').textContent = "Erreur - Réessayez";
+            }});
+        }}
+
+        // === ACTIONS ===
+        function toggleCall() {{
+            if (!vapi) {{
+                alert('Service vocal non disponible. Appelez le 05 53 13 33 33');
+                return;
+            }}
+            
+            if (isCallActive) {{
+                vapi.stop();
+            }} else {{
+                document.getElementById('agent-status').textContent = "Connexion...";
+                document.getElementById('toggle-call-btn').disabled = true;
+                
+                vapi.start(VAPI_ASSISTANT_ID, {{
+                    model: {{
+                        messages: [{{ role: "system", content: SYSTEM_PROMPT }}]
+                    }}
+                }}).catch(err => {{
+                    console.error('Start error:', err);
+                    document.getElementById('agent-status').textContent = "Erreur micro - Vérifiez les permissions";
+                    document.getElementById('toggle-call-btn').disabled = false;
+                }});
+            }}
+        }}
+
+        function selectRoom(roomName, btn) {{
+            document.querySelectorAll('.piece-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            if (isCallActive && vapi) {{
+                vapi.send({{
+                    type: "add-message",
+                    message: {{
+                        role: "system",
+                        content: "L'utilisateur indique qu'il visite maintenant: " + roomName + ". Adapte tes réponses à cette pièce."
+                    }}
+                }});
+                document.getElementById('agent-status').textContent = "📍 " + roomName;
+                setTimeout(() => {{
+                    if (isCallActive) document.getElementById('agent-status').textContent = "Je vous écoute...";
+                }}, 2000);
+            }}
+        }}
+
+        // === UI ===
+        function renderPieces() {{
+            const container = document.getElementById('pieces-container');
+            if (!PIECES || PIECES.length === 0) {{
+                container.innerHTML = '<span class="text-xs text-gray-400">Données non disponibles</span>';
+                return;
+            }}
+            
+            container.innerHTML = PIECES.map(p => 
+                `<button onclick="selectRoom('${{p.nom}}', this)" class="piece-btn px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs whitespace-nowrap hover:border-[#8B1538]">
+                    ${{p.nom}}
+                </button>`
+            ).join('');
+        }}
+
+        function updateUI(active) {{
+            const btn = document.getElementById('toggle-call-btn');
+            const btnText = document.getElementById('btn-text');
+            const btnIcon = document.getElementById('btn-icon');
+            const status = document.getElementById('status-indicator');
+            
+            btn.disabled = false;
+            
+            if (active) {{
+                btn.classList.remove('bg-[#8B1538]', 'hover:bg-[#6d1029]');
+                btn.classList.add('bg-red-600', 'hover:bg-red-700');
+                btnText.textContent = "Raccrocher";
+                btnIcon.textContent = "📞";
+                status.classList.remove('bg-gray-300');
+                status.classList.add('bg-green-500');
+                document.getElementById('agent-status').textContent = "Je vous écoute...";
+            }} else {{
+                btn.classList.remove('bg-red-600', 'hover:bg-red-700');
+                btn.classList.add('bg-[#8B1538]', 'hover:bg-[#6d1029]');
+                btnText.textContent = "Démarrer la visite vocale";
+                btnIcon.textContent = "🎙️";
+                status.classList.remove('bg-green-500');
+                status.classList.add('bg-gray-300');
+                document.getElementById('agent-status').textContent = "Prêt à vous accompagner";
+                document.getElementById('avatar-ring').classList.remove('pulse-ring');
+                document.getElementById('avatar-ring').style.background = '#f3f4f6';
+            }}
+        }}
+    </script>
+</body>
+</html>'''
+    
+    return html
+
+
+# ============================================================
 # TEMPLATES EMAILS SDR
 # ============================================================
 
@@ -2261,6 +2594,16 @@ class AxiHandler(BaseHTTPRequestHandler):
                 print(f"[FB WEBHOOK] ❌ Vérification échouée (token: {token})")
                 self.send_response(403)
                 self.end_headers()
+        
+        # === VISITE VIRTUELLE SPLIT-VIEW (Vapi + EnVisite) ===
+        elif path.startswith('/visite/'):
+            bien_id = path.split('/visite/')[-1].split('?')[0]
+            html = generer_page_visite_virtuelle(bien_id)
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(html.encode())
+        
         # === SDR: Chat prospect ===
         elif path.startswith('/chat/p/'):
             token = path.split('/chat/p/')[-1].split('?')[0]
