@@ -598,8 +598,8 @@ def get_enrichisseur():
 # ============================================================
 
 def get_dpe_ademe(code_postal):
-    """RÃƒÂ©cupÃƒÂ¨re les DPE rÃƒÂ©cents depuis l'API ADEME"""
-    url = f"https://data.ademe.fr/data-fair/api/v1/datasets/dpe-v2-logements-existants/lines?size=100&select=N%C2%B0DPE%2CDate_r%C3%A9ception_DPE%2CEtiquette_DPE%2CAdresse_brute%2CCode_postal_%28BAN%29%2CNom_commune_%28BAN%29%2CType_b%C3%A2timent%2CSurface_habitable_logement&q_fields=Code_postal_%28BAN%29&q={code_postal}&sort=Date_r%C3%A9ception_DPE%3A-1"
+    """Récupère les DPE récents depuis l'API ADEME - Dataset 2025"""
+    url = f"https://data.ademe.fr/data-fair/api/v1/datasets/dpe03existant/lines?size=100&q={code_postal}&q_fields=code_postal_ban&select=numero_dpe,date_reception_dpe,etiquette_dpe,etiquette_ges,adresse_brut,code_postal_ban,nom_commune_ban,type_batiment,surface_habitable_logement&sort=-date_reception_dpe"
     
     try:
         req = urllib.request.Request(url, headers={'User-Agent': 'ICI-Dordogne/1.0'})
@@ -627,16 +627,16 @@ def run_veille_dpe():
         resultats = get_dpe_ademe(cp)
         
         for dpe in resultats:
-            numero = dpe.get('NÃ‚Â°DPE', '')
+            numero = dpe.get('numero_dpe', '')
             if numero and numero not in dpe_connus:
-                # Nouveau DPE trouvÃƒÂ©
+                # Nouveau DPE trouvé
                 dpe_connus[numero] = {
                     'date_detection': datetime.now().isoformat(),
                     'data': dpe
                 }
                 
                 # Enrichir avec DVF si possible
-                adresse = dpe.get('Adresse_brute', '')
+                adresse = dpe.get('adresse_brut', '')
                 if adresse and enrichisseur.index_dvf:
                     try:
                         enrichissement = enrichisseur.enrichir_adresse(adresse, cp, rayon_km=0.3)
@@ -679,12 +679,12 @@ def run_veille_dpe():
             
             corps += f"""
             <tr>
-                <td>{dpe.get('Adresse_brute', 'N/A')}</td>
-                <td>{dpe.get('Code_postal_(BAN)', '')}</td>
-                <td>{dpe.get('Nom_commune_(BAN)', '')}</td>
-                <td>{dpe.get('Type_bÃƒÂ¢timent', '')}</td>
-                <td>{dpe.get('Surface_habitable_logement', '')} mÃ‚Â²</td>
-                <td><strong>{dpe.get('Etiquette_DPE', '')}</strong></td>
+                <td>{dpe.get('adresse_brut', 'N/A')}</td>
+                <td>{dpe.get('code_postal_ban', '')}</td>
+                <td>{dpe.get('nom_commune_ban', '')}</td>
+                <td>{dpe.get('type_batiment', '')}</td>
+                <td>{dpe.get('surface_habitable_logement', '')} m²</td>
+                <td><strong>{dpe.get('etiquette_dpe', '')}</strong></td>
                 <td>{dvf_info}</td>
             </tr>
             """
