@@ -17,6 +17,7 @@ import json
 import urllib.request
 import urllib.parse
 import requests  # NOUVEAU - pour API ADEME (encodage URL robuste)
+import psycopg2  # PostgreSQL pour caches persistants
 import smtplib
 import ssl
 import gzip
@@ -2608,6 +2609,78 @@ class AxiHandler(BaseHTTPRequestHandler):
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": str(e)}).encode())
+        
+        elif path == '/init-veilles-db':
+            # Créer les tables PostgreSQL pour les veilles
+            print("[DB] Initialisation tables veilles...")
+            try:
+                database_url = os.environ.get('DATABASE_URL')
+                if not database_url:
+                    raise ValueError("DATABASE_URL non définie")
+                
+                conn = psycopg2.connect(database_url)
+                cur = conn.cursor()
+                
+                # Table DPE
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS dpe_connus (
+                        numero_dpe VARCHAR(50) PRIMARY KEY,
+                        date_detection TIMESTAMP DEFAULT NOW(),
+                        code_postal VARCHAR(10),
+                        commune VARCHAR(100),
+                        etiquette VARCHAR(5),
+                        surface NUMERIC,
+                        data JSONB
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_dpe_date ON dpe_connus(date_detection);
+                    CREATE INDEX IF NOT EXISTS idx_dpe_cp ON dpe_connus(code_postal);
+                    CREATE INDEX IF NOT EXISTS idx_dpe_etiquette ON dpe_connus(etiquette);
+                """)
+                
+                # Table Concurrence
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS concurrence_connue (
+                        id SERIAL PRIMARY KEY,
+                        url_annonce VARCHAR(500) UNIQUE NOT NULL,
+                        agence VARCHAR(100) NOT NULL,
+                        prix INTEGER,
+                        code_postal VARCHAR(10),
+                        date_detection TIMESTAMP DEFAULT NOW()
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_conc_agence ON concurrence_connue(agence);
+                    CREATE INDEX IF NOT EXISTS idx_conc_date ON concurrence_connue(date_detection);
+                    CREATE INDEX IF NOT EXISTS idx_conc_cp ON concurrence_connue(code_postal);
+                """)
+                
+                conn.commit()
+                
+                # Vérifier les tables créées
+                cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('dpe_connus', 'concurrence_connue')")
+                tables = [row[0] for row in cur.fetchall()]
+                
+                cur.close()
+                conn.close()
+                
+                print(f"[DB] Tables créées: {tables}")
+                
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "status": "ok",
+                    "message": "Tables veilles créées avec succès",
+                    "tables": tables
+                }, ensure_ascii=False).encode())
+                
+            except Exception as e:
+                print(f"[DB] Erreur: {e}")
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "status": "error",
+                    "error": str(e)
+                }).encode())
         
         elif path == '/test-veille':
             # Test sans email
