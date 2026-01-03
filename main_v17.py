@@ -1345,6 +1345,39 @@ class ScraperEngineV18:
         invalid = ['javascript:', 'mailto:', 'tel:', '#', 'login', 'contact', '.css', '.js', '.png', '.jpg']
         return not any(p in url.lower() for p in invalid)
     
+    def fetch_html_requests(self, url, timeout=20):
+        """Version requests pour sites difficiles (Virginie Michelin)"""
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0',
+        }
+        try:
+            response = requests.get(url, headers=headers, timeout=timeout)
+            response.raise_for_status()
+            print(f"[DEBUG] fetch_html_requests {url}: {response.status_code} - {len(response.text)} bytes")
+            return response.text
+        except requests.exceptions.HTTPError as e:
+            print(f"[ERROR] HTTP {url}: {e.response.status_code} - {e.response.reason}")
+            return None
+        except requests.exceptions.ConnectionError:
+            print(f"[ERROR] Connection {url}: Blocage IP ou DNS")
+            return None
+        except requests.exceptions.Timeout:
+            print(f"[ERROR] Timeout {url}")
+            return None
+        except Exception as e:
+            print(f"[ERROR] fetch_html_requests {url}: {type(e).__name__}: {e}")
+            return None
+    
     def scrape_html(self, config):
         urls = set()
         base_url = config['base_url']
@@ -1386,13 +1419,13 @@ class ScraperEngineV18:
         return list(urls)
     
     def scrape_html_special(self, config):
+        """Scrape avec template URL - utilise requests (plus robuste)"""
         urls = set()
-        html = self.fetch_html(config['url_liste'])
-        print(f"[DEBUG] scrape_html_special: {config.get('url_liste', 'no url')} -> HTML: {len(html) if html else 0} bytes")
+        html = self.fetch_html_requests(config['url_liste'])
         if not html:
             return []
         matches = re.findall(config['pattern'], html, re.IGNORECASE)
-        print(f"[DEBUG] Pattern '{config['pattern'][:30]}...' -> {len(matches)} matches")
+        print(f"[DEBUG] scrape_html_special: {len(matches)} matches pour {config.get('url_liste', '?')}")
         template = config.get('url_template', '')
         for match in matches:
             url = f"{config['base_url']}{template.replace('{id}', match)}"
