@@ -1388,9 +1388,11 @@ class ScraperEngineV18:
     def scrape_html_special(self, config):
         urls = set()
         html = self.fetch_html(config['url_liste'])
+        print(f"[DEBUG] scrape_html_special: {config.get('url_liste', 'no url')} -> HTML: {len(html) if html else 0} bytes")
         if not html:
             return []
         matches = re.findall(config['pattern'], html, re.IGNORECASE)
+        print(f"[DEBUG] Pattern '{config['pattern'][:30]}...' -> {len(matches)} matches")
         template = config.get('url_template', '')
         for match in matches:
             url = f"{config['base_url']}{template.replace('{id}', match)}"
@@ -1548,6 +1550,7 @@ def run_veille_concurrence():
     for agence in AGENCES:
         print(f"[CONCURRENCE] Scan {agence['nom']}...")
         urls = scraper_agence_urls(agence)
+        print(f"[CONCURRENCE]   -> {len(urls)} URLs trouvées")
         toutes_urls[agence['nom']] = urls
         
         # Identifier les nouvelles URLs
