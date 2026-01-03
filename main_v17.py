@@ -105,6 +105,136 @@ AGENCES = [
     {"nom": "JDC Immo Lalinde", "url": "https://www.jdcimmo.fr/", "priorite": "haute"},
 ]
 
+# ============================================================
+# SCRAPERS V18 - Configuration des 16 agences (03/01/2026)
+# ============================================================
+
+HEADERS_SCRAPER = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
+    'Accept-Encoding': 'gzip, deflate',
+    'Connection': 'keep-alive',
+    'Referer': 'https://www.google.com/',
+}
+
+SCRAPERS_CONFIG = {
+    "HUMAN Immobilier": {
+        "type": "html", "priorite": "haute",
+        "url_liste": "https://www.human-immobilier.fr/achat-maison-dordogne",
+        "pattern": r'href="(/annonce-achat-[^"]+)"',
+        "base_url": "https://www.human-immobilier.fr",
+        "pagination": {"type": "page", "param": "page", "max_pages": 10}
+    },
+    "Perigord Noir Immobilier": {
+        "type": "html", "priorite": "haute",
+        "url_liste": "https://perigordnoirimmobilier.com/",
+        "pattern": r'href="(https://perigordnoirimmobilier\.com/detail/[^"]+\.html)"',
+        "base_url": "https://perigordnoirimmobilier.com",
+        "pagination": None
+    },
+    "Virginie Michelin": {
+        "type": "html_special", "priorite": "haute",
+        "url_liste": "https://virginie-michelin-immobilier.fr/listeAnnonce.php",
+        "pattern": r'<a\s+name="ancre(\d+)"',
+        "base_url": "https://virginie-michelin-immobilier.fr",
+        "url_template": "/detailAnnonce.php?id={id}",
+        "pagination": None
+    },
+    "Bayenche Immobilier": {
+        "type": "html", "priorite": "haute",
+        "url_liste": "https://www.bayencheimmobilier.fr/",
+        "pattern": r'href="(https://www\.bayencheimmobilier\.fr/affaires/[^"]+)"',
+        "base_url": "https://www.bayencheimmobilier.fr",
+        "pagination": None
+    },
+    "Transaxia Ste-Alvere": {
+        "type": "html", "priorite": "haute",
+        "url_liste": "https://transaxia-saintealvere.fr/recherche.php?type_offre=0",
+        "pattern": r'href="(https://transaxia-saintealvere\.fr/immobilier-[^"]+)"',
+        "base_url": "https://transaxia-saintealvere.fr",
+        "pagination": None
+    },
+    "KOK Immobilier": {
+        "type": "html", "priorite": "haute",
+        "url_liste": "https://www.kok.immo/vente/1",
+        "pattern": r'href="(/vente/\d+-[^"]+)"',
+        "base_url": "https://www.kok.immo",
+        "pagination": {"type": "path", "base": "/vente/", "max_pages": 5}
+    },
+    "JDC Immo Lalinde": {
+        "type": "api_json", "priorite": "haute",
+        "url_api": "https://www.jdcimmo.fr/dmxConnect/api/listeaffaires.php",
+        "params": {"typetransaction": "VENTE", "codeagence": "jde24"},
+        "base_url": "https://www.jdcimmo.fr",
+        "response_path": "selectionaffaires",
+        "url_template": "/ficheaffaire.php?code={Code}"
+    },
+    "Laforet Perigueux": {
+        "type": "html", "priorite": "moyenne",
+        "url_liste": "https://www.laforet.com/agence-immobiliere/perigueux/acheter",
+        "pattern": r'href="(/agence-immobiliere/[^"]*(?:maison|appartement|terrain)[^"]*-\d+)"',
+        "base_url": "https://www.laforet.com",
+        "pagination": {"type": "page", "param": "page", "max_pages": 5}
+    },
+    "Valadie Immobilier": {
+        "type": "html", "priorite": "moyenne",
+        "url_liste": "https://www.valadie-immobilier.com/fr/biens/categorie/departement/22-Dordogne-24",
+        "pattern": r'href="(/fr/biens/fiche/\d+)"',
+        "base_url": "https://www.valadie-immobilier.com",
+        "pagination": {"type": "path_suffix", "max_pages": 10}
+    },
+    "Internat Agency": {
+        "type": "api_rest", "priorite": "moyenne",
+        "url_api": "https://www.interimmoagency.com/wp-json/wp/v2/properties",
+        "params": {"per_page": 100},
+        "base_url": "https://www.interimmoagency.com",
+        "response_field": "link"
+    },
+    "Agence du Perigord": {
+        "type": "html", "priorite": "moyenne",
+        "url_liste": "https://www.agenceduperigord.fr/",
+        "pattern": r'href="(https://agenceduperigord\.fr/fr/annonces-immobilieres/[^"]+)"',
+        "base_url": "https://www.agenceduperigord.fr",
+        "pagination": None
+    },
+    "Alienor Immobilier": {
+        "type": "html", "priorite": "moyenne",
+        "url_liste": "https://www.immobilier-alienor.fr/annonces/transaction/Vente.html",
+        "pattern": r'href="\.\./fiches/([^"]+\.html)"',
+        "base_url": "https://www.immobilier-alienor.fr/fiches",
+        "pagination": None
+    },
+    "Century 21 Dordogne": {
+        "type": "html", "priorite": "basse",
+        "url_liste": "https://www.century21.fr/annonces/achat-maison/d-24_dordogne/",
+        "pattern": r'href="(/trouver_logement/detail/\d+/)"',
+        "base_url": "https://www.century21.fr",
+        "pagination": {"type": "path_suffix", "prefix": "page-", "max_pages": 12}
+    },
+    "Immobilier La Maison": {
+        "type": "html", "priorite": "basse",
+        "url_liste": "https://www.immobilierlamaison.fr/achat-immobilier-perigueux/1",
+        "pattern": r'href="(/\d+-[^"]+\.html)"',
+        "base_url": "https://www.immobilierlamaison.fr",
+        "pagination": {"type": "path", "base": "/achat-immobilier-perigueux/", "max_pages": 5}
+    },
+    "FD Immo Lalinde": {
+        "type": "html", "priorite": "basse",
+        "url_liste": "https://www.fdimmo24.com/immobilier/catalog/?_f_i=1",
+        "pattern": r'href="(/immobilier/catalog/vente/[^"]+\.html)"',
+        "base_url": "https://www.fdimmo24.com",
+        "pagination": None
+    },
+    "Montet Immobilier": {
+        "type": "html", "priorite": "basse",
+        "url_liste": "https://www.montet-immobilier.com/",
+        "pattern": r'href="(https://www\.montet-immobilier\.com/bien/[^"]+/)"',
+        "base_url": "https://www.montet-immobilier.com",
+        "pagination": None
+    },
+}
+
 # Fichiers de stockage
 FICHIER_DPE = "dpe_connus.json"
 FICHIER_ANNONCES = "annonces_connues.json"
@@ -1169,68 +1299,186 @@ def run_veille_dpe():
     
     return {"nouveaux": len(nouveaux_dpe), "total_connus": total_connus}
 
+
 # ============================================================
-# VEILLE CONCURRENCE
+# VEILLE CONCURRENCE - MOTEUR SCRAPING V18
 # ============================================================
 
-def extraire_urls_annonces(html, base_url):
-    """Extrait les URLs d'annonces depuis le HTML d'une agence"""
-    urls = set()
+class ScraperEngineV18:
+    """Moteur de scraping unifie pour 16 agences - V18"""
     
-    # Patterns courants pour les liens d'annonces
-    patterns = [
-        r'href="(/annonce[s]?/[^"]+)"',
-        r'href="(/bien[s]?/[^"]+)"',
-        r'href="(/vente[s]?/[^"]+)"',
-        r'href="(/immobilier/[^"]+)"',
-        r'href="(/property/[^"]+)"',
-        r'href="(/achat/[^"]+)"',
-    ]
+    def __init__(self):
+        self.headers = HEADERS_SCRAPER.copy()
+        self.stats = {'total_urls': 0, 'erreurs': 0, 'par_agence': {}}
     
-    for pattern in patterns:
-        matches = re.findall(pattern, html, re.IGNORECASE)
+    def fetch_html(self, url, timeout=20, retry=2):
+        from io import BytesIO
+        for attempt in range(retry + 1):
+            try:
+                req = urllib.request.Request(url, headers=self.headers)
+                with urllib.request.urlopen(req, timeout=timeout) as response:
+                    if response.info().get('Content-Encoding') == 'gzip':
+                        buf = BytesIO(response.read())
+                        with gzip.GzipFile(fileobj=buf) as f:
+                            return f.read().decode('utf-8', errors='ignore')
+                    return response.read().decode('utf-8', errors='ignore')
+            except:
+                if attempt < retry:
+                    time.sleep(1 * (attempt + 1))
+                    continue
+                return None
+        return None
+    
+    def fetch_json(self, url, params=None, timeout=20):
+        try:
+            if params:
+                url = f"{url}?{urllib.parse.urlencode(params)}"
+            headers = self.headers.copy()
+            headers['Accept'] = 'application/json'
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=timeout) as response:
+                return json.loads(response.read().decode('utf-8'))
+        except:
+            return None
+    
+    def _is_valid_url(self, url):
+        if not url:
+            return False
+        invalid = ['javascript:', 'mailto:', 'tel:', '#', 'login', 'contact', '.css', '.js', '.png', '.jpg']
+        return not any(p in url.lower() for p in invalid)
+    
+    def scrape_html(self, config):
+        urls = set()
+        base_url = config['base_url']
+        pattern = config['pattern']
+        pages = [config['url_liste']]
+        pag = config.get('pagination')
+        if pag:
+            max_p = pag.get('max_pages', 5)
+            if pag['type'] == 'page':
+                sep = '&' if '?' in config['url_liste'] else '?'
+                for i in range(2, max_p + 1):
+                    pages.append(f"{config['url_liste']}{sep}{pag.get('param', 'page')}={i}")
+            elif pag['type'] == 'path':
+                for i in range(2, max_p + 1):
+                    pages.append(f"{base_url}{pag.get('base', '')}{i}")
+            elif pag['type'] == 'path_suffix':
+                prefix = pag.get('prefix', '')
+                for i in range(2, max_p + 1):
+                    pages.append(f"{config['url_liste']}{prefix}{i}/" if prefix else f"{config['url_liste']}/{i}")
+        for page_url in pages:
+            html = self.fetch_html(page_url)
+            if not html:
+                continue
+            matches = re.findall(pattern, html, re.IGNORECASE)
+            if not matches and page_url != config['url_liste']:
+                break
+            for match in matches:
+                if match.startswith('http'):
+                    full_url = match
+                elif match.startswith('/'):
+                    full_url = f"{base_url.rstrip('/')}{match}"
+                else:
+                    full_url = f"{base_url.rstrip('/')}/{match}"
+                if self._is_valid_url(full_url):
+                    urls.add(full_url)
+            time.sleep(0.5)
+        return list(urls)
+    
+    def scrape_html_special(self, config):
+        urls = set()
+        html = self.fetch_html(config['url_liste'])
+        if not html:
+            return []
+        matches = re.findall(config['pattern'], html, re.IGNORECASE)
+        template = config.get('url_template', '')
         for match in matches:
-            if not any(x in match.lower() for x in ['javascript', 'mailto', '#', 'login', 'contact']):
-                full_url = urllib.parse.urljoin(base_url, match)
-                urls.add(full_url)
+            url = f"{config['base_url']}{template.replace('{id}', match)}"
+            urls.add(url)
+        return list(urls)
     
-    return list(urls)
+    def scrape_api_json(self, config):
+        urls = []
+        data = self.fetch_json(config['url_api'], config.get('params'))
+        if not data:
+            return []
+        items = data.get(config.get('response_path', ''), []) if isinstance(data, dict) else data
+        template = config.get('url_template', '')
+        for item in items:
+            if template:
+                url = template
+                for k, v in item.items():
+                    url = url.replace(f"{{{k}}}", str(v))
+                urls.append(f"{config['base_url']}{url}")
+            elif item.get('link'):
+                urls.append(item['link'])
+        return urls
+    
+    def scrape_api_rest(self, config):
+        urls = []
+        data = self.fetch_json(config['url_api'], config.get('params'))
+        if not data or not isinstance(data, list):
+            return []
+        field = config.get('response_field', 'link')
+        for item in data:
+            if item.get(field):
+                urls.append(item[field])
+        return urls
+    
+    def scrape_agence(self, agence_name):
+        if agence_name not in SCRAPERS_CONFIG:
+            return []
+        config = SCRAPERS_CONFIG[agence_name]
+        try:
+            if config['type'] == 'html':
+                urls = self.scrape_html(config)
+            elif config['type'] == 'html_special':
+                urls = self.scrape_html_special(config)
+            elif config['type'] == 'api_json':
+                urls = self.scrape_api_json(config)
+            elif config['type'] == 'api_rest':
+                urls = self.scrape_api_rest(config)
+            else:
+                urls = []
+            self.stats['par_agence'][agence_name] = len(urls)
+            self.stats['total_urls'] += len(urls)
+            return urls
+        except:
+            self.stats['erreurs'] += 1
+            return []
 
 
 def extraire_prix_page(html):
-    """Extrait le prix d'une page d'annonce"""
     patterns = [
-        r'(\d{2,3}[\s\xa0]?\d{3})[\s\xa0]?â‚¬',
-        r'(\d{2,3}[\s\xa0]?\d{3})[\s\xa0]?euros',
-        r'prix["\s:]+(\d+[\s\xa0]?\d*)',
+        r'(\d{2,3}[\s\xa0]?\d{3})[\s\xa0]*[E]',
+        r'(\d{2,3}[\s\xa0]?\d{3})[\s\xa0]*euros?',
+        r'prix["\s:]*(\d+[\s\xa0]?\d*)',
+        r'(\d{6,7})[\s\xa0]*[E]',
     ]
-    
     for pattern in patterns:
         match = re.search(pattern, html, re.IGNORECASE)
         if match:
             prix_str = match.group(1).replace(' ', '').replace('\xa0', '')
             try:
-                return int(prix_str)
+                prix = int(prix_str)
+                if 10000 < prix < 10000000:
+                    return prix
             except:
                 pass
     return None
 
 
 def extraire_cp_page_detail(html):
-    """Extrait le code postal d'une page d'annonce"""
     match = re.search(r'\b(24\d{3})\b', html)
     return match.group(1) if match else None
 
 
 def scraper_agence_urls(agence):
-    """Scrape les URLs d'annonces d'une agence"""
-    try:
-        html = fetch_url(agence['url'], timeout=20)
-        if html:
-            urls = extraire_urls_annonces(html, agence['url'])
-            return urls[:50]  # Limiter Ã  50 URLs par agence
-    except Exception as e:
-        print(f"[CONCURRENCE] Erreur {agence['nom']}: {e}")
+    engine = ScraperEngineV18()
+    nom = agence.get('nom', '')
+    for key in SCRAPERS_CONFIG:
+        if key in nom or nom in key:
+            return engine.scrape_agence(key)
     return []
 
 
