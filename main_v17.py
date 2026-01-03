@@ -1,6 +1,6 @@
-# VERSION: V17.0 - UNIFIED MASTER - {"timestamp": "2025-12-30T06:00:00"}
+# VERSION: V18.0 - UNIFIED MASTER + SCRAPERS PERENNES - {"timestamp": "2026-01-03T14:00:00"}
 """
-AXI ICI DORDOGNE V17.0 UNIFIED MASTER (9ebf44ac + Facebook) - Service complet Railway
+AXI ICI DORDOGNE V18.0 - UNIFIED MASTER + SCRAPERS PERENNES (03/01/2026)
 ======================================================
 - Chat Axi avec Claude API + recherche web
 - Interface web conversation (/, /trio)
@@ -126,7 +126,7 @@ SCRAPERS_CONFIG = {
         "base_url": "https://www.human-immobilier.fr",
         "pagination": {"type": "page", "param": "page", "max_pages": 10}
     },
-    "Perigord Noir Immobilier": {
+    "Périgord Noir Immobilier": {
         "type": "html", "priorite": "haute",
         "url_liste": "https://perigordnoirimmobilier.com/",
         "pattern": r'href="(https://perigordnoirimmobilier\.com/detail/[^"]+\.html)"',
@@ -148,7 +148,7 @@ SCRAPERS_CONFIG = {
         "base_url": "https://www.bayencheimmobilier.fr",
         "pagination": None
     },
-    "Transaxia Ste-Alvere": {
+    "Transaxia Ste-Alvère": {
         "type": "html", "priorite": "haute",
         "url_liste": "https://transaxia-saintealvere.fr/recherche.php?type_offre=0",
         "pattern": r'href="(https://transaxia-saintealvere\.fr/immobilier-[^"]+)"',
@@ -170,14 +170,14 @@ SCRAPERS_CONFIG = {
         "response_path": "selectionaffaires",
         "url_template": "/ficheaffaire.php?code={Code}"
     },
-    "Laforet Perigueux": {
+    "Laforêt Périgueux": {
         "type": "html", "priorite": "moyenne",
         "url_liste": "https://www.laforet.com/agence-immobiliere/perigueux/acheter",
         "pattern": r'href="(/agence-immobiliere/[^"]*(?:maison|appartement|terrain)[^"]*-\d+)"',
         "base_url": "https://www.laforet.com",
         "pagination": {"type": "page", "param": "page", "max_pages": 5}
     },
-    "Valadie Immobilier": {
+    "Valadié Immobilier": {
         "type": "html", "priorite": "moyenne",
         "url_liste": "https://www.valadie-immobilier.com/fr/biens/categorie/departement/22-Dordogne-24",
         "pattern": r'href="(/fr/biens/fiche/\d+)"',
@@ -191,14 +191,14 @@ SCRAPERS_CONFIG = {
         "base_url": "https://www.interimmoagency.com",
         "response_field": "link"
     },
-    "Agence du Perigord": {
+    "Agence du Périgord": {
         "type": "html", "priorite": "moyenne",
         "url_liste": "https://www.agenceduperigord.fr/",
         "pattern": r'href="(https://agenceduperigord\.fr/fr/annonces-immobilieres/[^"]+)"',
         "base_url": "https://www.agenceduperigord.fr",
         "pagination": None
     },
-    "Alienor Immobilier": {
+    "Aliénor Immobilier": {
         "type": "html", "priorite": "moyenne",
         "url_liste": "https://www.immobilier-alienor.fr/annonces/transaction/Vente.html",
         "pattern": r'href="\.\./fiches/([^"]+\.html)"',
@@ -1299,26 +1299,24 @@ def run_veille_dpe():
     
     return {"nouveaux": len(nouveaux_dpe), "total_connus": total_connus}
 
-
 # ============================================================
 # VEILLE CONCURRENCE - MOTEUR SCRAPING V18
 # ============================================================
 
 class ScraperEngineV18:
-    """Moteur de scraping unifie pour 16 agences - V18"""
+    """Moteur de scraping unifié pour 16 agences - V18"""
     
     def __init__(self):
         self.headers = HEADERS_SCRAPER.copy()
         self.stats = {'total_urls': 0, 'erreurs': 0, 'par_agence': {}}
     
     def fetch_html(self, url, timeout=20, retry=2):
-        from io import BytesIO
         for attempt in range(retry + 1):
             try:
                 req = urllib.request.Request(url, headers=self.headers)
                 with urllib.request.urlopen(req, timeout=timeout) as response:
                     if response.info().get('Content-Encoding') == 'gzip':
-                        buf = BytesIO(response.read())
+                        buf = io.BytesIO(response.read())
                         with gzip.GzipFile(fileobj=buf) as f:
                             return f.read().decode('utf-8', errors='ignore')
                     return response.read().decode('utf-8', errors='ignore')
@@ -1352,6 +1350,7 @@ class ScraperEngineV18:
         base_url = config['base_url']
         pattern = config['pattern']
         pages = [config['url_liste']]
+        
         pag = config.get('pagination')
         if pag:
             max_p = pag.get('max_pages', 5)
@@ -1366,6 +1365,7 @@ class ScraperEngineV18:
                 prefix = pag.get('prefix', '')
                 for i in range(2, max_p + 1):
                     pages.append(f"{config['url_liste']}{prefix}{i}/" if prefix else f"{config['url_liste']}/{i}")
+        
         for page_url in pages:
             html = self.fetch_html(page_url)
             if not html:
@@ -1450,10 +1450,10 @@ class ScraperEngineV18:
 
 def extraire_prix_page(html):
     patterns = [
-        r'(\d{2,3}[\s\xa0]?\d{3})[\s\xa0]*[E]',
+        r'(\d{2,3}[\s\xa0]?\d{3})[\s\xa0]*[€]',
         r'(\d{2,3}[\s\xa0]?\d{3})[\s\xa0]*euros?',
         r'prix["\s:]*(\d+[\s\xa0]?\d*)',
-        r'(\d{6,7})[\s\xa0]*[E]',
+        r'(\d{6,7})[\s\xa0]*[€]',
     ]
     for pattern in patterns:
         match = re.search(pattern, html, re.IGNORECASE)
