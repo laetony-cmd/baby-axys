@@ -1,6 +1,6 @@
-# AXI ICI DORDOGNE v12.8 MATCHING ENGINE
+# AXI ICI DORDOGNE v17.1 REQUESTS MIGRATION
 # Requirements Railway
-# Déployé: 2025-12-28T05:40:05Z
+# Déployé: 2026-01-03
 
 # Claude API
 anthropic>=0.18.0
@@ -17,4 +17,7 @@ pytz>=2024.1
 
 # Web scraping (Matching Engine)
 beautifulsoup4>=4.12.0
+
+# HTTP requests (NOUVEAU - remplace urllib pour API ADEME)
+requests>=2.31.0
 
