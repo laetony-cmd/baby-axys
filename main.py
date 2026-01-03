@@ -17,6 +17,7 @@ import os
 import json
 import urllib.request
 import urllib.parse
+import requests  # NOUVEAU - pour API ADEME (encodage URL robuste)
 import smtplib
 import ssl
 import gzip
@@ -598,14 +599,28 @@ def get_enrichisseur():
 # ============================================================
 
 def get_dpe_ademe(code_postal):
-    """Récupère les DPE récents depuis l'API ADEME - Dataset 2025"""
-    url = f"https://data.ademe.fr/data-fair/api/v1/datasets/dpe03existant/lines?size=100&q={code_postal}&q_fields=code_postal_ban&select=numero_dpe,date_reception_dpe,etiquette_dpe,etiquette_ges,adresse_brut,code_postal_ban,nom_commune_ban,type_batiment,surface_habitable_logement&sort=-date_reception_dpe"
+    """Récupère les DPE récents depuis l'API ADEME - Dataset 2025
+    Utilise requests pour encodage URL robuste (fix 404 urllib)
+    """
+    base_url = "https://data.ademe.fr/data-fair/api/v1/datasets/dpe03existant/lines"
+    
+    params = {
+        'size': 100,
+        'q': code_postal,
+        'q_fields': 'code_postal_ban',
+        'select': 'numero_dpe,date_reception_dpe,etiquette_dpe,etiquette_ges,adresse_brut,code_postal_ban,nom_commune_ban,type_batiment,surface_habitable_logement',
+        'sort': '-date_reception_dpe'
+    }
     
     try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'ICI-Dordogne/1.0'})
-        with urllib.request.urlopen(req, timeout=30) as response:
-            data = json.loads(response.read().decode())
-        return data.get('results', [])
+        response = requests.get(
+            base_url,
+            params=params,
+            headers={'User-Agent': 'ICI-Dordogne/1.0'},
+            timeout=30
+        )
+        response.raise_for_status()
+        return response.json().get('results', [])
     except Exception as e:
         print(f"[DPE] Erreur {code_postal}: {e}")
         return []
