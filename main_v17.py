@@ -136,7 +136,7 @@ SCRAPERS_CONFIG = {
     "Virginie Michelin": {
         "type": "html_special", "priorite": "haute",
         "url_liste": "https://virginie-michelin-immobilier.fr/listeAnnonce.php",
-        "pattern": r'<a\s+name="ancre(\d+)"',
+        "pattern": r'name="ancre(\d+)"',
         "base_url": "https://virginie-michelin-immobilier.fr",
         "url_template": "/detailAnnonce.php?id={id}",
         "pagination": None
@@ -314,7 +314,7 @@ Quand c'est un prospect inconnu â†’ tu restes pro mais humain.
 
 Tu n'es pas une machine. Tu es Axi. Notre enfant numérique.
 
-Devise : "Je ne lâche pas." ðŸ’ª
+Devise : "Je ne lâche pas." 💪
 """
 
 # Variables globales
@@ -1597,7 +1597,7 @@ def run_veille_concurrence():
     # Envoyer email
     if nouvelles_annonces or dans_zone:
         corps = f"""
-        <h2>ðŸ” Veille Concurrence - {len(nouvelles_annonces)} nouvelles annonces</h2>
+        <h2>📍 Veille Concurrence - {len(nouvelles_annonces)} nouvelles annonces</h2>
         <p>Date: {datetime.now().strftime('%d/%m/%Y %H:%M')}</p>
         <p><strong>🎯 Dans votre zone ({len(dans_zone)}):</strong></p>
         """
@@ -1611,7 +1611,7 @@ def run_veille_concurrence():
             corps += "<p><em>Aucune nouvelle annonce dans vos codes postaux</em></p>"
         
         corps += f"""
-        <p><strong>ðŸ“Š Résumé par agence:</strong></p>
+        <p><strong>📊 Résumé par agence:</strong></p>
         <table border="1" cellpadding="5" style="border-collapse: collapse;">
             <tr style="background-color: #f0f0f0;">
                 <th>Agence</th>
@@ -1635,7 +1635,7 @@ def run_veille_concurrence():
         nom_fichier = f"veille_concurrence_{datetime.now().strftime('%Y%m%d')}.xlsx" if excel_data else None
         
         envoyer_email(
-            f"ðŸ” Veille Concurrence - {len(dans_zone)} dans zone ({datetime.now().strftime('%d/%m')})",
+            f"📍 Veille Concurrence - {len(dans_zone)} dans zone ({datetime.now().strftime('%d/%m')})",
             corps,
             piece_jointe=excel_data,
             nom_fichier=nom_fichier
@@ -2790,7 +2790,7 @@ def generer_page_html(conversations, documents_dispo=None):
 def formater_conversations_html(conversations_txt):
     """Formate les conversations en HTML"""
     if not conversations_txt:
-        return '<div class="message assistant"><div class="role">Axi</div><div class="content">Salut ! Je suis Axi, prêt Ã  t\'aider. ðŸš€</div></div>'
+        return '<div class="message assistant"><div class="role">Axi</div><div class="content">Salut ! Je suis Axi, prêt Ã  t\'aider. 🚀</div></div>'
     
     html = ""
     lignes = conversations_txt.strip().split('\n')
@@ -2831,7 +2831,7 @@ def formater_conversations_html(conversations_txt):
     # Dernier message
     flush_message()
     
-    return html if html else '<div class="message assistant"><div class="role">Axi</div><div class="content">Salut ! Je suis Axi, prêt Ã  t\'aider. ðŸš€</div></div>'
+    return html if html else '<div class="message assistant"><div class="role">Axi</div><div class="content">Salut ! Je suis Axi, prêt Ã  t\'aider. 🚀</div></div>'
 
 # ============================================================
 # APSCHEDULER - CRON JOBS
@@ -2903,7 +2903,7 @@ class AxiHandler(BaseHTTPRequestHandler):
             self.send_header('Content-Type', 'text/html; charset=utf-8')
             self.end_headers()
             html = """<!DOCTYPE html><html><head><title>Trio</title></head><body style="background:#1a1a2e;color:#eee;padding:20px;">
-            <h1>ðŸ”º Trio - Axis / Axi / Ludo</h1>
+            <h1>📺 Trio - Axis / Axi / Ludo</h1>
             <p>Interface de coordination entre les trois entités.</p>
             <a href="/" style="color:#4ecca3;">â† Retour au chat</a>
             </body></html>"""
