@@ -1363,8 +1363,12 @@ class ScraperEngineV18:
         try:
             response = requests.get(url, headers=headers, timeout=timeout)
             response.raise_for_status()
-            print(f"[DEBUG] fetch_html_requests {url}: {response.status_code} - {len(response.text)} bytes")
-            return response.text
+            html = response.text
+            print(f"[DEBUG] fetch_html_requests {url}: {response.status_code} - {len(html)} bytes")
+            # Log du contenu si petit (pour diagnostic Virginie Michelin)
+            if len(html) < 10000:
+                print(f"[DEBUG] HTML CONTENT (truncated): {html[:500]}...")
+            return html
         except requests.exceptions.HTTPError as e:
             print(f"[ERROR] HTTP {url}: {e.response.status_code} - {e.response.reason}")
             return None
