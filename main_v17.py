@@ -830,14 +830,48 @@ def get_enrichisseur():
 def get_dpe_ademe(code_postal):
     """Récupère les DPE récents depuis l'API ADEME - Dataset 2025
     Utilise requests pour encodage URL robuste (fix 404 urllib)
+    26 champs enrichis incluant _geopoint (plus besoin de géocoder!)
     """
     base_url = "https://data.ademe.fr/data-fair/api/v1/datasets/dpe03existant/lines"
+    
+    # 26 champs enrichis pour prospection complète
+    champs = [
+        # IDENTIFICATION
+        'numero_dpe',
+        'date_reception_dpe',
+        'date_fin_validite_dpe',
+        # ADRESSE COMPLÈTE
+        'adresse_ban',
+        'adresse_brut',
+        'numero_voie_ban',
+        'nom_rue_ban',
+        'code_postal_ban',
+        'nom_commune_ban',
+        'complement_adresse_logement',
+        '_geopoint',  # Coordonnées GPS directes !
+        # PERFORMANCE ÉNERGÉTIQUE
+        'etiquette_dpe',
+        'etiquette_ges',
+        'conso_5_usages_par_m2_ep',
+        'emission_ges_5_usages_par_m2',
+        'cout_total_5_usages',
+        # BÂTIMENT
+        'type_batiment',
+        'surface_habitable_logement',
+        'annee_construction',
+        'periode_construction',
+        'nombre_niveau_logement',
+        # CHAUFFAGE / ISOLATION
+        'type_installation_chauffage',
+        'type_energie_principale_chauffage',
+        'qualite_isolation_enveloppe',
+    ]
     
     params = {
         'size': 100,
         'q': code_postal,
         'q_fields': 'code_postal_ban',
-        'select': 'numero_dpe,date_reception_dpe,etiquette_dpe,etiquette_ges,adresse_brut,code_postal_ban,nom_commune_ban,type_batiment,surface_habitable_logement',
+        'select': ','.join(champs),
         'sort': '-date_reception_dpe'
     }
     
@@ -850,6 +884,9 @@ def get_dpe_ademe(code_postal):
         )
         response.raise_for_status()
         return response.json().get('results', [])
+    except Exception as e:
+        print(f"[DPE] Erreur {code_postal}: {e}")
+        return []
     except Exception as e:
         print(f"[DPE] Erreur {code_postal}: {e}")
         return []
@@ -901,42 +938,81 @@ def run_veille_dpe():
     # Envoyer email si nouveaux DPE
     if nouveaux_dpe:
         corps = f"""
-        <h2>ðŸ  Veille DPE - {len(nouveaux_dpe)} nouveaux diagnostics</h2>
+        <h2>🏠 Veille DPE - {len(nouveaux_dpe)} nouveaux diagnostics</h2>
         <p>Date: {datetime.now().strftime('%d/%m/%Y %H:%M')}</p>
-        <table border="1" cellpadding="5" style="border-collapse: collapse;">
-            <tr style="background-color: #f0f0f0;">
-                <th>Adresse</th>
-                <th>CP</th>
+        <p>🎯 <strong>Passoires énergétiques (F/G) à prioriser pour prospection</strong></p>
+        <table border="1" cellpadding="8" style="border-collapse: collapse; font-size: 13px;">
+            <tr style="background-color: #2c3e50; color: white;">
+                <th>📍 Adresse</th>
                 <th>Commune</th>
                 <th>Type</th>
                 <th>Surface</th>
+                <th>Année</th>
                 <th>DPE</th>
-                <th>Historique DVF</th>
+                <th>GES</th>
+                <th>Conso</th>
+                <th>Coût/an</th>
+                <th>Chauffage</th>
+                <th>🗺️ Maps</th>
             </tr>
         """
         
         for dpe in nouveaux_dpe:
-            dvf_info = ""
-            if dpe.get('historique_dvf'):
-                derniere_vente = dpe['historique_dvf'][0]
-                dvf_info = f"{derniere_vente.get('date_mutation', '')} - {derniere_vente.get('valeur_fonciere', 0):,.0f}â‚¬"
+            # Construire l'adresse complète
+            adresse_complete = dpe.get('adresse_ban', '') or dpe.get('adresse_brut', 'N/A')
+            complement = dpe.get('complement_adresse_logement', '')
+            if complement:
+                adresse_complete += f" ({complement})"
+            
+            # Générer le lien Google Maps
+            geopoint = dpe.get('_geopoint', '')
+            if geopoint and ',' in str(geopoint):
+                lien_maps = f"https://www.google.com/maps?q={geopoint}"
+            else:
+                adresse_recherche = f"{dpe.get('adresse_brut', '')} {dpe.get('code_postal_ban', '')} {dpe.get('nom_commune_ban', '')}"
+                lien_maps = f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(adresse_recherche)}"
+            
+            # Couleur selon étiquette DPE
+            etiquette = dpe.get('etiquette_dpe', '')
+            couleur_dpe = '#e74c3c' if etiquette in ['F', 'G'] else '#27ae60' if etiquette in ['A', 'B'] else '#f39c12'
+            
+            # Formater les données
+            surface = dpe.get('surface_habitable_logement', '')
+            surface_str = f"{surface} m2" if surface else ''
+            annee = dpe.get('annee_construction', '') or dpe.get('periode_construction', '')
+            conso = dpe.get('conso_5_usages_par_m2_ep', '')
+            conso_str = f"{conso} kWh" if conso else ''
+            cout = dpe.get('cout_total_5_usages', '')
+            cout_str = f"{cout:.0f}E" if cout else ''
+            chauffage = dpe.get('type_energie_principale_chauffage', '')
+            if chauffage:
+                chauffage = chauffage[:15]
             
             corps += f"""
             <tr>
-                <td>{dpe.get('adresse_brut', 'N/A')}</td>
-                <td>{dpe.get('code_postal_ban', '')}</td>
+                <td><strong>{adresse_complete}</strong><br><small>{dpe.get('code_postal_ban', '')}</small></td>
                 <td>{dpe.get('nom_commune_ban', '')}</td>
                 <td>{dpe.get('type_batiment', '')}</td>
-                <td>{dpe.get('surface_habitable_logement', '')} m²</td>
-                <td><strong>{dpe.get('etiquette_dpe', '')}</strong></td>
-                <td>{dvf_info}</td>
+                <td>{surface_str}</td>
+                <td>{annee}</td>
+                <td style="background-color: {couleur_dpe}; color: white; text-align: center; font-weight: bold;">{etiquette}</td>
+                <td style="text-align: center;">{dpe.get('etiquette_ges', '')}</td>
+                <td>{conso_str}</td>
+                <td>{cout_str}</td>
+                <td><small>{chauffage}</small></td>
+                <td><a href="{lien_maps}" target="_blank">Voir</a></td>
             </tr>
             """
         
-        corps += "</table><p>ðŸ¤– GÃ©nÃ©rÃ© automatiquement par Axi</p>"
+        corps += """
+        </table>
+        <br>
+        <p>Astuce: Les DPE F/G (rouge) sont des passoires energetiques = opportunite de mandat!</p>
+        <p>Genere automatiquement par Axi - ICI Dordogne</p>
+        """
         
         envoyer_email(
-            f"ðŸ  Veille DPE - {len(nouveaux_dpe)} nouveaux ({datetime.now().strftime('%d/%m')})",
+            f"Veille DPE - {len(nouveaux_dpe)} nouveaux ({datetime.now().strftime('%d/%m')})",
             corps
         )
     
