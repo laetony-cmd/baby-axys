@@ -436,6 +436,157 @@ def sauver_json(fichier, data):
         json.dump(data, f)
 
 # ============================================================
+# POSTGRESQL - CACHES PERSISTANTS VEILLES
+# ============================================================
+
+def get_db_connection():
+    """Connexion PostgreSQL via DATABASE_URL Railway"""
+    database_url = os.environ.get('DATABASE_URL')
+    if not database_url:
+        print("[DB] WARNING: DATABASE_URL non définie, fallback JSON")
+        return None
+    try:
+        return psycopg2.connect(database_url)
+    except Exception as e:
+        print(f"[DB] Erreur connexion: {e}")
+        return None
+
+
+# === FONCTIONS DPE ===
+
+def db_get_dpe_connus():
+    """Récupère tous les numéros DPE connus depuis PostgreSQL"""
+    conn = get_db_connection()
+    if not conn:
+        return charger_json(FICHIER_DPE, {})  # Fallback JSON
+    
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT numero_dpe FROM dpe_connus")
+        result = {row[0]: True for row in cur.fetchall()}
+        cur.close()
+        conn.close()
+        return result
+    except Exception as e:
+        print(f"[DB] Erreur lecture DPE: {e}")
+        conn.close()
+        return {}
+
+
+def db_add_dpe(numero_dpe, dpe_data):
+    """Ajoute un nouveau DPE dans PostgreSQL"""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO dpe_connus (numero_dpe, code_postal, commune, etiquette, surface, data)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (numero_dpe) DO NOTHING
+        """, (
+            numero_dpe,
+            dpe_data.get('code_postal_ban', dpe_data.get('Code_postal_(BAN)', '')),
+            dpe_data.get('nom_commune_ban', dpe_data.get('Nom_commune_(BAN)', '')),
+            dpe_data.get('etiquette_dpe', dpe_data.get('Etiquette_DPE', '')),
+            dpe_data.get('surface_habitable_logement', dpe_data.get('Surface_habitable_logement', 0)),
+            json.dumps(dpe_data, ensure_ascii=False)
+        ))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"[DB] Erreur ajout DPE {numero_dpe}: {e}")
+        conn.close()
+        return False
+
+
+def db_count_dpe():
+    """Compte le nombre de DPE en base"""
+    conn = get_db_connection()
+    if not conn:
+        return 0
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM dpe_connus")
+        count = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+        return count
+    except:
+        return 0
+
+
+# === FONCTIONS CONCURRENCE ===
+
+def db_get_urls_connues():
+    """Récupère toutes les URLs connues par agence depuis PostgreSQL"""
+    conn = get_db_connection()
+    if not conn:
+        return charger_json(FICHIER_URLS, {})  # Fallback JSON
+    
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT agence, url_annonce FROM concurrence_connue")
+        
+        result = {}
+        for row in cur.fetchall():
+            agence, url = row
+            if agence not in result:
+                result[agence] = []
+            result[agence].append(url)
+        
+        cur.close()
+        conn.close()
+        return result
+    except Exception as e:
+        print(f"[DB] Erreur lecture URLs: {e}")
+        conn.close()
+        return {}
+
+
+def db_add_url(agence, url, prix=None, code_postal=None):
+    """Ajoute une nouvelle URL d'annonce dans PostgreSQL"""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO concurrence_connue (url_annonce, agence, prix, code_postal)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (url_annonce) DO NOTHING
+        """, (url, agence, prix, code_postal))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"[DB] Erreur ajout URL: {e}")
+        conn.close()
+        return False
+
+
+def db_count_urls():
+    """Compte le nombre d'URLs en base"""
+    conn = get_db_connection()
+    if not conn:
+        return 0
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM concurrence_connue")
+        count = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+        return count
+    except:
+        return 0
+
+
+# ============================================================
 # EMAIL
 # ============================================================
 
@@ -898,7 +1049,8 @@ def run_veille_dpe():
     print(f"\n[VEILLE DPE] DÃ©marrage - {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     
     # Charger les DPE dÃ©jÃ  connus
-    dpe_connus = charger_json(FICHIER_DPE, {})
+    dpe_connus = db_get_dpe_connus()
+    print(f"[DPE] {len(dpe_connus)} DPE déjà connus en base")
     nouveaux_dpe = []
     
     # RÃ©cupÃ©rer l'enrichisseur DVF
@@ -911,11 +1063,9 @@ def run_veille_dpe():
         for dpe in resultats:
             numero = dpe.get('numero_dpe', '')
             if numero and numero not in dpe_connus:
-                # Nouveau DPE trouvé
-                dpe_connus[numero] = {
-                    'date_detection': datetime.now().isoformat(),
-                    'data': dpe
-                }
+                # Nouveau DPE trouvé - AJOUTER EN BASE
+                if db_add_dpe(numero, dpe):
+                    dpe_connus[numero] = True  # Cache local
                 
                 # Enrichir avec DVF si possible
                 adresse = dpe.get('adresse_brut', '')
@@ -931,10 +1081,10 @@ def run_veille_dpe():
         
         time.sleep(0.5)  # Pause entre requÃªtes
     
-    # Sauvegarder
-    sauver_json(FICHIER_DPE, dpe_connus)
+    # PAS DE sauver_json() - tout est en PostgreSQL !
+    total_connus = db_count_dpe()
     
-    print(f"[DPE] TerminÃ©: {len(nouveaux_dpe)} nouveaux DPE")
+    print(f"[DPE] Terminé: {len(nouveaux_dpe)} nouveaux DPE, {total_connus} total en base")
     
     # Envoyer email si nouveaux DPE
     if nouveaux_dpe:
@@ -1017,7 +1167,7 @@ def run_veille_dpe():
             corps
         )
     
-    return {"nouveaux": len(nouveaux_dpe), "total_connus": len(dpe_connus)}
+    return {"nouveaux": len(nouveaux_dpe), "total_connus": total_connus}
 
 # ============================================================
 # VEILLE CONCURRENCE
@@ -1141,7 +1291,8 @@ def run_veille_concurrence():
     print(f"\n[CONCURRENCE] DÃ©marrage - {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     
     # Charger les URLs dÃ©jÃ  connues
-    urls_connues = charger_json(FICHIER_URLS, {})
+    urls_connues = db_get_urls_connues()
+    print(f"[CONCURRENCE] {sum(len(v) for v in urls_connues.values())} URLs déjà connues en base")
     nouvelles_annonces = []
     toutes_urls = {}
     dans_zone = []
@@ -1153,41 +1304,42 @@ def run_veille_concurrence():
         
         # Identifier les nouvelles URLs
         agence_id = agence['nom']
-        if agence_id not in urls_connues:
-            urls_connues[agence_id] = []
+        urls_agence_connues = urls_connues.get(agence_id, [])
         
         for url in urls:
-            if url not in urls_connues[agence_id]:
-                urls_connues[agence_id].append(url)
-                
+            if url not in urls_agence_connues:
                 # Enrichir avec prix et CP
+                prix = None
+                cp = None
                 try:
                     html_detail = fetch_url(url, timeout=10)
                     if html_detail:
                         prix = extraire_prix_page(html_detail)
                         cp = extraire_cp_page_detail(html_detail)
-                        
-                        annonce = {
-                            'agence': agence['nom'],
-                            'url': url,
-                            'prix': prix,
-                            'code_postal': cp,
-                            'date_detection': datetime.now().isoformat()
-                        }
-                        nouvelles_annonces.append(annonce)
-                        
-                        # VÃ©rifier si dans notre zone
-                        if cp and cp in CODES_POSTAUX:
-                            dans_zone.append(annonce)
                 except:
                     pass
+                
+                # AJOUTER EN BASE
+                if db_add_url(agence_id, url, prix, cp):
+                    annonce = {
+                        'agence': agence['nom'],
+                        'url': url,
+                        'prix': prix,
+                        'code_postal': cp,
+                        'date_detection': datetime.now().isoformat()
+                    }
+                    nouvelles_annonces.append(annonce)
+                    
+                    # VÃ©rifier si dans notre zone
+                    if cp and cp in CODES_POSTAUX:
+                        dans_zone.append(annonce)
         
         time.sleep(1)  # Pause entre agences
     
-    # Sauvegarder
-    sauver_json(FICHIER_URLS, urls_connues)
+    # PAS DE sauver_json() - tout est en PostgreSQL !
+    total_urls = db_count_urls()
     
-    print(f"[CONCURRENCE] TerminÃ©: {len(nouvelles_annonces)} nouvelles, {len(dans_zone)} dans zone")
+    print(f"[CONCURRENCE] Terminé: {len(nouvelles_annonces)} nouvelles, {len(dans_zone)} dans zone, {total_urls} total en base")
     
     # CrÃ©er Excel si disponible
     excel_data = None
@@ -2683,14 +2835,15 @@ class AxiHandler(BaseHTTPRequestHandler):
                 }).encode())
         
         elif path == '/test-veille':
-            # Test sans email
+            # Test sans email - VERSION POSTGRESQL
             print("[TEST] Veille DPE (mode test)")
-            dpe_connus = charger_json(FICHIER_DPE, {})
+            dpe_connus = db_get_dpe_connus()
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps({
                 "mode": "test",
+                "storage": "postgresql",
                 "dpe_connus": len(dpe_connus),
                 "codes_postaux": CODES_POSTAUX
             }).encode())
@@ -2703,14 +2856,16 @@ class AxiHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(result).encode())
         
         elif path == '/test-veille-concurrence':
+            # Test sans email - VERSION POSTGRESQL
             print("[TEST] Veille Concurrence (mode test)")
-            urls_connues = charger_json(FICHIER_URLS, {})
+            urls_connues = db_get_urls_connues()
             total_urls = sum(len(v) for v in urls_connues.values())
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps({
                 "mode": "test",
+                "storage": "postgresql",
                 "agences": len(AGENCES),
                 "urls_connues": total_urls
             }).encode())
