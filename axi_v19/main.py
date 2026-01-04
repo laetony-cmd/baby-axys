@@ -97,6 +97,15 @@ except ImportError as e:
     print(f"  ⚠️ modules.legacy not available: {e}", flush=True)
     LEGACY_OK = False
 
+# Import module veille (DPE + Concurrence)
+try:
+    from .modules.veille import register_veille_routes
+    print("  ✅ modules.veille loaded", flush=True)
+    VEILLE_OK = True
+except ImportError as e:
+    print(f"  ⚠️ modules.veille not available: {e}", flush=True)
+    VEILLE_OK = False
+
 # =============================================================================
 # IMPORTS STANDARDS
 # =============================================================================
@@ -290,6 +299,12 @@ class AxiV19:
             register_legacy_routes(server)
         else:
             logger.warning("⚠️ Routes legacy non disponibles")
+        
+        # Routes veille (DPE + Concurrence)
+        if VEILLE_OK:
+            register_veille_routes(server)
+        else:
+            logger.warning("⚠️ Routes veille non disponibles")
     
     def start(self):
         """Démarre l'application V19 complète."""
