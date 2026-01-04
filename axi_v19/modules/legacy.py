@@ -108,10 +108,7 @@ Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Paris
 - ✅ Imports relatifs corrigés (rapport Lumo)
 - ✅ Premier Cri implémenté
 - ✅ Tables v19_* créées
-
-### 🟡 EN COURS
-- ⏳ Migration veilles DPE/Concurrence vers V19
-- ⏳ Port endpoints legacy restants
+- ✅ Veilles DPE + Concurrence portées
 
 ### 📅 DATES
 - 7 janvier: Tirage Bio Vergt
@@ -129,55 +126,13 @@ Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Paris
     return briefing
 
 
-def run_veille(query):
-    """GET /run-veille - Stub pour veille DPE."""
-    logger.warning("⚠️ Veille DPE appelée - Migration V19 en cours")
-    return {
-        "status": "migration_pending",
-        "message": "La veille DPE est en cours de migration vers V19. Utiliser /test-veille pour le moment.",
-        "version": "V19"
-    }
-
-
-def test_veille(query):
-    """GET /test-veille - Stub pour test veille DPE."""
-    return {
-        "status": "test_mode",
-        "message": "Test veille DPE - Migration V19 en cours",
-        "version": "V19"
-    }
-
-
-def run_veille_concurrence(query):
-    """GET /run-veille-concurrence - Stub pour veille concurrence."""
-    logger.warning("⚠️ Veille Concurrence appelée - Migration V19 en cours")
-    return {
-        "status": "migration_pending", 
-        "message": "La veille Concurrence est en cours de migration vers V19.",
-        "version": "V19"
-    }
-
-
-def test_veille_concurrence(query):
-    """GET /test-veille-concurrence - Stub pour test veille concurrence."""
-    return {
-        "status": "test_mode",
-        "message": "Test veille Concurrence - Migration V19 en cours",
-        "version": "V19"
-    }
-
-
 def register_legacy_routes(server):
-    """Enregistre tous les endpoints legacy sur le serveur."""
+    """Enregistre les endpoints legacy sur le serveur."""
     
-    # Memory et briefing
+    # Memory et briefing uniquement
     server.register_route('GET', '/memory', get_memory)
     server.register_route('GET', '/briefing', get_briefing)
     
-    # Veilles (stubs)
-    server.register_route('GET', '/run-veille', run_veille)
-    server.register_route('GET', '/test-veille', test_veille)
-    server.register_route('GET', '/run-veille-concurrence', run_veille_concurrence)
-    server.register_route('GET', '/test-veille-concurrence', test_veille_concurrence)
+    # Note: Les veilles sont gérées par modules/veille.py
     
-    logger.info("📍 Routes legacy V18 enregistrées (compatibilité)")
+    logger.info("📍 Routes legacy V18 enregistrées (/memory, /briefing)")
