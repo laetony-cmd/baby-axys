@@ -4,6 +4,7 @@ Serveur HTTP threadé V19 - Architecture Bunker
 Remplace FastAPI par http.server natif (zéro dépendance nouvelle)
 
 Plan Lumo V3 - Section 5: Serveur HTTP
++ SÉCURISATION API - 4 janvier 2026
 """
 
 import json
@@ -13,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Dict, Any, Callable, Optional
 from urllib.parse import urlparse, parse_qs
 
-from .config import settings
+from .config import settings, check_auth
 from .database import db
 
 logger = logging.getLogger("axi_v19.server")
@@ -23,6 +24,7 @@ class AxiRequestHandler(BaseHTTPRequestHandler):
     """
     Handler HTTP minimaliste et robuste V19.
     Gère les réponses JSON basiques pour les endpoints de santé et API.
+    + Authentification pour endpoints sensibles.
     """
     
     # Routes enregistrées dynamiquement
@@ -34,6 +36,14 @@ class AxiRequestHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
         query = parse_qs(parsed.query)
+        
+        # === AUTHENTIFICATION ===
+        headers_dict = {k: v for k, v in self.headers.items()}
+        authorized, error_msg = check_auth(path, 'GET', query, headers_dict)
+        
+        if not authorized:
+            self._send_json(401, {"error": error_msg, "code": 401})
+            return
         
         # Routing
         if path in self.routes_get:
@@ -56,6 +66,15 @@ class AxiRequestHandler(BaseHTTPRequestHandler):
         """Gère les requêtes POST."""
         parsed = urlparse(self.path)
         path = parsed.path
+        query = parse_qs(parsed.query)
+        
+        # === AUTHENTIFICATION ===
+        headers_dict = {k: v for k, v in self.headers.items()}
+        authorized, error_msg = check_auth(path, 'POST', query, headers_dict)
+        
+        if not authorized:
+            self._send_json(401, {"error": error_msg, "code": 401})
+            return
         
         # Lire le body
         content_length = int(self.headers.get('Content-Length', 0))
@@ -82,7 +101,8 @@ class AxiRequestHandler(BaseHTTPRequestHandler):
         """Endpoint vital pour Railway."""
         self._send_json(200, {
             "status": "ok",
-            "version": f"v{settings.version}"
+            "version": f"v{settings.version}",
+            "secured": bool(settings.api_secret)
         })
     
     def _handle_ready(self):
@@ -93,7 +113,8 @@ class AxiRequestHandler(BaseHTTPRequestHandler):
         self._send_json(200 if ready else 503, {
             "ready": ready,
             "database": db_health.get("status"),
-            "version": f"v{settings.version}"
+            "version": f"v{settings.version}",
+            "secured": bool(settings.api_secret)
         })
     
     def _handle_status(self):
@@ -102,8 +123,11 @@ class AxiRequestHandler(BaseHTTPRequestHandler):
             "service": f"Axi ICI Dordogne V{settings.version}",
             "status": "ok",
             "environment": settings.environment,
+            "secured": bool(settings.api_secret),
             "database": db.health_check(),
-            "features": ["V19 Bunker", "Prospects", "Conversations", "Brain"],
+            "features": ["V19 Bunker", "Prospects", "Conversations", "Brain", "Auth"],
+            "public_endpoints": ["/", "/health", "/ready", "/status", "/memory", "/briefing"],
+            "protected_endpoints": ["/run-veille", "/run-veille-concurrence", "/v19/brain (POST)"],
             "endpoints": list(self.routes_get.keys()) + list(self.routes_post.keys()) + [
                 "/health", "/ready", "/status"
             ]
@@ -169,7 +193,13 @@ class ServerManager:
             self._thread = threading.Thread(target=self._serve, daemon=True)
             self._thread.start()
             self._running = True
-            logger.info(f"🚀 Serveur HTTP V19 démarré sur {settings.http_host}:{settings.http_port}")
+            
+            # Log sécurité
+            if settings.api_secret:
+                logger.info(f"🔒 Serveur HTTP V19 démarré sur {settings.http_host}:{settings.http_port} (SÉCURISÉ)")
+            else:
+                logger.warning(f"⚠️ Serveur HTTP V19 démarré sur {settings.http_host}:{settings.http_port} (NON SÉCURISÉ - définir AXI_API_SECRET)")
+                
         except Exception as e:
             logger.critical(f"❌ Échec démarrage serveur: {e}")
             raise
@@ -216,6 +246,7 @@ if __name__ == "__main__":
     server.start()
     
     print(f"Serveur démarré sur port {settings.http_port}")
+    print(f"Sécurisé: {bool(settings.api_secret)}")
     print("Ctrl+C pour arrêter")
     
     try:
