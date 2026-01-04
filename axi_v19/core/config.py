@@ -4,6 +4,7 @@ Configuration centralisée V19 - Architecture Bunker
 Première ligne de défense contre les erreurs d'environnement.
 
 Plan Lumo V3 - Section 2: Fondations Architecturales
++ SÉCURISATION API - 4 janvier 2026
 """
 
 import os
@@ -91,14 +92,17 @@ class Settings:
     http_port: int = field(default_factory=lambda: int(os.getenv("PORT", "8000")))
     http_host: str = "0.0.0.0"
     
+    # === SÉCURITÉ API ===
+    api_secret: str = field(default_factory=lambda: os.getenv("AXI_API_SECRET", ""))
+    
     # === APIs externes ===
     anthropic_api_key: str = field(default_factory=lambda: os.getenv("ANTHROPIC_API_KEY", ""))
     
     # === Email (notifications) ===
-    gmail_user: str = "u5050786429@gmail.com"
-    gmail_app_password: str = "izemquwmmqjdasrk"
-    email_to: str = "agence@icidordogne.fr"
-    email_cc: str = "laetony@gmail.com"  # TOUJOURS en copie
+    gmail_user: str = field(default_factory=lambda: os.getenv("GMAIL_USER", "u5050786429@gmail.com"))
+    gmail_app_password: str = field(default_factory=lambda: os.getenv("GMAIL_APP_PASSWORD", "izemquwmmqjdasrk"))
+    email_to: str = field(default_factory=lambda: os.getenv("EMAIL_TO", "agence@icidordogne.fr"))
+    email_cc: str = "laetony@gmail.com"  # TOUJOURS en copie - JAMAIS modifiable
     
     # === ICI Dordogne ===
     codes_postaux_vergt: List[str] = field(default_factory=lambda: [
@@ -109,7 +113,7 @@ class Settings:
     ])
     
     # === Métadonnées V19 ===
-    version: str = "19.0.0"
+    version: str = "19.1.0"  # Bump version pour sécurité
     environment: str = field(default_factory=lambda: os.getenv("RAILWAY_ENVIRONMENT", "development"))
     
     def __post_init__(self):
@@ -118,6 +122,8 @@ class Settings:
             logger.warning("⚠️ DATABASE_URL non définie - mode dégradé")
         if not self.anthropic_api_key:
             logger.warning("⚠️ ANTHROPIC_API_KEY non définie - chat désactivé")
+        if not self.api_secret:
+            logger.warning("⚠️ AXI_API_SECRET non définie - endpoints sensibles non protégés!")
     
     @property
     def all_codes_postaux(self) -> List[str]:
@@ -135,8 +141,8 @@ class Settings:
         if self.is_production():
             if not self.database_url:
                 errors.append("DATABASE_URL obligatoire en production")
-            if not self.anthropic_api_key:
-                errors.append("ANTHROPIC_API_KEY obligatoire en production")
+            if not self.api_secret:
+                errors.append("AXI_API_SECRET obligatoire en production")
         
         if errors:
             for e in errors:
@@ -149,6 +155,79 @@ class Settings:
 
 # Instance globale singleton
 settings = Settings()
+
+
+# =============================================================================
+# AUTHENTIFICATION API
+# =============================================================================
+
+# Endpoints qui NE NÉCESSITENT PAS d'authentification (publics)
+PUBLIC_ENDPOINTS = [
+    "/",
+    "/health",
+    "/ready", 
+    "/status",
+    "/memory",
+    "/briefing",
+]
+
+# Endpoints qui NÉCESSITENT une authentification
+PROTECTED_ENDPOINTS = [
+    "/run-veille",
+    "/run-veille-concurrence",
+    "/v19/brain",  # POST seulement, GET est public
+]
+
+
+def check_auth(path: str, method: str, query: dict, headers: dict) -> tuple:
+    """
+    Vérifie l'authentification pour un endpoint.
+    
+    Args:
+        path: Chemin de l'endpoint
+        method: GET, POST, etc.
+        query: Paramètres de requête
+        headers: Headers HTTP
+    
+    Returns:
+        (authorized: bool, error_message: str or None)
+    """
+    # Endpoints publics - toujours autorisés
+    if path in PUBLIC_ENDPOINTS:
+        return True, None
+    
+    # GET sur /v19/brain est public (lecture mémoire)
+    if path == "/v19/brain" and method == "GET":
+        return True, None
+    
+    # Si pas de secret configuré, on laisse passer (dev mode)
+    if not settings.api_secret:
+        logger.warning(f"⚠️ Accès non authentifié à {path} (AXI_API_SECRET non configuré)")
+        return True, None
+    
+    # Vérifier le token dans query params ou headers
+    token = None
+    
+    # Option 1: Query param ?token=xxx
+    if 'token' in query:
+        token = query['token'][0] if isinstance(query['token'], list) else query['token']
+    
+    # Option 2: Header Authorization: Bearer xxx
+    auth_header = headers.get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        token = auth_header[7:]
+    
+    # Option 3: Header X-API-Key: xxx
+    if not token:
+        token = headers.get('X-API-Key', '')
+    
+    # Vérification
+    if token == settings.api_secret:
+        return True, None
+    
+    # Non autorisé
+    logger.warning(f"🚫 Accès refusé à {path} - token invalide ou manquant")
+    return False, "Unauthorized - Token invalide ou manquant"
 
 
 # =============================================================================
@@ -173,5 +252,6 @@ if __name__ == "__main__":
     print(f"Version: {settings.version}")
     print(f"Environment: {settings.environment}")
     print(f"Port HTTP: {settings.http_port}")
+    print(f"API Secret: {'✅ Configuré' if settings.api_secret else '❌ Non configuré'}")
     print(f"Codes postaux: {len(settings.all_codes_postaux)}")
     settings.validate()
