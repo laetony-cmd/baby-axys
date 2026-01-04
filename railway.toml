@@ -8,10 +8,11 @@ restartPolicyMaxRetries = 3
 healthcheckPath = "/health"
 healthcheckTimeout = 120
 
+# Crons avec token de sécurité
 [[crons]]
 schedule = "0 6 * * *"
-endpoint = "/run-veille-concurrence"
+endpoint = "/run-veille-concurrence?token=fa5e235b1eab41d4937f6cc9bf78abf8"
 
 [[crons]]
 schedule = "0 7 * * *"
-endpoint = "/run-veille"
+endpoint = "/run-veille?token=fa5e235b1eab41d4937f6cc9bf78abf8"
