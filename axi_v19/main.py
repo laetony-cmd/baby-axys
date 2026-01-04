@@ -5,28 +5,108 @@ AXI V19 - Point d'entrée principal
 Architecture Bunker - "Je ne lâche pas." 💪
 
 Plan Lumo V3 - Section 6: Orchestration et Démarrage
+Correction imports: 4 janvier 2026
 """
 
+# =============================================================================
+# PREMIER CRI - Logs AVANT tout import (recommandation Lumo)
+# =============================================================================
 import sys
+import os
+from datetime import datetime
+
+print("=" * 60, flush=True)
+print(f"🚀 [V19] KERNEL INITIALIZING - {datetime.now().isoformat()}", flush=True)
+print(f"🐍 [V19] Python: {sys.version.split()[0]}", flush=True)
+print(f"📁 [V19] CWD: {os.getcwd()}", flush=True)
+print(f"📦 [V19] __name__: {__name__}", flush=True)
+print(f"📦 [V19] __package__: {__package__}", flush=True)
+print("=" * 60, flush=True)
+
+# =============================================================================
+# VÉRIFICATION DES DÉPENDANCES CRITIQUES (Guard-fou Lumo)
+# =============================================================================
+print("[V19] Checking critical dependencies...", flush=True)
+
+REQUIRED_VERSIONS = {
+    "psycopg2": "2.9",
+    "apscheduler": "3.",
+    "anthropic": "0.",
+}
+
+def check_dependency(module_name, expected_prefix):
+    """Vérifie qu'une dépendance est présente et compatible."""
+    try:
+        mod = __import__(module_name)
+        version = getattr(mod, '__version__', 'unknown')
+        if version.startswith(expected_prefix):
+            print(f"  ✅ {module_name}: {version}", flush=True)
+            return True
+        else:
+            print(f"  ⚠️ {module_name}: {version} (expected {expected_prefix}*)", flush=True)
+            return True  # Continue anyway, just warn
+    except ImportError as e:
+        print(f"  ❌ {module_name}: MISSING - {e}", flush=True)
+        return False
+
+deps_ok = True
+for mod, prefix in REQUIRED_VERSIONS.items():
+    if not check_dependency(mod, prefix):
+        deps_ok = False
+
+if not deps_ok:
+    print("❌ [V19] Critical dependencies missing - ABORT", flush=True)
+    sys.exit(1)
+
+print("[V19] Dependencies OK ✅", flush=True)
+
+# =============================================================================
+# IMPORTS V19 - Syntaxe relative (fix du bug)
+# =============================================================================
+print("[V19] Loading core modules...", flush=True)
+
+try:
+    from .core.config import settings, validate_dependencies
+    print("  ✅ core.config loaded", flush=True)
+except ImportError as e:
+    print(f"  ❌ core.config FAILED: {e}", flush=True)
+    sys.exit(1)
+
+try:
+    from .core.database import db
+    print("  ✅ core.database loaded", flush=True)
+except ImportError as e:
+    print(f"  ❌ core.database FAILED: {e}", flush=True)
+    sys.exit(1)
+
+try:
+    from .core.server import server
+    print("  ✅ core.server loaded", flush=True)
+except ImportError as e:
+    print(f"  ❌ core.server FAILED: {e}", flush=True)
+    sys.exit(1)
+
+print("[V19] Core modules loaded ✅", flush=True)
+
+# =============================================================================
+# IMPORTS STANDARDS
+# =============================================================================
 import signal
 import logging
 import threading
 import time
-from datetime import datetime
 
 # Import conditionnel APScheduler
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
-    from apscheduler.triggers.cron import CronTrigger
     import pytz
     SCHEDULER_OK = True
+    TZ_PARIS = pytz.timezone('Europe/Paris')
+    print("  ✅ APScheduler loaded", flush=True)
 except ImportError:
     SCHEDULER_OK = False
-
-# Imports V19
-from core.config import settings, validate_dependencies
-from core.database import db
-from core.server import server
+    TZ_PARIS = None
+    print("  ⚠️ APScheduler not available", flush=True)
 
 # Configuration logging
 logging.basicConfig(
@@ -36,9 +116,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger("axi_v19.main")
 
-# Timezone Paris
-TZ_PARIS = pytz.timezone('Europe/Paris') if SCHEDULER_OK else None
+print("[V19] All imports complete ✅", flush=True)
+print("=" * 60, flush=True)
 
+
+# =============================================================================
+# CLASSE PRINCIPALE
+# =============================================================================
 
 class AxiV19:
     """
@@ -82,9 +166,6 @@ class AxiV19:
             name='V19 Heartbeat'
         )
         
-        # Placeholder pour futures veilles V19
-        # self._scheduler.add_job(...)
-        
         self._scheduler.start()
         logger.info("⏰ Scheduler V19 démarré")
     
@@ -95,6 +176,14 @@ class AxiV19:
     
     def _register_routes(self):
         """Enregistre les routes API V19."""
+        
+        # Route racine
+        def get_root(query):
+            return {
+                "service": f"Axi ICI Dordogne V{settings.version}",
+                "status": "ok",
+                "message": "Je ne lâche pas. 💪"
+            }
         
         # API Prospects
         def get_prospects(query):
@@ -179,6 +268,7 @@ class AxiV19:
                 return {"error": str(e), "results": []}
         
         # Enregistrement des routes
+        server.register_route('GET', '/', get_root)
         server.register_route('GET', '/v19/prospects', get_prospects)
         server.register_route('GET', '/v19/brain', get_brain)
         server.register_route('POST', '/v19/brain', post_brain)
@@ -270,6 +360,7 @@ class AxiV19:
 
 def main():
     """Point d'entrée principal."""
+    print("[V19] Starting main application...", flush=True)
     app = AxiV19()
     app.start()
 
