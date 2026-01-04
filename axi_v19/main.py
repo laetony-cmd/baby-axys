@@ -88,6 +88,15 @@ except ImportError as e:
 
 print("[V19] Core modules loaded ✅", flush=True)
 
+# Import module legacy (endpoints V18 compatibles)
+try:
+    from .modules.legacy import register_legacy_routes
+    print("  ✅ modules.legacy loaded", flush=True)
+    LEGACY_OK = True
+except ImportError as e:
+    print(f"  ⚠️ modules.legacy not available: {e}", flush=True)
+    LEGACY_OK = False
+
 # =============================================================================
 # IMPORTS STANDARDS
 # =============================================================================
@@ -275,6 +284,12 @@ class AxiV19:
         server.register_route('GET', '/v19/veille', get_veille_results)
         
         logger.info("📍 Routes API V19 enregistrées")
+        
+        # Routes legacy (compatibilité V18)
+        if LEGACY_OK:
+            register_legacy_routes(server)
+        else:
+            logger.warning("⚠️ Routes legacy non disponibles")
     
     def start(self):
         """Démarre l'application V19 complète."""
