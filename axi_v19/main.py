@@ -193,6 +193,36 @@ class AxiV19:
             name='V19 Heartbeat'
         )
         
+        # =================================================================
+        # VEILLES QUOTIDIENNES - Ajouté le 5 janvier 2026
+        # =================================================================
+        if VEILLE_OK:
+            from .modules.veille import run_veille_dpe, run_veille_concurrence
+            
+            # Veille Concurrence à 7h00 Paris
+            self._scheduler.add_job(
+                lambda: run_veille_concurrence(db),
+                'cron',
+                hour=7,
+                minute=0,
+                id='veille_concurrence_7h',
+                name='Veille Concurrence 7h Paris'
+            )
+            logger.info("📡 Job Veille Concurrence programmé: 7h00 Paris")
+            
+            # Veille DPE à 8h00 Paris
+            self._scheduler.add_job(
+                lambda: run_veille_dpe(db),
+                'cron',
+                hour=8,
+                minute=0,
+                id='veille_dpe_8h',
+                name='Veille DPE 8h Paris'
+            )
+            logger.info("🏠 Job Veille DPE programmé: 8h00 Paris")
+        else:
+            logger.warning("⚠️ Module veille non disponible - Crons veille désactivés")
+        
         self._scheduler.start()
         logger.info("⏰ Scheduler V19 démarré")
     
