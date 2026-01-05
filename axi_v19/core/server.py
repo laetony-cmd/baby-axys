@@ -78,13 +78,31 @@ class AxiRequestHandler(BaseHTTPRequestHandler):
         
         # Lire le body
         content_length = int(self.headers.get('Content-Length', 0))
-        body = self.rfile.read(content_length).decode('utf-8') if content_length else '{}'
+        body = self.rfile.read(content_length).decode('utf-8') if content_length else ''
+        
+        # Parser le body selon le Content-Type
+        content_type = self.headers.get('Content-Type', '')
         
         try:
-            data = json.loads(body) if body else {}
-        except json.JSONDecodeError:
-            self._send_json(400, {"error": "JSON invalide"})
-            return
+            if 'application/json' in content_type:
+                data = json.loads(body) if body else {}
+            elif 'application/x-www-form-urlencoded' in content_type:
+                # Form data (URL encoded)
+                from urllib.parse import parse_qs as parse_form
+                parsed_data = parse_form(body)
+                data = {k: v[0] if len(v) == 1 else v for k, v in parsed_data.items()}
+            else:
+                # Essayer JSON par défaut
+                data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, Exception) as e:
+            # Si ça échoue, essayer comme form data
+            try:
+                from urllib.parse import parse_qs as parse_form
+                parsed_data = parse_form(body)
+                data = {k: v[0] if len(v) == 1 else v for k, v in parsed_data.items()}
+            except:
+                self._send_json(400, {"error": "Données invalides"})
+                return
         
         # Routing
         if path in self.routes_post:
@@ -125,8 +143,8 @@ class AxiRequestHandler(BaseHTTPRequestHandler):
             "environment": settings.environment,
             "secured": bool(settings.api_secret),
             "database": db.health_check(),
-            "features": ["V19 Bunker", "Prospects", "Conversations", "Brain", "Auth"],
-            "public_endpoints": ["/", "/health", "/ready", "/status", "/memory", "/briefing"],
+            "features": ["V19 Bunker", "Chat Interface", "Tavily Search", "Prospects", "Conversations", "Brain", "Auth"],
+            "public_endpoints": ["/", "/health", "/ready", "/status", "/memory", "/briefing", "/chat", "/trio", "/nouvelle-session"],
             "protected_endpoints": ["/run-veille", "/run-veille-concurrence", "/v19/brain (POST)"],
             "endpoints": list(self.routes_get.keys()) + list(self.routes_post.keys()) + [
                 "/health", "/ready", "/status"
@@ -134,13 +152,21 @@ class AxiRequestHandler(BaseHTTPRequestHandler):
         })
     
     def _send_json(self, code: int, data: Any):
-        """Helper pour envoyer des réponses JSON standardisées."""
+        """Helper pour envoyer des réponses JSON ou HTML."""
         self.send_response(code)
-        self.send_header('Content-Type', 'application/json; charset=utf-8')
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.end_headers()
-        response = json.dumps(data, ensure_ascii=False, default=str)
-        self.wfile.write(response.encode('utf-8'))
+        
+        # Détecter si c'est du HTML (string commençant par <!DOCTYPE ou <html)
+        if isinstance(data, str) and (data.strip().startswith('<!DOCTYPE') or data.strip().startswith('<html')):
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(data.encode('utf-8'))
+        else:
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            response = json.dumps(data, ensure_ascii=False, default=str)
+            self.wfile.write(response.encode('utf-8'))
     
     def log_message(self, format, *args):
         """Redirige les logs HTTP vers notre logger structuré."""
@@ -255,3 +281,4 @@ if __name__ == "__main__":
             time.sleep(1)
     except KeyboardInterrupt:
         server.stop()
+
