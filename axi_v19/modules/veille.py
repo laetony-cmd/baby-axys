@@ -185,14 +185,21 @@ def envoyer_email(sujet, corps_html, destinataire=None):
 
 
 def get_dpe_ademe(code_postal):
-    """Récupère les DPE récents depuis l'API ADEME."""
-    url = f"https://data.ademe.fr/data-fair/api/v1/datasets/dpe-v2-logements-existants/lines"
+    """
+    Récupère les DPE récents depuis l'API ADEME.
+    
+    MISE À JOUR 05/01/2026: Nouveau dataset dpe03existant + nouveaux noms de champs
+    Ancien dataset dpe-v2-logements-existants → 404 Not Found
+    """
+    # NOUVEAU dataset ADEME 2025
+    url = "https://data.ademe.fr/data-fair/api/v1/datasets/dpe03existant/lines"
+    
+    # NOUVEAUX noms de champs (snake_case au lieu de noms avec espaces/accents)
     params = {
         "size": "100",
-        "select": "N°DPE,Date_réception_DPE,Etiquette_DPE,Adresse_brute,Code_postal_(BAN),Nom_commune_(BAN),Type_bâtiment,Surface_habitable_logement",
-        "q_fields": "Code_postal_(BAN)",
-        "q": code_postal,
-        "sort": "Date_réception_DPE:-1"
+        "code_postal_ban": code_postal,
+        "select": "numero_dpe,date_reception_dpe,etiquette_dpe,etiquette_ges,adresse_brut,code_postal_ban,nom_commune_ban,type_batiment,surface_habitable_logement,_geopoint,conso_5_usages_par_m2_ep,emission_ges_5_usages_par_m2,cout_total_5_usages,annee_construction,type_energie_principale_chauffage",
+        "sort": "date_reception_dpe:-1"
     }
     
     full_url = f"{url}?{urllib.parse.urlencode(params)}"
@@ -201,7 +208,31 @@ def get_dpe_ademe(code_postal):
         req = urllib.request.Request(full_url, headers={'User-Agent': 'ICI-Dordogne-V19/1.0'})
         with urllib.request.urlopen(req, timeout=30) as response:
             data = json.loads(response.read().decode())
-        return data.get('results', [])
+        
+        # Normaliser les noms de champs pour compatibilité avec le reste du code
+        results = []
+        for dpe in data.get('results', []):
+            normalized = {
+                'N°DPE': dpe.get('numero_dpe', ''),
+                'Date_réception_DPE': dpe.get('date_reception_dpe', ''),
+                'Etiquette_DPE': dpe.get('etiquette_dpe', ''),
+                'Etiquette_GES': dpe.get('etiquette_ges', ''),
+                'Adresse_brute': dpe.get('adresse_brut', ''),
+                'Code_postal_(BAN)': dpe.get('code_postal_ban', ''),
+                'Nom_commune_(BAN)': dpe.get('nom_commune_ban', ''),
+                'Type_bâtiment': dpe.get('type_batiment', ''),
+                'Surface_habitable_logement': dpe.get('surface_habitable_logement', ''),
+                '_geopoint': dpe.get('_geopoint', ''),
+                'Conso_kWh_m2_an': dpe.get('conso_5_usages_par_m2_ep', ''),
+                'Emission_GES_m2_an': dpe.get('emission_ges_5_usages_par_m2', ''),
+                'Cout_annuel': dpe.get('cout_total_5_usages', ''),
+                'Annee_construction': dpe.get('annee_construction', ''),
+                'Type_chauffage': dpe.get('type_energie_principale_chauffage', '')
+            }
+            results.append(normalized)
+        
+        logger.info(f"[DPE] {code_postal}: {len(results)} DPE trouvés")
+        return results
     except Exception as e:
         logger.error(f"[DPE] Erreur {code_postal}: {e}")
         return []
