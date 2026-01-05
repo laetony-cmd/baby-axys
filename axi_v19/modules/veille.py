@@ -16,6 +16,7 @@ import gzip
 import re
 import time
 import logging
+import requests  # Plus robuste que urllib
 from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -188,28 +189,34 @@ def get_dpe_ademe(code_postal):
     """
     Récupère les DPE récents depuis l'API ADEME.
     
-    MISE À JOUR 05/01/2026: Nouveau dataset dpe03existant + nouveaux noms de champs
-    Ancien dataset dpe-v2-logements-existants → 404 Not Found
-    Format correct: q=CODE_POSTAL&q_fields=code_postal_ban
+    MISE À JOUR 05/01/2026: 
+    - Nouveau dataset dpe03existant (ancien dpe-v2-logements-existants → 404)
+    - Migration urllib → requests pour robustesse
+    - Meilleure gestion d'erreurs
     """
     # NOUVEAU dataset ADEME 2025
     url = "https://data.ademe.fr/data-fair/api/v1/datasets/dpe03existant/lines"
     
-    # Format correct pour filtrer par code postal
+    # Paramètres de recherche
     params = {
-        "size": "100",
-        "q": code_postal,
+        "size": 100,
+        "q": str(code_postal),
         "q_fields": "code_postal_ban",
         "select": "numero_dpe,date_reception_dpe,etiquette_dpe,etiquette_ges,adresse_brut,code_postal_ban,nom_commune_ban,type_batiment,surface_habitable_logement,_geopoint,conso_5_usages_par_m2_ep,emission_ges_5_usages_par_m2,cout_total_5_usages,annee_construction,type_energie_principale_chauffage",
         "sort": "date_reception_dpe:-1"
     }
     
-    full_url = f"{url}?{urllib.parse.urlencode(params)}"
+    headers = {
+        'User-Agent': 'ICI-Dordogne-V19/1.0',
+        'Accept': 'application/json'
+    }
     
     try:
-        req = urllib.request.Request(full_url, headers={'User-Agent': 'ICI-Dordogne-V19/1.0'})
-        with urllib.request.urlopen(req, timeout=30) as response:
-            data = json.loads(response.read().decode())
+        response = requests.get(url, params=params, headers=headers, timeout=30)
+        response.raise_for_status()  # Lève exception si erreur HTTP
+        
+        data = response.json()
+        total = data.get('total', 0)
         
         # Normaliser les noms de champs pour compatibilité avec le reste du code
         results = []
@@ -233,10 +240,23 @@ def get_dpe_ademe(code_postal):
             }
             results.append(normalized)
         
-        logger.info(f"[DPE] {code_postal}: {len(results)} DPE trouvés")
+        logger.info(f"[DPE] {code_postal}: {len(results)} DPE trouvés (total API: {total})")
         return results
+        
+    except requests.exceptions.Timeout:
+        logger.error(f"[DPE] Timeout {code_postal} - API ADEME ne répond pas")
+        return []
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"[DPE] Erreur HTTP {code_postal}: {e}")
+        return []
+    except requests.exceptions.RequestException as e:
+        logger.error(f"[DPE] Erreur réseau {code_postal}: {e}")
+        return []
+    except json.JSONDecodeError as e:
+        logger.error(f"[DPE] Erreur JSON {code_postal}: {e}")
+        return []
     except Exception as e:
-        logger.error(f"[DPE] Erreur {code_postal}: {e}")
+        logger.error(f"[DPE] Erreur inattendue {code_postal}: {type(e).__name__}: {e}")
         return []
 
 
