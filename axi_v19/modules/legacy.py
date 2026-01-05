@@ -17,7 +17,7 @@ logger = logging.getLogger("axi_v19.legacy")
 
 MEMORY_CONTENT = """# MEMORY - CONSIGNES POUR AXIS
 
-*Mise à jour: V19 - 4 janvier 2026*
+*Mise à jour: V19.1 - 5 janvier 2026*
 
 ## WORKFLOW OBLIGATOIRE
 
@@ -65,20 +65,25 @@ MEMORY_CONTENT = """# MEMORY - CONSIGNES POUR AXIS
 - Principal: agence@icidordogne.fr
 - Copie: laetony@gmail.com
 
-## VEILLES (En cours de migration V19)
+## VEILLES ✅ OPÉRATIONNELLES
 
-### 1. Veille DPE 
-- Cron: 08h00 Paris
-- Status: ⏳ Migration en cours
+### 1. Veille DPE
+- Cron: 08h00 Paris (UTC 07h00)
+- Endpoint: /run-veille (protégé)
+- Status: ✅ Opérationnelle
+- Enrichissement DVF actif (23,680 parcelles)
 
 ### 2. Veille Concurrence
-- Cron: 07h00 Paris  
-- Status: ⏳ Migration en cours
+- Cron: 07h00 Paris (UTC 06h00)
+- Endpoint: /run-veille-concurrence (protégé)
+- Agences surveillées: 16
+- Status: ✅ Opérationnelle
 
 ## HISTORIQUE
 
 | Date | Action |
 |------|--------|
+| 05/01/2026 | V19.1: Veilles opérationnelles, sécurité API |
 | 04/01/2026 | V19: Architecture Bunker déployée |
 | 24/12/2025 | v10: Code unifié (chat + veilles) |
 | 22/12/2025 | v7: Machine de guerre + Excel |
@@ -97,7 +102,7 @@ def get_briefing(query):
 Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Paris
 
 ## STATUS SYSTÈME
-- Version: V19.0.0 (Bunker)
+- Version: V19.1.0 (Bunker Sécurisé)
 - Database: PostgreSQL connecté
 - Architecture: Modulaire isolée
 
@@ -136,3 +141,4 @@ def register_legacy_routes(server):
     # Note: Les veilles sont gérées par modules/veille.py
     
     logger.info("📍 Routes legacy V18 enregistrées (/memory, /briefing)")
+
