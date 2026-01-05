@@ -113,7 +113,7 @@ class Settings:
     ])
     
     # === Métadonnées V19 ===
-    version: str = "19.1.0"  # Bump version pour sécurité
+    version: str = "19.2.0"  # Bump version pour sécurité
     environment: str = field(default_factory=lambda: os.getenv("RAILWAY_ENVIRONMENT", "development"))
     
     def __post_init__(self):
@@ -255,3 +255,4 @@ if __name__ == "__main__":
     print(f"API Secret: {'✅ Configuré' if settings.api_secret else '❌ Non configuré'}")
     print(f"Codes postaux: {len(settings.all_codes_postaux)}")
     settings.validate()
+
