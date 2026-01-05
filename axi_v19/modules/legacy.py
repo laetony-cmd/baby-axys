@@ -17,7 +17,7 @@ logger = logging.getLogger("axi_v19.legacy")
 
 MEMORY_CONTENT = """# MEMORY - CONSIGNES POUR AXIS
 
-*Mise à jour: V19.1 - 5 janvier 2026*
+*Mise à jour: V19.2 - 5 janvier 2026*
 
 ## WORKFLOW OBLIGATOIRE
 
@@ -42,18 +42,31 @@ MEMORY_CONTENT = """# MEMORY - CONSIGNES POUR AXIS
 
 ## VERSION ACTUELLE
 
-**V19 BUNKER** - Architecture modulaire déployée le 4 janvier 2026
+**V19.2 BUNKER + CHAT** - Déployé le 5 janvier 2026
 
-### Features V19
+### Features V19.2
 - Tables préfixées v19_* (isolation stricte)
 - Pool PostgreSQL thread-safe
 - Graceful shutdown (SIGTERM/SIGINT)
-- Premier Cri (logs pré-initialisation)
+- Interface Chat HTML complète
+- Recherche Web Tavily CORRIGÉE (domaines français)
 
-### Endpoints V19
+### Endpoints V19.2
 - /health, /ready, /status
 - /v19/brain, /v19/prospects, /v19/veille
 - /memory, /briefing (legacy compatible)
+- /, /chat, /nouvelle-session, /trio (NOUVEAU)
+
+## INTERFACE CHAT
+
+### ✅ URL Fonctionnelle
+https://baby-axys-production.up.railway.app/
+
+### ⚠️ axi.symbine.fr
+Pointe encore vers AXIS Station local (ancien code v12).
+Pour utiliser la V19.2 avec Tavily corrigé:
+→ Utiliser baby-axys-production.up.railway.app directement
+→ OU mettre à jour le DNS/proxy Cloudflare
 
 ## CREDENTIALS ACTIFS
 
@@ -83,6 +96,7 @@ MEMORY_CONTENT = """# MEMORY - CONSIGNES POUR AXIS
 
 | Date | Action |
 |------|--------|
+| 05/01/2026 | V19.2: Interface Chat + Tavily corrigé |
 | 05/01/2026 | V19.1: Veilles opérationnelles, sécurité API |
 | 04/01/2026 | V19: Architecture Bunker déployée |
 | 24/12/2025 | v10: Code unifié (chat + veilles) |
@@ -97,26 +111,34 @@ def get_memory(query):
 
 def get_briefing(query):
     """GET /briefing - Retourne le contexte complet."""
-    briefing = f"""=== BRIEFING AXI V19 ===
+    briefing = f"""=== BRIEFING AXI V19.2 ===
 
 Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Paris
 
 ## STATUS SYSTÈME
-- Version: V19.1.0 (Bunker Sécurisé)
+- Version: V19.2.0 (Bunker + Chat)
 - Database: PostgreSQL connecté
 - Architecture: Modulaire isolée
+- Interface Chat: ✅ Opérationnelle
+- Recherche Web Tavily: ✅ Corrigée (domaines français)
+
+## INTERFACE CHAT
+
+✅ URL Fonctionnelle: https://baby-axys-production.up.railway.app/
+
+⚠️ axi.symbine.fr pointe encore vers AXIS Station local (v12).
+   Pour chat avec recherche web fonctionnelle → utiliser Railway.
 
 ## DÉCISIONS ACTIVES
 
-### 🟢 VALIDÉ (4 janvier 2026)
-- ✅ V19 Bunker déployée
-- ✅ Imports relatifs corrigés (rapport Lumo)
-- ✅ Premier Cri implémenté
-- ✅ Tables v19_* créées
-- ✅ Veilles DPE + Concurrence portées
+### 🟢 VALIDÉ (5 janvier 2026)
+- ✅ V19.2 Chat + Tavily déployé
+- ✅ Interface HTML complète
+- ✅ Recherche web corrigée (include_domains français)
+- ✅ Endpoints publics: /, /chat, /trio, /nouvelle-session
 
 ### 📅 DATES
-- 7 janvier: Tirage Bio Vergt
+- 6 janvier: Tirage Bio Vergt (demain!)
 - Fin janvier: Départ Maroc Ludo
 
 ## COMMANDES
@@ -141,4 +163,5 @@ def register_legacy_routes(server):
     # Note: Les veilles sont gérées par modules/veille.py
     
     logger.info("📍 Routes legacy V18 enregistrées (/memory, /briefing)")
+
 
