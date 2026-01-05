@@ -1,4 +1,4 @@
 # Railway auto-deploy trigger
-# Last update: 2026-01-05T14:42:23Z
-# Reason: Fix veille DPE urllib -> requests
-trigger_v19_fix_dpe_1767624143
+# Last update: 2026-01-05T14:47:17Z
+# Reason: q_mode=simple fix for ADEME API
+fix_qmode_1767624437
