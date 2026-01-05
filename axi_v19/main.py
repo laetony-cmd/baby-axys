@@ -106,6 +106,15 @@ except ImportError as e:
     print(f"  ⚠️ modules.veille not available: {e}", flush=True)
     VEILLE_OK = False
 
+# Import module interface (Chat avec Tavily corrigé)
+try:
+    from .modules.interface import register_interface_routes
+    print("  ✅ modules.interface loaded (Chat + Tavily)", flush=True)
+    INTERFACE_OK = True
+except ImportError as e:
+    print(f"  ⚠️ modules.interface not available: {e}", flush=True)
+    INTERFACE_OK = False
+
 # =============================================================================
 # IMPORTS STANDARDS
 # =============================================================================
@@ -195,14 +204,6 @@ class AxiV19:
     def _register_routes(self):
         """Enregistre les routes API V19."""
         
-        # Route racine
-        def get_root(query):
-            return {
-                "service": f"Axi ICI Dordogne V{settings.version}",
-                "status": "ok",
-                "message": "Je ne lâche pas. 💪"
-            }
-        
         # API Prospects
         def get_prospects(query):
             if not db.is_connected:
@@ -285,14 +286,28 @@ class AxiV19:
             except Exception as e:
                 return {"error": str(e), "results": []}
         
-        # Enregistrement des routes
-        server.register_route('GET', '/', get_root)
+        # Enregistrement des routes API
         server.register_route('GET', '/v19/prospects', get_prospects)
         server.register_route('GET', '/v19/brain', get_brain)
         server.register_route('POST', '/v19/brain', post_brain)
         server.register_route('GET', '/v19/veille', get_veille_results)
         
         logger.info("📍 Routes API V19 enregistrées")
+        
+        # Routes Interface (Chat avec Tavily corrigé) - PRIORITÉ
+        if INTERFACE_OK:
+            register_interface_routes(server)
+            logger.info("✅ Interface Chat + Tavily activée")
+        else:
+            # Fallback: route racine basique si interface non disponible
+            def get_root(query):
+                return {
+                    "service": f"Axi ICI Dordogne V{settings.version}",
+                    "status": "ok",
+                    "message": "Je ne lâche pas. 💪"
+                }
+            server.register_route('GET', '/', get_root)
+            logger.warning("⚠️ Interface non disponible - Mode API only")
         
         # Routes legacy (compatibilité V18)
         if LEGACY_OK:
@@ -397,3 +412,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
