@@ -197,11 +197,12 @@ def get_dpe_ademe(code_postal):
     # NOUVEAU dataset ADEME 2025
     url = "https://data.ademe.fr/data-fair/api/v1/datasets/dpe03existant/lines"
     
-    # Paramètres de recherche
+    # Paramètres de recherche (q_mode=simple OBLIGATOIRE pour recherche par champ)
     params = {
         "size": 100,
         "q": str(code_postal),
         "q_fields": "code_postal_ban",
+        "q_mode": "simple",
         "select": "numero_dpe,date_reception_dpe,etiquette_dpe,etiquette_ges,adresse_brut,code_postal_ban,nom_commune_ban,type_batiment,surface_habitable_logement,_geopoint,conso_5_usages_par_m2_ep,emission_ges_5_usages_par_m2,cout_total_5_usages,annee_construction,type_energie_principale_chauffage",
         "sort": "date_reception_dpe:-1"
     }
