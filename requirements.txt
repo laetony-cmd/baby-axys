@@ -1,6 +1,7 @@
-# AXI ICI DORDOGNE v17.1 REQUESTS MIGRATION
+# AXI ICI DORDOGNE V19.2 - CHAT + TAVILY CORRIGÉ
 # Requirements Railway
-# Déployé: 2026-01-03
+# Déployé: 2026-01-05
+# Upgrade: Interface Chat + Recherche Web Tavily corrigée
 
 # Claude API
 anthropic>=0.18.0
@@ -18,6 +19,7 @@ pytz>=2024.1
 # Web scraping (Matching Engine)
 beautifulsoup4>=4.12.0
 
-# HTTP requests (NOUVEAU - remplace urllib pour API ADEME)
+# HTTP requests (API ADEME, Tavily, Claude)
 requests>=2.31.0
+
 
