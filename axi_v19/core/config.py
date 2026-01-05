@@ -169,6 +169,9 @@ PUBLIC_ENDPOINTS = [
     "/status",
     "/memory",
     "/briefing",
+    "/chat",           # Interface chat (V19.2)
+    "/nouvelle-session", # Reset session (V19.2)
+    "/trio",           # Mode trio (V19.2)
 ]
 
 # Endpoints qui NÉCESSITENT une authentification
