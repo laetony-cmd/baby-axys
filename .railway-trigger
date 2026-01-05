@@ -1,1 +1,4 @@
-Trigger: 20260105131839
+# Railway auto-deploy trigger
+# Last update: 2026-01-05T14:42:23Z
+# Reason: Fix veille DPE urllib -> requests
+trigger_v19_fix_dpe_1767624143
