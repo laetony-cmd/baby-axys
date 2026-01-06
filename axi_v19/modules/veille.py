@@ -119,115 +119,6 @@ SCRAPERS_CONFIG = {
     # Immo Sud Ouest: DNS error (domaine mort?)
     # Virginie Michelin: Site JavaScript (SPA) - non scrapable sans headless
 }
-",
-        "max_pages": 5,
-        "pattern": r'href="([^"]+/detail/[^"]+\.html)"'
-    },
-    # DÉSACTIVÉ - Site JavaScript (SPA) non scrapable sans headless
-    # "Virginie Michelin": {
-    #     "type": "html",
-    #     "base_url": "https://virginie-michelin-immobilier.fr",
-    #     "search_url": "https://virginie-michelin-immobilier.fr/immobilier/vente",
-    #     "max_pages": 1,
-    #     "pattern": r'href="([^"]+/annonce/[^"]+)"'
-    # },
-    "Bayenche Immobilier": {
-        "type": "api_json",
-        "api_url": "https://www.bayencheimmobilier.fr/api/properties",
-        "params": {"transaction": "sale", "limit": 100}
-    },
-    # TODO: Site JS - API cachée à trouver
-    "Laforêt Périgueux": {
-        "type": "api_rest",
-        "api_url": "https://www.laforet.com/api/immo/properties/search",
-        "params": {"agencyIds[]": "laforet-perigueux", "transactionType": "sale"}
-    },
-    "HUMAN Immobilier": {
-        "type": "html",
-        "base_url": "https://www.human-immobilier.fr",
-        "search_url": "https://www.human-immobilier.fr/achat-immobilier-dordogne",
-        "max_pages": 3,
-        "pattern": r'href="(/annonce-achat-[^"]+)"'
-    },
-    # TODO: Site JS - nécessite scraper headless
-    "Valadié Immobilier": {
-        "type": "html",
-        "base_url": "https://www.valadie-immobilier.com",
-        "search_url": "https://www.valadie-immobilier.com/fr/vente/maison?page={page}",
-        "max_pages": 2,
-        "pattern": r'href="([^"]+/vente/[^"]+\.html)"'
-    },
-    "Internat Agency": {
-        "type": "api_json",
-        "api_url": "https://www.interimmoagency.com/api/properties",
-        "params": {"for_sale": "true"}
-    },
-    "Agence du Périgord": {
-        "type": "html",
-        "base_url": "https://agenceduperigord.fr",
-        "search_url": "https://www.agence-du-perigord.com/index.php?action=list&ctypmandatmeta=v&page={page}",
-        "max_pages": 3,
-        "pattern": r'href="([^"]+/annonces-immobilieres/offre/[^"]+\.html)"'
-    },
-    # TODO: API/JS complexe - nécessite reverse engineering
-    "Century 21 Dordogne": {
-        "type": "api_rest",
-        "api_url": "https://www.century21.fr/api/properties",
-        "params": {"department": "24"}
-    },
-    "Immobilier La Maison": {
-        "type": "html",
-        "base_url": "https://www.immobilierlamaison.fr",
-        "search_url": "https://www.immobilierlamaison.fr/vente",
-        "max_pages": 1,
-        "pattern": r'href="([^"]+/annonce/[^"]+)"'
-    },
-    "Cabinet Labrousse": {
-        "type": "html",
-        "base_url": "https://www.cabinet-labrousse.fr",
-        "search_url": "https://www.cabinet-labrousse.fr/recherche/?type%5B%5D=buy",
-        "max_pages": 2,
-        "pattern": r'href="([^"]+/annonces/[^"]+)"'
-    },
-    "Lagrange Immobilier": {
-        "type": "html",
-        "base_url": "https://www.lagrangeimmobilier.com",
-        "search_url": "https://www.lagrangeimmobilier.com/fr/ventes",
-        "max_pages": 2,
-        "pattern": r'href="(/fr/vente/[^"]+)"'
-    },
-    "Lascaux Immobilier": {
-        "type": "html",
-        "base_url": "https://www.lascaux-immobilier.com",
-        "search_url": "https://www.lascaux-immobilier.com/fr/annonces/achat",
-        "max_pages": 1,
-        "pattern": r'href="([^"]+/annonces/[^"]+)"'
-    },
-    "Dordogne Habitat": {
-        "type": "html",
-        "base_url": "https://www.dordogne-habitat.com",
-        "search_url": "https://www.dordogne-habitat.com/nos-offres",
-        "max_pages": 2,
-        "pattern": r'href="(/offres/[^"]+)"'
-    },
-    "Immo Sud Ouest": {
-        "type": "api_json",
-        "api_url": "https://www.immosudouest.fr/api/listings",
-        "params": {"department": "24", "type": "sale"}
-    },
-    "Sarlat Immobilier": {
-        "type": "html",
-        "base_url": "https://www.sarlat-immobilier.fr",
-        "search_url": "https://www.sarlat-immobilier.fr/vente",
-        "max_pages": 2,
-        "pattern": r'href="([^"]+/bien-[^"]+)"'
-    }
-}
-
-
-# =============================================================================
-# FONCTIONS UTILITAIRES
-# =============================================================================
 
 def envoyer_email(sujet, corps_html, destinataire=None):
     """Envoie un email via Gmail SMTP."""
@@ -253,7 +144,6 @@ def envoyer_email(sujet, corps_html, destinataire=None):
     except Exception as e:
         logger.error(f"❌ Erreur email: {e}")
         return False
-
 
 def get_dpe_ademe(code_postal):
     """
@@ -329,7 +219,6 @@ def get_dpe_ademe(code_postal):
     except Exception as e:
         logger.error(f"[DPE] Erreur inattendue {code_postal}: {type(e).__name__}: {e}")
         return []
-
 
 # =============================================================================
 # SCRAPER ENGINE V19
@@ -468,7 +357,6 @@ class ScraperEngineV19:
         
         return resultats
 
-
 # =============================================================================
 # VEILLE DPE
 # =============================================================================
@@ -544,7 +432,6 @@ def run_veille_dpe(db=None):
         "version": "V19"
     }
 
-
 # =============================================================================
 # VEILLE CONCURRENCE
 # =============================================================================
@@ -616,7 +503,6 @@ def run_veille_concurrence(db=None):
         "par_agence": scraper.stats['par_agence'],
         "version": "V19"
     }
-
 
 # =============================================================================
 # REGISTRATION
@@ -729,7 +615,6 @@ def register_veille_routes(server):
         }
     
     server.register_route('GET', '/audit-scrapers', handle_audit_scrapers)
-
 
     def handle_diagnose_all(query):
         """Diagnostic détaillé de TOUTES les URLs des scrapers."""
