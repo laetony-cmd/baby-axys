@@ -664,4 +664,76 @@ def register_veille_routes(server):
     
     server.register_route('GET', '/audit-scrapers', handle_audit_scrapers)
 
-    logger.info("📍 Routes veille V19 enregistrées (DPE + Concurrence + Audit)")
+
+    def handle_diagnose_all(query):
+        """Diagnostic détaillé de TOUTES les URLs des scrapers."""
+        import time as diag_time
+        import urllib.request
+        import urllib.error
+        
+        results = []
+        
+        # URLs à tester directement (bypass SCRAPERS_CONFIG)
+        test_urls = {
+            "Périgord Noir": "https://perigordnoirimmobilier.com/nos-biens-immobiliers/",
+            "HUMAN": "https://www.human-immobilier.fr/achat-immobilier-dordogne",
+            "Agence du Périgord": "https://www.agence-du-perigord.com/index.php?action=list&ctypmandatmeta=v",
+            "Valadié": "https://www.valadie-immobilier.com/fr/biens/a_vendre",
+            "Bayenche": "https://www.bayencheimmobilier.fr",
+            "Laforêt": "https://www.laforet.com/agence-immobiliere/perigueux/acheter",
+            "Century 21": "https://www.century21.fr/annonces/achat-maison/d-24_dordogne/",
+            "Immobilier La Maison": "https://www.immobilierlamaison.fr/vente",
+            "Cabinet Labrousse": "https://www.cabinet-labrousse.com/acheter",
+            "Lagrange": "https://www.lagrangeimmobilier.com/nos-biens",
+            "Lascaux": "https://www.lascaux-immobilier.com/vente",
+            "Dordogne Habitat": "https://www.dordogne-habitat.com/nos-offres",
+            "Sarlat": "https://www.sarlat-immobilier.fr/vente",
+            "Internat Agency": "https://www.interimmoagency.com/a-vendre",
+            "Immo Sud Ouest": "https://www.immosudouest.com/recherche"
+        }
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'fr-FR,fr;q=0.9'
+        }
+        
+        for name, url in test_urls.items():
+            result = {"agence": name, "url": url, "status": 0, "size": 0, "title": "", "sample_links": [], "error": ""}
+            
+            try:
+                req = urllib.request.Request(url, headers=headers)
+                import ssl
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                
+                with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
+                    result["status"] = resp.status
+                    html = resp.read().decode('utf-8', errors='ignore')
+                    result["size"] = len(html)
+                    
+                    # Extraire title
+                    import re
+                    title_match = re.search(r'<title>([^<]+)</title>', html, re.I)
+                    if title_match:
+                        result["title"] = title_match.group(1)[:60]
+                    
+                    # Extraire quelques liens avec numéros (probables annonces)
+                    links = re.findall(r'href="([^"]*[0-9]{4,}[^"]*)"', html)
+                    result["sample_links"] = list(set(links))[:5]
+                    
+            except urllib.error.HTTPError as e:
+                result["status"] = e.code
+                result["error"] = str(e.reason)
+            except Exception as e:
+                result["error"] = str(e)[:50]
+            
+            results.append(result)
+            diag_time.sleep(0.3)
+        
+        return {"diagnostic": "URLS_TEST", "results": results}
+    
+    server.register_route('GET', '/diagnose-all', handle_diagnose_all)
+
+    logger.info("📍 Routes veille V19 enregistrées (DPE + Concurrence + Audit + Diagnose)")
