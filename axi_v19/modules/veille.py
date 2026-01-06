@@ -585,4 +585,79 @@ def register_veille_routes(server):
     server.register_route('GET', '/run-veille-concurrence', handle_run_veille_concurrence)
     server.register_route('GET', '/test-veille-concurrence', handle_test_veille_concurrence)
     
-    logger.info("📍 Routes veille V19 enregistrées (DPE + Concurrence)")
+
+    def handle_audit_scrapers(query):
+        """Audit complet de tous les scrapers."""
+        import time as audit_time
+        
+        results = []
+        scraper = ScraperEngineV19()
+        
+        for name, config in SCRAPERS_CONFIG.items():
+            result = {
+                "agence": name,
+                "type": config.get("type", "?"),
+                "status": 0,
+                "annonces": 0,
+                "html_size": 0,
+                "diagnostic": ""
+            }
+            
+            try:
+                if config["type"] == "html":
+                    url = config["search_url"].format(page=1)
+                    html = scraper.fetch_html(url, timeout=15)
+                    
+                    if html:
+                        result["status"] = 200
+                        result["html_size"] = len(html)
+                        matches = re.findall(config["pattern"], html)
+                        result["annonces"] = len(set(matches))
+                        
+                        if result["annonces"] == 0:
+                            result["diagnostic"] = "JS-ONLY" if len(html) < 3000 else "PATTERN_KO"
+                        elif result["annonces"] < 10:
+                            result["diagnostic"] = "PAGINATION?"
+                        else:
+                            result["diagnostic"] = "OK"
+                    else:
+                        result["diagnostic"] = "FETCH_FAIL"
+                        
+                elif config["type"] in ("api_json", "api_rest"):
+                    url = config.get("api_url", "")
+                    params = config.get("params", {})
+                    json_data = scraper.fetch_json(url, params, timeout=15)
+                    
+                    if json_data:
+                        result["status"] = 200
+                        if isinstance(json_data, list):
+                            result["annonces"] = len(json_data)
+                        elif isinstance(json_data, dict):
+                            for key in ['results', 'items', 'properties', 'annonces', 'data']:
+                                if key in json_data and isinstance(json_data[key], list):
+                                    result["annonces"] = len(json_data[key])
+                                    break
+                        result["diagnostic"] = "OK" if result["annonces"] > 0 else "EMPTY"
+                    else:
+                        result["diagnostic"] = "API_FAIL"
+                        
+            except Exception as e:
+                result["diagnostic"] = f"ERR:{str(e)[:20]}"
+            
+            results.append(result)
+            audit_time.sleep(0.3)
+        
+        total = sum(r["annonces"] for r in results)
+        ok_count = len([r for r in results if r["diagnostic"] == "OK"])
+        
+        return {
+            "audit": "MATRICE_VERITE_V19",
+            "total_agences": len(results),
+            "agences_ok": ok_count,
+            "total_annonces": total,
+            "details": results
+        }
+    
+    server.register_route('GET', '/audit-scrapers', handle_audit_scrapers)
+
+    logger.info("📍 Routes veille V19 enregistrées (DPE + Concurrence + Audit)")
