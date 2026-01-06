@@ -317,11 +317,16 @@ class ScraperEngineV19:
         
         for page in range(1, config.get('max_pages', 1) + 1):
             search_url = config['search_url'].format(page=page)
+            logger.info(f"[SCRAPER] Fetching: {search_url}")
             html = self.fetch_html(search_url)
             if not html:
+                logger.warning(f"[SCRAPER] No HTML returned for {search_url}")
                 continue
             
+            logger.info(f"[SCRAPER] HTML size: {len(html)} chars")
             matches = re.findall(config['pattern'], html)
+            logger.info(f"[SCRAPER] Pattern matches: {len(matches)}")
+            
             for match in matches:
                 url = match if match.startswith('http') else f"{base_url}{match}"
                 if self._is_valid_url(url):
