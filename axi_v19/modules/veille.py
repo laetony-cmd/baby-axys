@@ -55,7 +55,7 @@ SCRAPERS_CONFIG = {
         "base_url": "https://perigordnoirimmobilier.com",
         "search_url": "https://perigordnoirimmobilier.com/fr/liste.htm?page={page}#liste",
         "max_pages": 3,
-        "pattern": r'href="([^"]+/annonce-[^"]+\.htm)"'
+        "pattern": r'href="([^"]+/detail/[^"]+\.html)"'
     },
     "Virginie Michelin": {
         "type": "html",
