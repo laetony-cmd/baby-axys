@@ -82,9 +82,6 @@ SCRAPERS_CONFIG = {
         "search_url": "https://www.human-immobilier.fr/achat-immobilier-dordogne",
         "max_pages": 3,
         "pattern": r'href="(/annonce-achat-[^"]+)"'
-    }",
-        "max_pages": 3,
-        "pattern": r'href="(/annonce-immobiliere-[^"]+)"'
     },
     # TODO: Site JS - nécessite scraper headless
     "Valadié Immobilier": {
