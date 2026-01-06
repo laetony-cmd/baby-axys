@@ -53,8 +53,8 @@ SCRAPERS_CONFIG = {
     "Périgord Noir Immobilier": {
         "type": "html",
         "base_url": "https://perigordnoirimmobilier.com",
-        "search_url": "https://perigordnoirimmobilier.com/fr/liste.htm?page={page}#liste",
-        "max_pages": 3,
+        "search_url": "https://perigordnoirimmobilier.com/nos-biens-immobiliers/?page_number={page}",
+        "max_pages": 5,
         "pattern": r'href="([^"]+/detail/[^"]+\.html)"'
     },
     "Virginie Michelin": {
