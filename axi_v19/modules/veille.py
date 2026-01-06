@@ -111,20 +111,8 @@ SCRAPERS_CONFIG = {
     
     
     # === AGENCES "DERNIÈRE CHANCE" - NOUVELLES URLs ===
-    "Cabinet Labrousse": {
-        "type": "html",
-        "base_url": "https://www.immobilier-labrousse.com",
-        "search_url": "https://www.immobilier-labrousse.com/a-vendre/{page}",
-        "max_pages": 3,
-        "pattern": r'href="([^"]+/vente/[^"]+)"'
-    },
-    "Lascaux Immobilier": {
-        "type": "html",
-        "base_url": "https://www.lascaux-immobilier.com",
-        "search_url": "https://www.lascaux-immobilier.com/nos-annonces",
-        "max_pages": 1,
-        "pattern": r'href="([^"]+/annonce[^"]+)"'
-    },
+    # Cabinet Labrousse: DÉFINITIVEMENT HORS SERVICE (FETCH_FAIL Railway)
+    # Lascaux Immobilier: DÉFINITIVEMENT HORS SERVICE (503 Railway)
     
     # === AGENCES DÉFINITIVEMENT EXCLUES ===
     # Lagrange Immobilier: Agence nationale résidences tourisme (pas Dordogne)
