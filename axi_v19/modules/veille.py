@@ -109,15 +109,30 @@ SCRAPERS_CONFIG = {
         "pattern": r'href="(/[0-9]+-[^"]+\.html)"'
     },
     
-    # === AGENCES HORS SERVICE - À RÉACTIVER QUAND DISPONIBLES ===
-    # Cabinet Labrousse: DNS error (domaine mort?)
-    # Lagrange Immobilier: Connection refused (site hors ligne)
-    # Lascaux Immobilier: Connection refused (site hors ligne)
-    # Dordogne Habitat: DNS error (domaine changé?)
-    # Sarlat Immobilier: Connection reset (bloqué?)
-    # Internat Agency: 404 (URL changée)
-    # Immo Sud Ouest: DNS error (domaine mort?)
-    # Virginie Michelin: Site JavaScript (SPA) - non scrapable sans headless
+    
+    # === AGENCES "DERNIÈRE CHANCE" - NOUVELLES URLs ===
+    "Cabinet Labrousse": {
+        "type": "html",
+        "base_url": "https://www.immobilier-labrousse.com",
+        "search_url": "https://www.immobilier-labrousse.com/a-vendre/{page}",
+        "max_pages": 3,
+        "pattern": r'href="([^"]+/vente/[^"]+)"'
+    },
+    "Lascaux Immobilier": {
+        "type": "html",
+        "base_url": "https://www.lascaux-immobilier.com",
+        "search_url": "https://www.lascaux-immobilier.com/nos-annonces",
+        "max_pages": 1,
+        "pattern": r'href="([^"]+/annonce[^"]+)"'
+    },
+    
+    # === AGENCES DÉFINITIVEMENT EXCLUES ===
+    # Lagrange Immobilier: Agence nationale résidences tourisme (pas Dordogne)
+    # Dordogne Habitat: Office HLM social (pas notre marché)
+    # Sarlat Immobilier: Connection reset persistant
+    # Internat Agency: 404 persistant
+    # Immo Sud Ouest: DNS mort
+    # Virginie Michelin: DISABLED_UNTIL_V20_LOCAL (100% JavaScript/SPA)
 }
 
 def envoyer_email(sujet, corps_html, destinataire=None):
@@ -634,13 +649,10 @@ def register_veille_routes(server):
             "Laforêt": "https://www.laforet.com/agence-immobiliere/perigueux/acheter",
             "Century 21": "https://www.century21.fr/annonces/achat-maison/d-24_dordogne/",
             "Immobilier La Maison": "https://www.immobilierlamaison.fr/vente",
-            "Cabinet Labrousse": "https://www.cabinet-labrousse.com/acheter",
-            "Lagrange": "https://www.lagrangeimmobilier.com/nos-biens",
-            "Lascaux": "https://www.lascaux-immobilier.com/vente",
-            "Dordogne Habitat": "https://www.dordogne-habitat.com/nos-offres",
+            "Cabinet Labrousse": "https://www.immobilier-labrousse.com/a-vendre/1",
+            "Lascaux": "https://www.lascaux-immobilier.com/nos-annonces",
             "Sarlat": "https://www.sarlat-immobilier.fr/vente",
             "Internat Agency": "https://www.interimmoagency.com/a-vendre",
-            "Immo Sud Ouest": "https://www.immosudouest.com/recherche"
         }
         
         headers = {
