@@ -174,6 +174,7 @@ PUBLIC_ENDPOINTS = [
     "/trio",           # Mode trio (V19.2)
     "/test-veille",    # Test DPE sans email (V19.2 patch)
     "/test-veille-concurrence",  # Test concurrence sans email
+    "/audit-scrapers",           # Audit complet scrapers (V19.2)
 ]
 
 # Endpoints qui NÉCESSITENT une authentification
