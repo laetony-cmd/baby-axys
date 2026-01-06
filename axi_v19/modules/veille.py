@@ -57,18 +57,20 @@ SCRAPERS_CONFIG = {
         "max_pages": 5,
         "pattern": r'href="([^"]+/detail/[^"]+\.html)"'
     },
-    "Virginie Michelin": {
-        "type": "html",
-        "base_url": "https://virginie-michelin-immobilier.fr",
-        "search_url": "https://virginie-michelin-immobilier.fr/immobilier/vente",
-        "max_pages": 1,
-        "pattern": r'href="([^"]+/annonce/[^"]+)"'
-    },
+    # DÉSACTIVÉ - Site JavaScript (SPA) non scrapable sans headless
+    # "Virginie Michelin": {
+    #     "type": "html",
+    #     "base_url": "https://virginie-michelin-immobilier.fr",
+    #     "search_url": "https://virginie-michelin-immobilier.fr/immobilier/vente",
+    #     "max_pages": 1,
+    #     "pattern": r'href="([^"]+/annonce/[^"]+)"'
+    # },
     "Bayenche Immobilier": {
         "type": "api_json",
         "api_url": "https://www.bayencheimmobilier.fr/api/properties",
         "params": {"transaction": "sale", "limit": 100}
     },
+    # TODO: Site JS - API cachée à trouver
     "Laforêt Périgueux": {
         "type": "api_rest",
         "api_url": "https://www.laforet.com/api/immo/properties/search",
@@ -77,10 +79,14 @@ SCRAPERS_CONFIG = {
     "HUMAN Immobilier": {
         "type": "html",
         "base_url": "https://www.human-immobilier.fr",
-        "search_url": "https://www.human-immobilier.fr/immobilier-dordogne-24?page={page}",
+        "search_url": "https://www.human-immobilier.fr/achat-immobilier-dordogne",
+        "max_pages": 3,
+        "pattern": r'href="(/annonce-achat-[^"]+)"'
+    }",
         "max_pages": 3,
         "pattern": r'href="(/annonce-immobiliere-[^"]+)"'
     },
+    # TODO: Site JS - nécessite scraper headless
     "Valadié Immobilier": {
         "type": "html",
         "base_url": "https://www.valadie-immobilier.com",
@@ -95,11 +101,12 @@ SCRAPERS_CONFIG = {
     },
     "Agence du Périgord": {
         "type": "html",
-        "base_url": "https://www.agenceduperigord.fr",
-        "search_url": "https://www.agenceduperigord.fr/acheter",
-        "max_pages": 1,
-        "pattern": r'href="([^"]+/bien/[^"]+)"'
+        "base_url": "https://agenceduperigord.fr",
+        "search_url": "https://www.agence-du-perigord.com/index.php?action=list&ctypmandatmeta=v&page={page}",
+        "max_pages": 3,
+        "pattern": r'href="([^"]+/annonces-immobilieres/offre/[^"]+\.html)"'
     },
+    # TODO: API/JS complexe - nécessite reverse engineering
     "Century 21 Dordogne": {
         "type": "api_rest",
         "api_url": "https://www.century21.fr/api/properties",
