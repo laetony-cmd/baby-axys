@@ -50,10 +50,76 @@ HEADERS_SCRAPER = {
 
 # Configuration 16 agences
 SCRAPERS_CONFIG = {
+    # === AGENCES OPÉRATIONNELLES (8) ===
+    
     "Périgord Noir Immobilier": {
         "type": "html",
         "base_url": "https://perigordnoirimmobilier.com",
         "search_url": "https://perigordnoirimmobilier.com/nos-biens-immobiliers/?page_number={page}",
+        "max_pages": 5,
+        "pattern": r'href="([^"]+/detail/[^"]+\.html)"'
+    },
+    "HUMAN Immobilier": {
+        "type": "html",
+        "base_url": "https://www.human-immobilier.fr",
+        "search_url": "https://www.human-immobilier.fr/achat-immobilier-dordogne",
+        "max_pages": 3,
+        "pattern": r'href="(/annonce-achat-[^"]+)"'
+    },
+    "Agence du Périgord": {
+        "type": "html",
+        "base_url": "https://agenceduperigord.fr",
+        "search_url": "https://www.agence-du-perigord.com/index.php?action=list&ctypmandatmeta=v&page={page}",
+        "max_pages": 3,
+        "pattern": r'href="([^"]+/annonces-immobilieres/offre/[^"]+\.html)"'
+    },
+    "Valadié Immobilier": {
+        "type": "html",
+        "base_url": "https://www.valadie-immobilier.com",
+        "search_url": "https://www.valadie-immobilier.com/fr/biens/a_vendre",
+        "max_pages": 3,
+        "pattern": r'href="(/fr/biens/fiche/[0-9]+)"'
+    },
+    "Bayenche Immobilier": {
+        "type": "html",
+        "base_url": "https://www.bayencheimmobilier.fr",
+        "search_url": "https://www.bayencheimmobilier.fr",
+        "max_pages": 1,
+        "pattern": r'href="(https://www\.bayencheimmobilier\.fr/affaires/[^"#]+)"'
+    },
+    "Laforêt Périgueux": {
+        "type": "html",
+        "base_url": "https://www.laforet.com",
+        "search_url": "https://www.laforet.com/agence-immobiliere/perigueux/acheter?page={page}",
+        "max_pages": 3,
+        "pattern": r'href="(/agence-immobiliere/perigueux/acheter/[^"]+/[^"]+)"'
+    },
+    "Century 21 Dordogne": {
+        "type": "html",
+        "base_url": "https://www.century21.fr",
+        "search_url": "https://www.century21.fr/annonces/achat-maison/d-24_dordogne/",
+        "max_pages": 3,
+        "pattern": r'href="(/trouver_logement/detail/[0-9]+/)"'
+    },
+    "Immobilier La Maison": {
+        "type": "html",
+        "base_url": "https://www.immobilierlamaison.fr",
+        "search_url": "https://www.immobilierlamaison.fr/vente",
+        "max_pages": 2,
+        "pattern": r'href="(/[0-9]+-[^"]+\.html)"'
+    },
+    
+    # === AGENCES HORS SERVICE - À RÉACTIVER QUAND DISPONIBLES ===
+    # Cabinet Labrousse: DNS error (domaine mort?)
+    # Lagrange Immobilier: Connection refused (site hors ligne)
+    # Lascaux Immobilier: Connection refused (site hors ligne)
+    # Dordogne Habitat: DNS error (domaine changé?)
+    # Sarlat Immobilier: Connection reset (bloqué?)
+    # Internat Agency: 404 (URL changée)
+    # Immo Sud Ouest: DNS error (domaine mort?)
+    # Virginie Michelin: Site JavaScript (SPA) - non scrapable sans headless
+}
+",
         "max_pages": 5,
         "pattern": r'href="([^"]+/detail/[^"]+\.html)"'
     },
