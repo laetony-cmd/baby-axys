@@ -172,6 +172,8 @@ PUBLIC_ENDPOINTS = [
     "/chat",           # Interface chat (V19.2)
     "/nouvelle-session", # Reset session (V19.2)
     "/trio",           # Mode trio (V19.2)
+    "/test-veille",    # Test DPE sans email (V19.2 patch)
+    "/test-veille-concurrence",  # Test concurrence sans email
 ]
 
 # Endpoints qui NÉCESSITENT une authentification
