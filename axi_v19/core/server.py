@@ -5,13 +5,15 @@ Remplace FastAPI par http.server natif (zéro dépendance nouvelle)
 
 Plan Lumo V3 - Section 5: Serveur HTTP
 + SÉCURISATION API - 4 janvier 2026
++ AGENT SUPPORT - 7 janvier 2026 (headers, routes dynamiques)
 """
 
 import json
 import logging
+import re
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Dict, Any, Callable, Optional
+from typing import Dict, Any, Callable, Optional, Tuple
 from urllib.parse import urlparse, parse_qs
 
 from .config import settings, check_auth
@@ -25,11 +27,15 @@ class AxiRequestHandler(BaseHTTPRequestHandler):
     Handler HTTP minimaliste et robuste V19.
     Gère les réponses JSON basiques pour les endpoints de santé et API.
     + Authentification pour endpoints sensibles.
+    + Support headers et routes dynamiques pour Agent.
     """
     
     # Routes enregistrées dynamiquement
     routes_get: Dict[str, Callable] = {}
     routes_post: Dict[str, Callable] = {}
+    # Routes avec patterns (regex)
+    routes_get_patterns: list = []  # [(pattern, handler)]
+    routes_post_patterns: list = []
     
     def do_GET(self):
         """Gère les requêtes GET."""
@@ -45,15 +51,32 @@ class AxiRequestHandler(BaseHTTPRequestHandler):
             self._send_json(401, {"error": error_msg, "code": 401})
             return
         
-        # Routing
+        # Routing exact
         if path in self.routes_get:
             try:
-                result = self.routes_get[path](query)
-                self._send_json(200, result)
+                handler = self.routes_get[path]
+                result = self._call_handler(handler, query, None, headers_dict)
+                self._handle_result(result)
             except Exception as e:
                 logger.error(f"Erreur GET {path}: {e}")
                 self._send_json(500, {"error": str(e)})
-        elif path == '/health':
+            return
+        
+        # Routing patterns (ex: /agent/result/{id})
+        for pattern, handler in self.routes_get_patterns:
+            match = pattern.match(path)
+            if match:
+                try:
+                    path_params = match.groupdict()
+                    result = self._call_handler(handler, query, None, headers_dict, path_params)
+                    self._handle_result(result)
+                except Exception as e:
+                    logger.error(f"Erreur GET {path}: {e}")
+                    self._send_json(500, {"error": str(e)})
+                return
+        
+        # Routes système
+        if path == '/health':
             self._handle_health()
         elif path == '/ready':
             self._handle_ready()
@@ -104,16 +127,63 @@ class AxiRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(400, {"error": "Données invalides"})
                 return
         
-        # Routing
+        # Routing exact
         if path in self.routes_post:
             try:
-                result = self.routes_post[path](data)
-                self._send_json(200, result)
+                handler = self.routes_post[path]
+                result = self._call_handler(handler, query, data, headers_dict)
+                self._handle_result(result)
             except Exception as e:
                 logger.error(f"Erreur POST {path}: {e}")
                 self._send_json(500, {"error": str(e)})
+            return
+        
+        # Routing patterns (ex: /agent/result/{id})
+        for pattern, handler in self.routes_post_patterns:
+            match = pattern.match(path)
+            if match:
+                try:
+                    path_params = match.groupdict()
+                    result = self._call_handler(handler, query, data, headers_dict, path_params)
+                    self._handle_result(result)
+                except Exception as e:
+                    logger.error(f"Erreur POST {path}: {e}")
+                    self._send_json(500, {"error": str(e)})
+                return
+        
+        self.send_error(404, f"Endpoint POST non trouvé: {path}")
+    
+    def _call_handler(self, handler, query, body, headers, path_params=None):
+        """Appelle un handler avec les bons arguments."""
+        import inspect
+        sig = inspect.signature(handler)
+        params = sig.parameters
+        
+        kwargs = {}
+        if 'query' in params:
+            kwargs['query'] = query
+        if 'body' in params:
+            kwargs['body'] = body
+        if 'headers' in params:
+            kwargs['headers'] = headers
+        if 'path_params' in params:
+            kwargs['path_params'] = path_params
+        
+        # Si le handler n'a pas de params nommés, passer les args positionnels
+        if not kwargs:
+            if body is not None:
+                return handler(query, body)
+            return handler(query)
+        
+        return handler(**kwargs)
+    
+    def _handle_result(self, result):
+        """Gère le résultat d'un handler (peut être tuple ou dict)."""
+        if isinstance(result, tuple) and len(result) == 2:
+            code, data = result
+            self._send_json(code, data)
         else:
-            self.send_error(404, f"Endpoint POST non trouvé: {path}")
+            self._send_json(200, result)
     
     def _handle_health(self):
         """Endpoint vital pour Railway."""
@@ -143,9 +213,9 @@ class AxiRequestHandler(BaseHTTPRequestHandler):
             "environment": settings.environment,
             "secured": bool(settings.api_secret),
             "database": db.health_check(),
-            "features": ["V19 Bunker", "Chat Interface", "Tavily Search", "Prospects", "Conversations", "Brain", "Auth"],
-            "public_endpoints": ["/", "/health", "/ready", "/status", "/memory", "/briefing", "/chat", "/trio", "/nouvelle-session"],
-            "protected_endpoints": ["/run-veille", "/run-veille-concurrence", "/v19/brain (POST)"],
+            "features": ["V19 Bunker", "Chat Interface", "Tavily Search", "Prospects", "Conversations", "Brain", "Auth", "Agent"],
+            "public_endpoints": ["/", "/health", "/ready", "/status", "/memory", "/briefing", "/chat", "/trio", "/nouvelle-session", "/agent/status"],
+            "protected_endpoints": ["/run-veille", "/run-veille-concurrence", "/v19/brain (POST)", "/agent/execute", "/agent/pending"],
             "endpoints": list(self.routes_get.keys()) + list(self.routes_post.keys()) + [
                 "/health", "/ready", "/status"
             ]
@@ -190,20 +260,34 @@ class ServerManager:
     def register_route(self, method: str, path: str, handler: Callable):
         """
         Enregistre une route dynamiquement.
+        Supporte les patterns avec {param} (ex: /agent/result/{id})
         
         Args:
             method: 'GET' ou 'POST'
-            path: Chemin de l'endpoint (ex: '/api/prospects')
+            path: Chemin de l'endpoint (ex: '/api/prospects' ou '/agent/result/{id}')
             handler: Fonction qui traite la requête
         """
-        if method.upper() == 'GET':
-            AxiRequestHandler.routes_get[path] = handler
-            logger.info(f"📍 Route GET {path} enregistrée")
-        elif method.upper() == 'POST':
-            AxiRequestHandler.routes_post[path] = handler
-            logger.info(f"📍 Route POST {path} enregistrée")
+        # Détecter si c'est un pattern
+        if '{' in path:
+            # Convertir /agent/result/{id} en regex /agent/result/(?P<id>[^/]+)
+            pattern_str = re.sub(r'\{(\w+)\}', r'(?P<\1>[^/]+)', path)
+            pattern = re.compile(f'^{pattern_str}$')
+            
+            if method.upper() == 'GET':
+                AxiRequestHandler.routes_get_patterns.append((pattern, handler))
+                logger.info(f"📍 Route GET pattern {path} enregistrée")
+            elif method.upper() == 'POST':
+                AxiRequestHandler.routes_post_patterns.append((pattern, handler))
+                logger.info(f"📍 Route POST pattern {path} enregistrée")
         else:
-            raise ValueError(f"Méthode HTTP non supportée: {method}")
+            if method.upper() == 'GET':
+                AxiRequestHandler.routes_get[path] = handler
+                logger.info(f"📍 Route GET {path} enregistrée")
+            elif method.upper() == 'POST':
+                AxiRequestHandler.routes_post[path] = handler
+                logger.info(f"📍 Route POST {path} enregistrée")
+            else:
+                raise ValueError(f"Méthode HTTP non supportée: {method}")
     
     def start(self):
         """Démarre le serveur HTTP dans un thread séparé."""
@@ -281,4 +365,3 @@ if __name__ == "__main__":
             time.sleep(1)
     except KeyboardInterrupt:
         server.stop()
-
