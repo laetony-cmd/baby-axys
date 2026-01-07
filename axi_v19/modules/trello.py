@@ -634,28 +634,21 @@ _Notification automatique Axi_
     return result is not None
 
 
+
 # =============================================================================
 # ENDPOINTS HTTP - REGISTRATION DES ROUTES
 # =============================================================================
 
-
 def register_routes(server, db):
     """
     Enregistre les routes Trello dans le serveur V19.
-    
-    Routes:
-    - GET /trello/status
-    - GET /trello/sync (dry run)
-    - POST /trello/sync (live)
-    - GET /trello/match
-    - GET /trello/secteurs
     """
     logger.info("📋 Registering Trello routes...")
     
     # Récupérer le pool depuis l'objet db
     pool = db.pool if hasattr(db, 'pool') else db
     
-    def trello_status():
+    def trello_status(query, headers=None):
         """Status du module Trello."""
         return {
             "module": "trello",
@@ -665,7 +658,7 @@ def register_routes(server, db):
             "secteurs_loaded": len(_secteurs_cache),
         }
     
-    def trello_sync_dry():
+    def trello_sync_dry(query, headers=None):
         """Synchronisation Trello -> v19_biens (DRY RUN)."""
         try:
             init_secteurs_table(pool)
@@ -676,7 +669,7 @@ def register_routes(server, db):
             logger.error(f"Erreur sync dry: {e}")
             return {"error": str(e)}
     
-    def trello_sync_live():
+    def trello_sync_live(query, body=None, headers=None):
         """Synchronisation Trello -> v19_biens (LIVE)."""
         try:
             init_secteurs_table(pool)
@@ -687,7 +680,7 @@ def register_routes(server, db):
             logger.error(f"Erreur sync live: {e}")
             return {"error": str(e)}
     
-    def trello_match():
+    def trello_match(query, headers=None):
         """Matching Biens -> Prospects (DRY RUN)."""
         try:
             init_secteurs_table(pool)
@@ -707,7 +700,7 @@ def register_routes(server, db):
             logger.error(f"Erreur matching: {e}")
             return {"error": str(e)}
     
-    def trello_secteurs():
+    def trello_secteurs(query, headers=None):
         """Liste le référentiel secteurs."""
         try:
             load_secteurs_from_db(pool)
@@ -719,7 +712,7 @@ def register_routes(server, db):
         except Exception as e:
             return {"error": str(e)}
     
-    # Enregistrement des routes via l'API serveur V19
+    # Enregistrement des routes
     server.register_route("GET", "/trello/status", trello_status)
     server.register_route("GET", "/trello/sync", trello_sync_dry)
     server.register_route("POST", "/trello/sync", trello_sync_live)
@@ -730,11 +723,8 @@ def register_routes(server, db):
 
 
 # =============================================================================
-# BLOC MAIN PROTÉGÉ (ne s'exécute JAMAIS lors d'un import)
+# BLOC MAIN PROTÉGÉ
 # =============================================================================
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("TEST MODULE TRELLO (standalone)")
-    print("=" * 60)
-    print("Ce test nécessite TRELLO_KEY et TRELLO_TOKEN en variables d'env")
+    print("Module Trello - Test standalone")
