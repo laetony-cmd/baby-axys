@@ -138,9 +138,42 @@ def init_sweepbright_tables(db):
                 webhook_received_at TIMESTAMP,
                 synced_at TIMESTAMP DEFAULT NOW(),
                 created_at TIMESTAMP DEFAULT NOW(),
-                updated_at TIMESTAMP DEFAULT NOW()
+                updated_at TIMESTAMP DEFAULT NOW(),
+                -- NOUVEAUX CHAMPS V19.3
+                mandate_exclusive BOOLEAN,
+                mandate_start_date DATE,
+                mandate_end_date DATE,
+                negotiator_name VARCHAR(200),
+                negotiator_email VARCHAR(200),
+                negotiator_phone VARCHAR(50),
+                office_name VARCHAR(200),
+                amenities JSONB DEFAULT '[]',
+                equipment JSONB DEFAULT '{}',
+                virtual_tour_url VARCHAR(500),
+                video_url VARCHAR(500)
             )
         """, table_name="v19_biens")
+        
+        # Ajouter les colonnes si elles n'existent pas (migration)
+        migration_columns = [
+            ("mandate_exclusive", "BOOLEAN"),
+            ("mandate_start_date", "DATE"),
+            ("mandate_end_date", "DATE"),
+            ("negotiator_name", "VARCHAR(200)"),
+            ("negotiator_email", "VARCHAR(200)"),
+            ("negotiator_phone", "VARCHAR(50)"),
+            ("office_name", "VARCHAR(200)"),
+            ("amenities", "JSONB DEFAULT '[]'"),
+            ("equipment", "JSONB DEFAULT '{}'"),
+            ("virtual_tour_url", "VARCHAR(500)"),
+            ("video_url", "VARCHAR(500)")
+        ]
+        
+        for col_name, col_type in migration_columns:
+            try:
+                db.execute_safe(f"ALTER TABLE v19_biens ADD COLUMN IF NOT EXISTS {col_name} {col_type}", table_name="v19_biens")
+            except:
+                pass
         
         db.execute_safe("""
             CREATE TABLE IF NOT EXISTS v19_sweepbright_webhooks (
@@ -155,14 +188,14 @@ def init_sweepbright_tables(db):
             )
         """, table_name="v19_sweepbright_webhooks")
         
-        logger.info("✅ Tables SweepBright initialisées")
+        logger.info("✅ Tables SweepBright initialisées (avec colonnes enrichies)")
         return True
     except Exception as e:
         logger.error(f"❌ Erreur init tables SweepBright: {e}")
         return False
 
 def save_estate(db, estate: Dict[str, Any], webhook_time: datetime = None) -> bool:
-    """Sauvegarde un bien dans la base."""
+    """Sauvegarde un bien dans la base avec TOUTES les données disponibles."""
     try:
         # Extraire les données - Format SweepBright réel
         location = estate.get("location", {})
@@ -171,6 +204,10 @@ def save_estate(db, estate: Dict[str, Any], webhook_time: datetime = None) -> bo
         price = estate.get("price", {})
         legal = estate.get("legal", {})
         energy = legal.get("energy", {})
+        mandate = estate.get("mandate", {})
+        negotiator = estate.get("negotiator", {})
+        office = estate.get("office", {})
+        features_raw = estate.get("features", {})
         
         # Description - peut être string ou dict multilangue
         desc_raw = estate.get("description", {})
@@ -204,14 +241,37 @@ def save_estate(db, estate: Dict[str, Any], webhook_time: datetime = None) -> bo
         if bathrooms is None:
             bathrooms = len([r for r in estate.get("rooms", []) if r.get("type") in ["bathrooms", "shower_rooms"]])
         
+        # Négociateur - nom complet
+        negotiator_name = None
+        if negotiator:
+            first = negotiator.get("first_name", "")
+            last = negotiator.get("last_name", "")
+            negotiator_name = f"{first} {last}".strip() or None
+        
+        # Aménités
+        amenities = estate.get("amenities", [])
+        
+        # Équipements consolidés
+        equipment = {}
+        if isinstance(features_raw, dict):
+            for category, items in features_raw.items():
+                if isinstance(items, dict):
+                    for k, v in items.items():
+                        if v is True:
+                            equipment[k] = True
+        
         db.execute_safe("""
             INSERT INTO v19_biens 
             (id, reference, title, description, price, price_type, status, type, subtype,
              address_street, address_city, address_postal_code, address_country,
              latitude, longitude, surface_livable, surface_land,
              bedrooms, bathrooms, rooms, energy_class, ghg_class, construction_year,
-             images, features, raw_data, webhook_received_at, synced_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+             images, features, raw_data, webhook_received_at,
+             mandate_exclusive, mandate_start_date, mandate_end_date,
+             negotiator_name, negotiator_email, negotiator_phone, office_name,
+             amenities, equipment, virtual_tour_url, video_url,
+             synced_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
             ON CONFLICT (id) DO UPDATE SET
                 reference = EXCLUDED.reference,
                 title = EXCLUDED.title,
@@ -239,15 +299,26 @@ def save_estate(db, estate: Dict[str, Any], webhook_time: datetime = None) -> bo
                 features = EXCLUDED.features,
                 raw_data = EXCLUDED.raw_data,
                 webhook_received_at = COALESCE(EXCLUDED.webhook_received_at, v19_biens.webhook_received_at),
+                mandate_exclusive = EXCLUDED.mandate_exclusive,
+                mandate_start_date = EXCLUDED.mandate_start_date,
+                mandate_end_date = EXCLUDED.mandate_end_date,
+                negotiator_name = EXCLUDED.negotiator_name,
+                negotiator_email = EXCLUDED.negotiator_email,
+                negotiator_phone = EXCLUDED.negotiator_phone,
+                office_name = EXCLUDED.office_name,
+                amenities = EXCLUDED.amenities,
+                equipment = EXCLUDED.equipment,
+                virtual_tour_url = EXCLUDED.virtual_tour_url,
+                video_url = EXCLUDED.video_url,
                 synced_at = NOW(),
                 updated_at = NOW()
         """, (
             estate.get("id"),
-            estate.get("mandate", {}).get("reference") if isinstance(estate.get("mandate"), dict) else None,
+            mandate.get("number") if isinstance(mandate, dict) else None,
             title,
             description,
-            price.get("amount"),
-            "sale",  # Par défaut
+            price.get("amount") if isinstance(price, dict) else None,
+            "sale",
             estate.get("status"),
             estate.get("type"),
             estate.get("sub_type"),
@@ -255,8 +326,8 @@ def save_estate(db, estate: Dict[str, Any], webhook_time: datetime = None) -> bo
             location.get("city"),
             location.get("postal_code"),
             location.get("country"),
-            geo.get("latitude"),
-            geo.get("longitude"),
+            geo.get("latitude") if isinstance(geo, dict) else None,
+            geo.get("longitude") if isinstance(geo, dict) else None,
             sizes.get("liveable_area", {}).get("size") if isinstance(sizes.get("liveable_area"), dict) else None,
             sizes.get("plot_area", {}).get("size") if isinstance(sizes.get("plot_area"), dict) else None,
             bedrooms,
@@ -264,14 +335,26 @@ def save_estate(db, estate: Dict[str, Any], webhook_time: datetime = None) -> bo
             len(estate.get("rooms", [])),
             energy.get("epc_value") or energy.get("dpe"),
             energy.get("greenhouse_emissions") or energy.get("co2_value"),
-            estate.get("features", {}).get("construction_year") if isinstance(estate.get("features"), dict) else None,
+            features_raw.get("construction_year") if isinstance(features_raw, dict) else None,
             json.dumps(images),
-            json.dumps(estate.get("features", {})),
+            json.dumps(features_raw),
             json.dumps(estate),
-            webhook_time
+            webhook_time,
+            mandate.get("exclusive") if isinstance(mandate, dict) else None,
+            mandate.get("start_date") if isinstance(mandate, dict) else None,
+            mandate.get("end_date") if isinstance(mandate, dict) else None,
+            negotiator_name,
+            negotiator.get("email") if isinstance(negotiator, dict) else None,
+            negotiator.get("phone") if isinstance(negotiator, dict) else None,
+            office.get("name") if isinstance(office, dict) else None,
+            json.dumps(amenities),
+            json.dumps(equipment),
+            estate.get("virtual_tour_url"),
+            estate.get("video_url")
         ), table_name="v19_biens")
         
-        logger.info(f"✅ Bien {estate.get('id')} sauvegardé ({location.get('city', 'ville inconnue')})")
+        ref = mandate.get("number") if isinstance(mandate, dict) else "?"
+        logger.info(f"✅ Bien {ref} sauvegardé ({location.get('city', 'ville inconnue')})")
         return True
     except Exception as e:
         logger.error(f"❌ Erreur sauvegarde bien: {e}")
@@ -351,13 +434,20 @@ def handle_webhook(body: dict, db) -> tuple:
         return 500, {"error": str(e), "code": 500}
 
 def handle_get_biens(query: dict, db) -> tuple:
-    """GET /sweepbright/biens - Liste les biens."""
+    """GET /sweepbright/biens - Liste les biens avec toutes les infos."""
     try:
         status = query.get("status", [None])[0]
         city = query.get("city", [None])[0]
         limit = int(query.get("limit", [50])[0])
         
-        sql = "SELECT id, reference, title, price, status, address_city, surface_livable, bedrooms, energy_class, updated_at FROM v19_biens WHERE 1=1"
+        sql = """SELECT id, reference, title, price, status, type,
+                        address_city, address_postal_code, surface_livable, surface_land,
+                        bedrooms, bathrooms, energy_class, ghg_class,
+                        mandate_exclusive, mandate_end_date,
+                        negotiator_name, negotiator_email, negotiator_phone,
+                        office_name, amenities, equipment,
+                        updated_at 
+                 FROM v19_biens WHERE 1=1"""
         params = []
         
         if status:
