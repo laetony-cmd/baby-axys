@@ -1,6 +1,6 @@
 # MEMORY - CONSIGNES POUR AXIS
 
-*Mise à jour: V19.3 - 7 janvier 2026*
+*Mise à jour: V19.4 - 7 janvier 2026*
 
 ## WORKFLOW OBLIGATOIRE
 
@@ -25,51 +25,48 @@
 
 ## VERSION ACTUELLE
 
-**V19.3 BUNKER + AGENT + SWEEPBRIGHT** - Déployé le 7 janvier 2026
+**V19.4 BUNKER + TRELLO** - Déployé le 7 janvier 2026
+
+### Features V19.4 (NOUVEAU)
+- Module Trello: Sync biens + Matching prospects
+- Enrichissement v19_biens depuis Trello (proprio, TF, contact)
+- Matching automatique Biens -> Acquéreurs
+- Notifications désactivées par défaut (TRELLO_NOTIFICATIONS=false)
+- Référentiel secteurs en PostgreSQL (v19_secteurs)
+
+### Endpoints Trello V19.4
+- /trello/status - Status du module
+- /trello/sync - Sync Trello -> v19_biens (LIVE)
+- /trello/match - Matching Biens -> Prospects (logs seulement)
+- /trello/full - Sync + Match complet
 
 ### Features V19.3
-- Agent MS-01 (pilotage PowerShell distant)
-- Webhook SweepBright (réception publications)
-- Table v19_biens (stockage permanent biens)
-- Parsing enrichi (référence, négociateur, mandat, aménités)
+- Agent MS-01: Pilotage PowerShell distant
+- SweepBright: Webhooks + stockage biens
+
+### Features V19.2
 - Tables préfixées v19_* (isolation stricte)
-- Pool PostgreSQL thread-safe
 - Interface Chat HTML complète
-- Recherche Web Tavily CORRIGÉE
+- Recherche Web Tavily (domaines français)
 
-### Endpoints V19.3
-- /health, /ready, /status
-- /v19/brain, /v19/prospects, /v19/veille
-- /memory, /briefing (legacy compatible)
-- /, /chat, /nouvelle-session, /trio
-- /agent/status, /agent/pending, /agent/execute, /agent/result/{id}
-- /webhook/sweepbright, /sweepbright/biens, /sweepbright/resync
+## INTERFACE CHAT
 
-## AGENT MS-01
+### ✅ URL Fonctionnelle
+https://baby-axys-production.up.railway.app/
 
-### Token
-`ici-dordogne-2026` (header X-Agent-Token)
-
-### Commande PowerShell pour lancer l'agent
-```powershell
-$token="ici-dordogne-2026"; $url="https://baby-axys-production.up.railway.app"; while($true){try{$r=Invoke-RestMethod "$url/agent/pending" -Headers @{"X-Agent-Token"=$token}; if($r.commands){foreach($c in $r.commands){Write-Host "Exec: $($c.command)" -ForegroundColor Yellow; $res=Invoke-Expression $c.command 2>&1|Out-String; Invoke-RestMethod "$url/agent/result/$($c.id)" -Method POST -Headers @{"X-Agent-Token"=$token} -Body (@{result=$res}|ConvertTo-Json) -ContentType "application/json" -ErrorAction SilentlyContinue|Out-Null; Write-Host "OK" -ForegroundColor Green}}}catch{Write-Host "." -NoNewline}; Start-Sleep 5}
-```
-
-## SWEEPBRIGHT
-
-### Webhook URL
-https://baby-axys-production.up.railway.app/webhook/sweepbright
-
-### Biens stockés (07/01/2026)
-- 41710 - Saint Félix de Villadeix - 577.500€
-- 41693 - Manzac-sur-Vern - 198.000€
-- 41687 - Saint Geyrac - 395.000€
+### ⚠️ axi.symbine.fr
+Pointe encore vers AXIS Station local (ancien code v12).
+→ Utiliser baby-axys-production.up.railway.app directement
 
 ## CREDENTIALS ACTIFS
 
 ### Gmail SMTP
 - Email: u5050786429@gmail.com
 - App password: izemquwmmqjdasrk
+
+### Trello
+- Key: dans variable TRELLO_KEY
+- Token: dans variable TRELLO_TOKEN
 
 ### Destinataires
 - Principal: agence@icidordogne.fr
@@ -79,16 +76,40 @@ https://baby-axys-production.up.railway.app/webhook/sweepbright
 
 ### 1. Veille DPE
 - Cron: 08h00 Paris
+- Endpoint: /run-veille
 - Status: ✅ Opérationnelle
 
 ### 2. Veille Concurrence
 - Cron: 07h00 Paris
+- Endpoint: /run-veille-concurrence
 - Status: ✅ Opérationnelle
+
+## MATCHING TRELLO
+
+### Configuration
+- Notifications: **DÉSACTIVÉES** (mode silencieux)
+- Sync: **ACTIVÉ** (enrichissement v19_biens)
+- Pour activer les notifs: TRELLO_NOTIFICATIONS=true
+
+### Seuils de matching
+- Budget: ±15% du prix du bien
+- Match FORT: Budget OK + (REF citée OU secteur match)
+- Match FAIBLE: Budget OK seulement
+
+### Référentiel secteurs
+Table v19_secteurs avec mots-clés et codes postaux.
+Modifiable en base sans redéploiement.
 
 ## HISTORIQUE
 
-| Date | Action |
-|------|--------|
-| 07/01/2026 | V19.3: Agent MS-01 + SweepBright Webhooks |
-| 05/01/2026 | V19.2: Interface Chat + Tavily corrigé |
-| 04/01/2026 | V19: Architecture Bunker déployée |
+| Date | Version | Modification |
+|------|---------|--------------|
+| **07/01/2026** | **V19.4** | **Module Trello (Sync + Matching)** |
+| 07/01/2026 | V19.3 | Agent MS-01 + SweepBright Webhooks |
+| 05/01/2026 | V19.2 | Interface Chat + Tavily corrigé |
+| 05/01/2026 | V19.1 | Veilles opérationnelles, sécurité API |
+| 04/01/2026 | V19.0 | Architecture Bunker déployée |
+
+---
+
+*"Je ne lâche pas." 💪*
