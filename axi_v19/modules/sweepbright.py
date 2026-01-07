@@ -478,6 +478,38 @@ def handle_get_bien(estate_id: str, db) -> tuple:
     except Exception as e:
         return 500, {"error": str(e), "code": 500}
 
+def handle_resync(db) -> tuple:
+    """POST /sweepbright/resync - Resynchronise les biens depuis leur raw_data."""
+    try:
+        # Mise à jour SQL depuis le JSONB raw_data
+        db.execute_safe("""
+            UPDATE v19_biens SET
+                reference = raw_data->'mandate'->>'number',
+                negotiator_name = CONCAT(raw_data->'negotiator'->>'first_name', ' ', raw_data->'negotiator'->>'last_name'),
+                negotiator_email = raw_data->'negotiator'->>'email',
+                negotiator_phone = raw_data->'negotiator'->>'phone',
+                office_name = raw_data->'office'->>'name',
+                mandate_exclusive = (raw_data->'mandate'->>'exclusive')::boolean,
+                mandate_start_date = NULLIF(raw_data->'mandate'->>'start_date', '')::date,
+                mandate_end_date = NULLIF(raw_data->'mandate'->>'end_date', '')::date,
+                address_postal_code = raw_data->'location'->>'postal_code',
+                amenities = COALESCE(raw_data->'amenities', '[]'::jsonb),
+                virtual_tour_url = raw_data->>'virtual_tour_url',
+                video_url = raw_data->>'video_url',
+                updated_at = NOW()
+            WHERE raw_data IS NOT NULL
+        """, table_name="v19_biens")
+        
+        # Compter les biens mis à jour
+        result = db.execute_safe("SELECT COUNT(*) as count FROM v19_biens WHERE reference IS NOT NULL", table_name="v19_biens")
+        count = result[0]["count"] if result else 0
+        
+        logger.info(f"✅ Resync terminé: {count} biens mis à jour")
+        return 200, {"status": "ok", "message": f"{count} biens resynchronisés"}
+    except Exception as e:
+        logger.error(f"❌ Erreur resync: {e}")
+        return 500, {"error": str(e), "code": 500}
+
 # =============================================================================
 # ENREGISTREMENT DES ROUTES
 # =============================================================================
@@ -505,4 +537,10 @@ def register_sweepbright_routes(server, db):
         return handle_get_bien(estate_id, db)
     server.register_route("GET", "/sweepbright/biens/{id}", bien_detail_handler)
     
-    logger.info("✅ Routes SweepBright enregistrées: /webhook/sweepbright, /sweepbright/biens")
+    # POST /sweepbright/resync - Resynchroniser les biens
+    def resync_handler(query, body=None, headers=None):
+        return handle_resync(db)
+    server.register_route("POST", "/sweepbright/resync", resync_handler)
+    server.register_route("GET", "/sweepbright/resync", resync_handler)  # GET aussi pour faciliter
+    
+    logger.info("✅ Routes SweepBright enregistrées: /webhook/sweepbright, /sweepbright/biens, /sweepbright/resync")
