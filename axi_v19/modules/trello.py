@@ -638,9 +638,10 @@ _Notification automatique Axi_
 # ENDPOINTS HTTP - REGISTRATION DES ROUTES
 # =============================================================================
 
-def register_routes(app, pool):
+
+def register_routes(server, db):
     """
-    Enregistre les routes Trello dans l'application Bottle.
+    Enregistre les routes Trello dans le serveur V19.
     
     Routes:
     - GET /trello/status
@@ -649,56 +650,50 @@ def register_routes(app, pool):
     - GET /trello/match
     - GET /trello/secteurs
     """
-    # Import lazy de bottle (uniquement quand cette fonction est appelée)
-    from bottle import response
-    
     logger.info("📋 Registering Trello routes...")
     
-    @app.get('/trello/status')
+    # Récupérer le pool depuis l'objet db
+    pool = db.pool if hasattr(db, 'pool') else db
+    
     def trello_status():
-        response.content_type = 'application/json'
-        return json.dumps({
+        """Status du module Trello."""
+        return {
             "module": "trello",
             "version": "2.0.0",
             "notifications_enabled": ENABLE_NOTIFICATIONS,
             "trello_configured": bool(TRELLO_KEY and TRELLO_TOKEN),
             "secteurs_loaded": len(_secteurs_cache),
-        })
+        }
     
-    @app.get('/trello/sync')
     def trello_sync_dry():
-        response.content_type = 'application/json'
+        """Synchronisation Trello -> v19_biens (DRY RUN)."""
         try:
             init_secteurs_table(pool)
             load_secteurs_from_db(pool)
             stats = sync_biens_from_trello(pool, dry_run=True)
-            return json.dumps({"status": "ok", "mode": "dry_run", "stats": stats})
+            return {"status": "ok", "mode": "dry_run", "stats": stats}
         except Exception as e:
             logger.error(f"Erreur sync dry: {e}")
-            response.status = 500
-            return json.dumps({"error": str(e)})
+            return {"error": str(e)}
     
-    @app.post('/trello/sync')
     def trello_sync_live():
-        response.content_type = 'application/json'
+        """Synchronisation Trello -> v19_biens (LIVE)."""
         try:
             init_secteurs_table(pool)
             load_secteurs_from_db(pool)
             stats = sync_biens_from_trello(pool, dry_run=False)
-            return json.dumps({"status": "ok", "mode": "live", "stats": stats})
+            return {"status": "ok", "mode": "live", "stats": stats}
         except Exception as e:
             logger.error(f"Erreur sync live: {e}")
-            response.status = 500
-            return json.dumps({"error": str(e)})
+            return {"error": str(e)}
     
-    @app.get('/trello/match')
     def trello_match():
-        response.content_type = 'application/json'
+        """Matching Biens -> Prospects (DRY RUN)."""
         try:
             init_secteurs_table(pool)
             load_secteurs_from_db(pool)
             result = run_matching_dry_run(pool)
-            return json.dumps({
+            return {
                 "status": "ok",
                 "mode": "dry_run",
                 "notifications": "DISABLED",
@@ -707,25 +702,29 @@ def register_routes(app, pool):
                 "matches_forts": result.get("matches_forts", 0),
                 "matches_faibles": result.get("matches_faibles", 0),
                 "top_matches": result.get("top_matches", [])[:10]
-            })
+            }
         except Exception as e:
             logger.error(f"Erreur matching: {e}")
-            response.status = 500
-            return json.dumps({"error": str(e)})
+            return {"error": str(e)}
     
-    @app.get('/trello/secteurs')
     def trello_secteurs():
-        response.content_type = 'application/json'
+        """Liste le référentiel secteurs."""
         try:
             load_secteurs_from_db(pool)
-            return json.dumps({
+            return {
                 "status": "ok",
                 "count": len(_secteurs_cache),
                 "secteurs": _secteurs_cache
-            })
+            }
         except Exception as e:
-            response.status = 500
-            return json.dumps({"error": str(e)})
+            return {"error": str(e)}
+    
+    # Enregistrement des routes via l'API serveur V19
+    server.register_route("GET", "/trello/status", trello_status)
+    server.register_route("GET", "/trello/sync", trello_sync_dry)
+    server.register_route("POST", "/trello/sync", trello_sync_live)
+    server.register_route("GET", "/trello/match", trello_match)
+    server.register_route("GET", "/trello/secteurs", trello_secteurs)
     
     logger.info("✅ Routes Trello enregistrées: /trello/status, /trello/sync, /trello/match, /trello/secteurs")
 
@@ -735,10 +734,7 @@ def register_routes(app, pool):
 # =============================================================================
 
 if __name__ == "__main__":
-    # Ce bloc ne s'exécute que si le fichier est lancé directement
-    # python trello.py (pas lors de: from trello import ...)
     print("=" * 60)
     print("TEST MODULE TRELLO (standalone)")
     print("=" * 60)
     print("Ce test nécessite TRELLO_KEY et TRELLO_TOKEN en variables d'env")
-    print("Pour tester: TRELLO_KEY=xxx TRELLO_TOKEN=xxx python trello.py")
