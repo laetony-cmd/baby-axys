@@ -134,17 +134,16 @@ except ImportError as e:
     print(f"  ⚠️ modules.sweepbright not available: {e}", flush=True)
     SWEEPBRIGHT_OK = False
 
-# HOTFIX DISABLED: # Import module Trello (Sync + Matching) - V19.4
-# HOTFIX DISABLED: try:
-# HOTFIX DISABLED:     from .modules.trello import register_routes as register_trello_routes
-# HOTFIX DISABLED:     print("  ✅ modules.trello loaded (Sync + Matching)", flush=True)
-# HOTFIX DISABLED:     TRELLO_OK = True
-# HOTFIX DISABLED: except ImportError as e:
-# HOTFIX DISABLED:     print(f"  ⚠️ modules.trello not available: {e}", flush=True)
-# HOTFIX DISABLED:     TRELLO_OK = False
-# HOTFIX: Module Trello désactivé temporairement
-TRELLO_OK = False
-print("  ⚠️ modules.trello DISABLED (hotfix)", flush=True)
+
+# Import module Trello (Sync + Matching) - V19.5
+try:
+    from .modules.trello import register_routes as register_trello_routes
+    print("  ✅ modules.trello loaded (Sync + Matching)", flush=True)
+    TRELLO_OK = True
+except ImportError as e:
+    print(f"  ⚠️ modules.trello not available: {e}", flush=True)
+    TRELLO_OK = False
+
 
 # =============================================================================
 # IMPORTS STANDARDS
