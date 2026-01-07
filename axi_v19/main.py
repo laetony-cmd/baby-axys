@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+#!/usr/bin/env python3
 # axi_v19/main.py
 """
 AXI V19 - Point d'entrée principal
@@ -132,6 +133,15 @@ try:
 except ImportError as e:
     print(f"  ⚠️ modules.sweepbright not available: {e}", flush=True)
     SWEEPBRIGHT_OK = False
+
+# Import module Trello (Sync + Matching) - V19.4
+try:
+    from .modules.trello import register_routes as register_trello_routes
+    print("  ✅ modules.trello loaded (Sync + Matching)", flush=True)
+    TRELLO_OK = True
+except ImportError as e:
+    print(f"  ⚠️ modules.trello not available: {e}", flush=True)
+    TRELLO_OK = False
 
 # =============================================================================
 # IMPORTS STANDARDS
@@ -382,6 +392,13 @@ class AxiV19:
             logger.info("✅ Routes SweepBright activées (webhooks + biens)")
         else:
             logger.warning("⚠️ Routes SweepBright non disponibles")
+        
+        # Routes Trello (Sync + Matching) - V19.4
+        if TRELLO_OK:
+            register_trello_routes(server.app, db)
+            logger.info("✅ Routes Trello activées (Sync + Matching)")
+        else:
+            logger.warning("⚠️ Routes Trello non disponibles")
     
     def start(self):
         """Démarre l'application V19 complète."""
@@ -428,8 +445,8 @@ class AxiV19:
         
         # 8. Message de bienvenue
         logger.info("=" * 60)
-        logger.info("🎉 AXI V19.3 est opérationnel et en attente")
-        logger.info(f"   Endpoints: /health, /status, /v19/*, /agent/*, /sweepbright/*")
+        logger.info("🎉 AXI V19.4 est opérationnel et en attente")
+        logger.info(f"   Endpoints: /health, /status, /v19/*, /agent/*, /sweepbright/*, /trello/*")
         logger.info("   \"Je ne lâche pas.\" 💪")
         logger.info("=" * 60)
         
@@ -474,5 +491,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
