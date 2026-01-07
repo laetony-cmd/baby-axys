@@ -115,6 +115,15 @@ except ImportError as e:
     print(f"  ⚠️ modules.interface not available: {e}", flush=True)
     INTERFACE_OK = False
 
+# Import module agent (Pilotage distant MS-01)
+try:
+    from .modules.agent import register_agent_routes
+    print("  ✅ modules.agent loaded (Remote Control)", flush=True)
+    AGENT_OK = True
+except ImportError as e:
+    print(f"  ⚠️ modules.agent not available: {e}", flush=True)
+    AGENT_OK = False
+
 # =============================================================================
 # IMPORTS STANDARDS
 # =============================================================================
@@ -350,6 +359,13 @@ class AxiV19:
             register_veille_routes(server)
         else:
             logger.warning("⚠️ Routes veille non disponibles")
+        
+        # Routes agent (Pilotage distant MS-01)
+        if AGENT_OK:
+            register_agent_routes(server)
+            logger.info("✅ Routes Agent activées (pilotage MS-01)")
+        else:
+            logger.warning("⚠️ Routes agent non disponibles")
     
     def start(self):
         """Démarre l'application V19 complète."""
@@ -397,7 +413,7 @@ class AxiV19:
         # 8. Message de bienvenue
         logger.info("=" * 60)
         logger.info("🎉 AXI V19 est opérationnel et en attente")
-        logger.info(f"   Endpoints: /health, /ready, /status, /v19/*")
+        logger.info(f"   Endpoints: /health, /ready, /status, /v19/*, /agent/*")
         logger.info("   \"Je ne lâche pas.\" 💪")
         logger.info("=" * 60)
         
@@ -442,4 +458,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
