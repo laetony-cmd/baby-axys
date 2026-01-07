@@ -180,6 +180,8 @@ PUBLIC_ENDPOINTS = [
     "/agent/execute",    # Agent MS-01 (auth propre via X-Agent-Token)
     "/agent/result",     # Agent MS-01 (auth propre via X-Agent-Token)
     "/agent/status",     # Agent MS-01 status
+    "/webhook/sweepbright",  # Webhook SweepBright (V19.3)
+    "/sweepbright/biens",    # API biens SweepBright (V19.3)
 ]
 
 # Endpoints qui NÉCESSITENT une authentification
@@ -209,6 +211,10 @@ def check_auth(path: str, method: str, query: dict, headers: dict) -> tuple:
     
     # Routes agent (patterns) - authentification gérée par le module agent
     if path.startswith("/agent/"):
+        return True, None
+    
+    # Routes SweepBright (patterns) - publiques
+    if path.startswith("/sweepbright/") or path.startswith("/webhook/"):
         return True, None
     
     # GET sur /v19/brain est public (lecture mémoire)
