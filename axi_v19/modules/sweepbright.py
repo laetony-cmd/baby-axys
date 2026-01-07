@@ -164,24 +164,45 @@ def init_sweepbright_tables(db):
 def save_estate(db, estate: Dict[str, Any], webhook_time: datetime = None) -> bool:
     """Sauvegarde un bien dans la base."""
     try:
-        # Extraire les données
+        # Extraire les données - Format SweepBright réel
         location = estate.get("location", {})
-        address = location.get("address", {})
         geo = location.get("geo", {})
-        features = estate.get("features", {})
+        sizes = estate.get("sizes", {})
         price = estate.get("price", {})
         legal = estate.get("legal", {})
         energy = legal.get("energy", {})
-        description = estate.get("description", {})
+        
+        # Description - peut être string ou dict multilangue
+        desc_raw = estate.get("description", {})
+        if isinstance(desc_raw, dict):
+            description = desc_raw.get("fr") or desc_raw.get("en") or ""
+        else:
+            description = str(desc_raw) if desc_raw else ""
+        
+        # Titre
+        title_raw = estate.get("description_title", {})
+        if isinstance(title_raw, dict):
+            title = title_raw.get("fr") or title_raw.get("en") or ""
+        else:
+            title = str(title_raw) if title_raw else ""
         
         # Images
         images = []
         for img in estate.get("images", []):
-            if img.get("url"):
+            if isinstance(img, dict) and img.get("url"):
                 images.append({
                     "url": img["url"],
                     "type": img.get("type", "image")
                 })
+        
+        # Compter les chambres depuis la clé directe ou rooms
+        bedrooms = estate.get("bedrooms")
+        if bedrooms is None:
+            bedrooms = len([r for r in estate.get("rooms", []) if r.get("type") == "bedrooms"])
+        
+        bathrooms = estate.get("bathrooms")
+        if bathrooms is None:
+            bathrooms = len([r for r in estate.get("rooms", []) if r.get("type") in ["bathrooms", "shower_rooms"]])
         
         db.execute_safe("""
             INSERT INTO v19_biens 
@@ -222,35 +243,35 @@ def save_estate(db, estate: Dict[str, Any], webhook_time: datetime = None) -> bo
                 updated_at = NOW()
         """, (
             estate.get("id"),
-            estate.get("reference"),
-            description.get("title", {}).get("fr") or description.get("title", {}).get("en"),
-            description.get("description", {}).get("fr") or description.get("description", {}).get("en"),
+            estate.get("mandate", {}).get("reference") if isinstance(estate.get("mandate"), dict) else None,
+            title,
+            description,
             price.get("amount"),
-            price.get("type"),
+            "sale",  # Par défaut
             estate.get("status"),
             estate.get("type"),
-            estate.get("subtype"),
-            address.get("street"),
-            address.get("city"),
-            address.get("postal_code"),
-            address.get("country"),
+            estate.get("sub_type"),
+            location.get("street"),
+            location.get("city"),
+            location.get("postal_code"),
+            location.get("country"),
             geo.get("latitude"),
             geo.get("longitude"),
-            features.get("living_area"),
-            features.get("plot_area"),
-            features.get("bedrooms"),
-            features.get("bathrooms"),
-            features.get("rooms"),
-            energy.get("epc_value"),
-            energy.get("co2_value"),
-            features.get("construction_year"),
+            sizes.get("liveable_area", {}).get("size") if isinstance(sizes.get("liveable_area"), dict) else None,
+            sizes.get("plot_area", {}).get("size") if isinstance(sizes.get("plot_area"), dict) else None,
+            bedrooms,
+            bathrooms,
+            len(estate.get("rooms", [])),
+            energy.get("epc_value") or energy.get("dpe"),
+            energy.get("greenhouse_emissions") or energy.get("co2_value"),
+            estate.get("features", {}).get("construction_year") if isinstance(estate.get("features"), dict) else None,
             json.dumps(images),
-            json.dumps(features),
+            json.dumps(estate.get("features", {})),
             json.dumps(estate),
             webhook_time
         ), table_name="v19_biens")
         
-        logger.info(f"✅ Bien {estate.get('id')} sauvegardé")
+        logger.info(f"✅ Bien {estate.get('id')} sauvegardé ({location.get('city', 'ville inconnue')})")
         return True
     except Exception as e:
         logger.error(f"❌ Erreur sauvegarde bien: {e}")
