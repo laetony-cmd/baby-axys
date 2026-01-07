@@ -1,6 +1,6 @@
 # MEMORY - CONSIGNES POUR AXIS
 
-*Dernière mise à jour: 23/12/2025*
+*Mise à jour: V19.3 - 7 janvier 2026*
 
 ## WORKFLOW OBLIGATOIRE
 
@@ -12,7 +12,7 @@
 ## RÈGLES ABSOLUES
 
 ### Emails
-- ❌ Jamais d envoi sans accord explicite de Ludo
+- ❌ Jamais d'envoi sans accord explicite de Ludo
 - ✅ Toujours laetony@gmail.com en copie
 
 ### Validation
@@ -22,6 +22,48 @@
 ### Qualité
 - ✅ Toujours être critique sur le travail fait
 - ✅ Identifier les failles/manques AVANT de proposer la suite
+
+## VERSION ACTUELLE
+
+**V19.3 BUNKER + AGENT + SWEEPBRIGHT** - Déployé le 7 janvier 2026
+
+### Features V19.3
+- Agent MS-01 (pilotage PowerShell distant)
+- Webhook SweepBright (réception publications)
+- Table v19_biens (stockage permanent biens)
+- Parsing enrichi (référence, négociateur, mandat, aménités)
+- Tables préfixées v19_* (isolation stricte)
+- Pool PostgreSQL thread-safe
+- Interface Chat HTML complète
+- Recherche Web Tavily CORRIGÉE
+
+### Endpoints V19.3
+- /health, /ready, /status
+- /v19/brain, /v19/prospects, /v19/veille
+- /memory, /briefing (legacy compatible)
+- /, /chat, /nouvelle-session, /trio
+- /agent/status, /agent/pending, /agent/execute, /agent/result/{id}
+- /webhook/sweepbright, /sweepbright/biens, /sweepbright/resync
+
+## AGENT MS-01
+
+### Token
+`ici-dordogne-2026` (header X-Agent-Token)
+
+### Commande PowerShell pour lancer l'agent
+```powershell
+$token="ici-dordogne-2026"; $url="https://baby-axys-production.up.railway.app"; while($true){try{$r=Invoke-RestMethod "$url/agent/pending" -Headers @{"X-Agent-Token"=$token}; if($r.commands){foreach($c in $r.commands){Write-Host "Exec: $($c.command)" -ForegroundColor Yellow; $res=Invoke-Expression $c.command 2>&1|Out-String; Invoke-RestMethod "$url/agent/result/$($c.id)" -Method POST -Headers @{"X-Agent-Token"=$token} -Body (@{result=$res}|ConvertTo-Json) -ContentType "application/json" -ErrorAction SilentlyContinue|Out-Null; Write-Host "OK" -ForegroundColor Green}}}catch{Write-Host "." -NoNewline}; Start-Sleep 5}
+```
+
+## SWEEPBRIGHT
+
+### Webhook URL
+https://baby-axys-production.up.railway.app/webhook/sweepbright
+
+### Biens stockés (07/01/2026)
+- 41710 - Saint Félix de Villadeix - 577.500€
+- 41693 - Manzac-sur-Vern - 198.000€
+- 41687 - Saint Geyrac - 395.000€
 
 ## CREDENTIALS ACTIFS
 
@@ -33,71 +75,20 @@
 - Principal: agence@icidordogne.fr
 - Copie: laetony@gmail.com
 
-## VEILLES ACTIVES
+## VEILLES ✅ OPÉRATIONNELLES
 
-### 1. Veille DPE ✅ OPÉRATIONNELLE + DVF
+### 1. Veille DPE
 - Cron: 08h00 Paris
-- Endpoint: /run-veille
-- Enrichissement: historique ventes DVF
+- Status: ✅ Opérationnelle
 
-### 2. Veille Concurrence ✅ OPÉRATIONNELLE
+### 2. Veille Concurrence
 - Cron: 07h00 Paris
-- Endpoint: /run-veille-concurrence
-- Agences: 16
-
-### 3. DVF ✅ NOUVEAU
-- Endpoint: /dvf/stats, /dvf/enrichir
-- Données: 2022-2024, Dordogne
-- Parcelles indexées: 23 680
-
-## AGENCES ICI DORDOGNE
-
-### Structure
-- **Vergt** : Agence principale
-- **Le Bugue** : Deuxième agence
-- **Équipe** : Anthony (opérationnel), Julie, Ingrid (validation NL)
-- **Contact** : 05 53 13 33 33
-
-### Stack technique
-| Outil | Usage |
-|-------|-------|
-| SweepBright | CRM principal |
-| Slack | Communication interne |
-| Trello | Suivi dossiers |
-| Gmail | Emails + Calendar |
-| Google Ads | Campagnes (CPC 0.09€) |
-| Netlify | Sites dédiés par bien |
-| HeyGen | Vidéos présentation |
-
-### Sites dédiés déployés
-1. **Manzac** - nouveaute-maisonavendre-manzacsurvern.netlify.app (198K€, 99m²)
-2. **Saint-Geyrac** - icidordogne-paradis-saint-geyrac.netlify.app (395K€)
-3. Template validé : 3 langues (FR/EN/NL), chat IA, capture email
-
-### Google Ads actif
-- CPC: 0.09€ (marché = 1-3€)
-- Clics: 1200+
-- 1ère conversion: 6 décembre 2025
-
-## SIMPLY PÉRIGORD
-
-- **Activité** : Location saisonnière premium
-- **Site** : simply-perigord.com
-- **Positionnement** : Biens haut de gamme uniquement
-
-## PLAN DIRECTEUR
-
-- 6 semaines jusqu au Maroc
-- Julie = prospection vendeurs
-- Anthony = vente uniquement
+- Status: ✅ Opérationnelle
 
 ## HISTORIQUE
 
 | Date | Action |
 |------|--------|
-| 23/12/2025 | Sync mémoire agences + Simply depuis Axis |
-| 22/12/2025 | v5: Enrichissement DVF intégré |
-| 22/12/2025 | v4: 16 agences complètes |
-| 22/12/2025 | v3: Veille concurrence intégrée |
-| 22/12/2025 | Cron APScheduler intégré |
-| 21/12/2025 | Création service unifié Railway |
+| 07/01/2026 | V19.3: Agent MS-01 + SweepBright Webhooks |
+| 05/01/2026 | V19.2: Interface Chat + Tavily corrigé |
+| 04/01/2026 | V19: Architecture Bunker déployée |
