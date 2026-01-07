@@ -214,6 +214,6 @@ def register_agent_routes(server):
     def result_handler(query, body=None, headers=None, path_params=None):
         cmd_id = path_params.get("id", "") if path_params else query.get("id", "")
         return handle_result(query, body or {}, headers or {}, cmd_id)
-    server.register_route("POST", "/agent/result", result_handler)
+    server.register_route("POST", "/agent/result/{id}", result_handler)
     
-    logger.info("✅ Routes Agent enregistrées: /agent/pending, /agent/execute, /agent/result, /agent/status")
+    logger.info("✅ Routes Agent enregistrées: /agent/pending, /agent/execute, /agent/result/{id}, /agent/status")
