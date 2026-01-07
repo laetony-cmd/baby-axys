@@ -787,6 +787,123 @@ def run_full_analysis(pool) -> Dict:
 
 
 # =============================================================================
+# ENDPOINTS HTTP - REGISTRATION DES ROUTES
+# =============================================================================
+
+def register_routes(app, pool):
+    """
+    Enregistre les routes Trello dans l'application Flask/Bottle
+    
+    Routes:
+    - GET /trello/status - Status du module
+    - GET /trello/sync - Lance la synchronisation (dry_run par défaut)
+    - POST /trello/sync - Lance la synchronisation LIVE
+    - GET /trello/match - Lance le matching (dry_run)
+    - GET /trello/secteurs - Liste le référentiel secteurs
+    """
+    from bottle import request, response
+    import json as json_lib
+    
+    logger.info("📋 Registering Trello routes...")
+    
+    @app.get('/trello/status')
+    def trello_status():
+        """Status du module Trello"""
+        response.content_type = 'application/json'
+        return json_lib.dumps({
+            "module": "trello",
+            "version": "1.0.0",
+            "notifications_enabled": ENABLE_NOTIFICATIONS,
+            "trello_configured": bool(TRELLO_KEY and TRELLO_TOKEN),
+            "secteurs_loaded": len(_secteurs_cache),
+        })
+    
+    @app.get('/trello/sync')
+    def trello_sync_dry():
+        """Synchronisation Trello -> v19_biens (DRY RUN)"""
+        response.content_type = 'application/json'
+        try:
+            # Initialiser la table secteurs si nécessaire
+            init_secteurs_table(pool)
+            load_secteurs_from_db(pool)
+            
+            # Lancer le sync en dry run
+            stats = sync_biens_from_trello(pool, dry_run=True)
+            return json_lib.dumps({
+                "status": "ok",
+                "mode": "dry_run",
+                "stats": stats
+            })
+        except Exception as e:
+            logger.error(f"Erreur sync dry: {e}")
+            response.status = 500
+            return json_lib.dumps({"error": str(e)})
+    
+    @app.post('/trello/sync')
+    def trello_sync_live():
+        """Synchronisation Trello -> v19_biens (LIVE)"""
+        response.content_type = 'application/json'
+        try:
+            # Initialiser la table secteurs si nécessaire
+            init_secteurs_table(pool)
+            load_secteurs_from_db(pool)
+            
+            # Lancer le sync en LIVE
+            stats = sync_biens_from_trello(pool, dry_run=False)
+            return json_lib.dumps({
+                "status": "ok",
+                "mode": "live",
+                "stats": stats
+            })
+        except Exception as e:
+            logger.error(f"Erreur sync live: {e}")
+            response.status = 500
+            return json_lib.dumps({"error": str(e)})
+    
+    @app.get('/trello/match')
+    def trello_match():
+        """Matching Biens -> Prospects (DRY RUN)"""
+        response.content_type = 'application/json'
+        try:
+            # Initialiser et charger les secteurs
+            init_secteurs_table(pool)
+            load_secteurs_from_db(pool)
+            
+            # Lancer le matching
+            result = run_matching_dry_run(pool)
+            return json_lib.dumps({
+                "status": "ok",
+                "mode": "dry_run (notifications désactivées)",
+                "biens_count": result.get("biens_count", 0),
+                "prospects_count": result.get("prospects_count", 0),
+                "matches_forts": result.get("matches_forts", 0),
+                "matches_faibles": result.get("matches_faibles", 0),
+                "top_matches": result.get("top_matches", [])[:10]
+            })
+        except Exception as e:
+            logger.error(f"Erreur matching: {e}")
+            response.status = 500
+            return json_lib.dumps({"error": str(e)})
+    
+    @app.get('/trello/secteurs')
+    def trello_secteurs():
+        """Liste le référentiel secteurs"""
+        response.content_type = 'application/json'
+        try:
+            load_secteurs_from_db(pool)
+            return json_lib.dumps({
+                "status": "ok",
+                "count": len(_secteurs_cache),
+                "secteurs": _secteurs_cache
+            })
+        except Exception as e:
+            response.status = 500
+            return json_lib.dumps({"error": str(e)})
+    
+    logger.info("✅ Trello routes registered: /trello/status, /trello/sync, /trello/match, /trello/secteurs")
+
+
+# =============================================================================
 # TEST STANDALONE
 # =============================================================================
 
