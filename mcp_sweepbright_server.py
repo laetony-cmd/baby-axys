@@ -30,7 +30,7 @@ SWEEPBRIGHT_CONFIG = {
     "base_url": "https://website.sweepbright.com/api",
     "client_id": "766",
     "client_secret": "IyuH9EKO6whBPF34JqeOlQimSv9fRmx4XeVIUzTv",
-    "api_version": "20230901"
+    "api_version": "20241030"
 }
 
 POSTGRES_CONFIG = {
@@ -110,9 +110,7 @@ class SweepBrightClient:
         
         headers = {
             "Authorization": f"Bearer {token}",
-            "X-Sweepbright-Version": self.api_version,
-            "Accept": "application/json",
-            "Content-Type": "application/json",
+            "Accept": f"application/vnd.sweepbright.v{self.api_version}+json",
             **kwargs.pop("headers", {})
         }
         
