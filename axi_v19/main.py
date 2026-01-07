@@ -124,6 +124,15 @@ except ImportError as e:
     print(f"  ⚠️ modules.agent not available: {e}", flush=True)
     AGENT_OK = False
 
+# Import module SweepBright (Webhooks + API)
+try:
+    from .modules.sweepbright import register_sweepbright_routes
+    print("  ✅ modules.sweepbright loaded (Webhooks + API)", flush=True)
+    SWEEPBRIGHT_OK = True
+except ImportError as e:
+    print(f"  ⚠️ modules.sweepbright not available: {e}", flush=True)
+    SWEEPBRIGHT_OK = False
+
 # =============================================================================
 # IMPORTS STANDARDS
 # =============================================================================
@@ -366,6 +375,13 @@ class AxiV19:
             logger.info("✅ Routes Agent activées (pilotage MS-01)")
         else:
             logger.warning("⚠️ Routes agent non disponibles")
+        
+        # Routes SweepBright (Webhooks + API)
+        if SWEEPBRIGHT_OK:
+            register_sweepbright_routes(server, db)
+            logger.info("✅ Routes SweepBright activées (webhooks + biens)")
+        else:
+            logger.warning("⚠️ Routes SweepBright non disponibles")
     
     def start(self):
         """Démarre l'application V19 complète."""
@@ -412,8 +428,8 @@ class AxiV19:
         
         # 8. Message de bienvenue
         logger.info("=" * 60)
-        logger.info("🎉 AXI V19 est opérationnel et en attente")
-        logger.info(f"   Endpoints: /health, /ready, /status, /v19/*, /agent/*")
+        logger.info("🎉 AXI V19.3 est opérationnel et en attente")
+        logger.info(f"   Endpoints: /health, /status, /v19/*, /agent/*, /sweepbright/*")
         logger.info("   \"Je ne lâche pas.\" 💪")
         logger.info("=" * 60)
         
