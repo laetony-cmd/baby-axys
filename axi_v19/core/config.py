@@ -182,6 +182,10 @@ PUBLIC_ENDPOINTS = [
     "/agent/status",     # Agent MS-01 status
     "/webhook/sweepbright",  # Webhook SweepBright (V19.3)
     "/sweepbright/biens",    # API biens SweepBright (V19.3)
+    "/trello/status",        # Status module Trello (V19.4)
+    "/trello/sync",          # Sync Trello -> v19_biens (V19.4)
+    "/trello/match",         # Matching Biens -> Prospects (V19.4)
+    "/trello/full",          # Sync + Match complet (V19.4)
 ]
 
 # Endpoints qui NÉCESSITENT une authentification
