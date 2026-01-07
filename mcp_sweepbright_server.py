@@ -112,6 +112,7 @@ class SweepBrightClient:
             "Authorization": f"Bearer {token}",
             "X-Sweepbright-Version": self.api_version,
             "Accept": "application/json",
+            "Content-Type": "application/json",
             **kwargs.pop("headers", {})
         }
         
