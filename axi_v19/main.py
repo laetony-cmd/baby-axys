@@ -397,7 +397,7 @@ class AxiV19:
         
         # Routes Trello (Sync + Matching) - V19.4
         if TRELLO_OK:
-            register_trello_routes(server.app, db)
+            register_trello_routes(server, db)
             logger.info("✅ Routes Trello activées (Sync + Matching)")
         else:
             logger.warning("⚠️ Routes Trello non disponibles")
