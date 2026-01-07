@@ -113,3 +113,11 @@ Modifiable en base sans redéploiement.
 ---
 
 *"Je ne lâche pas." 💪*
+
+## V19.4.1 - Module Trello (7 janvier 2026 08:05)
+
+- Module trello.py avec register_routes
+- Endpoints: /trello/status, /trello/sync, /trello/match, /trello/secteurs
+- MODE SILENCIEUX: ENABLE_NOTIFICATIONS=False
+- Sync Trello → v19_biens actif
+- Matching loggé uniquement (pas de notifications Trello)
