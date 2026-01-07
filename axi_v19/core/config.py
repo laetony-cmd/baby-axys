@@ -176,6 +176,10 @@ PUBLIC_ENDPOINTS = [
     "/test-veille-concurrence",  # Test concurrence sans email
     "/audit-scrapers",           # Audit complet scrapers (V19.2)
     "/diagnose-all",             # Diagnostic URLs détaillé
+    "/agent/pending",    # Agent MS-01 (auth propre via X-Agent-Token)
+    "/agent/execute",    # Agent MS-01 (auth propre via X-Agent-Token)
+    "/agent/result",     # Agent MS-01 (auth propre via X-Agent-Token)
+    "/agent/status",     # Agent MS-01 status
 ]
 
 # Endpoints qui NÉCESSITENT une authentification
@@ -201,6 +205,10 @@ def check_auth(path: str, method: str, query: dict, headers: dict) -> tuple:
     """
     # Endpoints publics - toujours autorisés
     if path in PUBLIC_ENDPOINTS:
+        return True, None
+    
+    # Routes agent (patterns) - authentification gérée par le module agent
+    if path.startswith("/agent/"):
         return True, None
     
     # GET sur /v19/brain est public (lecture mémoire)
@@ -262,4 +270,5 @@ if __name__ == "__main__":
     print(f"API Secret: {'✅ Configuré' if settings.api_secret else '❌ Non configuré'}")
     print(f"Codes postaux: {len(settings.all_codes_postaux)}")
     settings.validate()
+
 
