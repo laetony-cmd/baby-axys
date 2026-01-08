@@ -118,11 +118,11 @@ class SyncMemoryManager:
                     cur.execute("SELECT key, value FROM v19_context ORDER BY category, key")
                     context = cur.fetchall()
                     
-                    # Biens SweepBright
+                    # Biens SweepBright (colonnes réelles)
                     cur.execute(
-                        """SELECT reference, ville, prix, surface, negociateur 
-                           FROM v19_biens WHERE prix IS NOT NULL 
-                           ORDER BY created_at DESC LIMIT 10"""
+                        """SELECT reference, address_city, price, surface_livable, negotiator_name 
+                           FROM v19_biens WHERE price IS NOT NULL 
+                           ORDER BY updated_at DESC LIMIT 10"""
                     )
                     biens = cur.fetchall()
                     
@@ -156,8 +156,11 @@ TRIO:
         if biens:
             lines.append("\n\n🏠 BIENS EN PORTEFEUILLE:")
             for b in biens:
-                prix = f"{b['prix']:,.0f}€".replace(",", " ") if b['prix'] else "N/A"
-                lines.append(f"- Réf {b['reference']}: {b['ville']} - {prix} ({b['surface']}m²)")
+                prix = f"{int(b['price']):,}€".replace(",", " ") if b['price'] else "N/A"
+                ville = b['address_city'] or "N/A"
+                surface = b['surface_livable'] or "?"
+                nego = b['negotiator_name'] or "N/A"
+                lines.append(f"- Réf {b['reference']}: {ville} - {prix} ({surface}m²) - {nego}")
         
         lines.append(f"\n\n📅 Date: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
         lines.append("\n\nRÈGLES: Recherche web dispo (Tavily). Ne fabule jamais. Sois direct.")
