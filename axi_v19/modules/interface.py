@@ -1,7 +1,7 @@
 # axi_v19/modules/interface.py
 """
-Module Interface V19 - Pages HTML pour le chat Axi
-Interface style ChatGPT avec sidebar et conversations.
+Module Interface V19.3 - Pages HTML pour le chat Axi
+CORRIGÉ: Signature handlers + init mémoire persistante.
 
 "Je ne lâche pas." 💪
 """
@@ -12,12 +12,12 @@ from datetime import datetime
 from typing import Dict, Any
 from urllib.parse import parse_qs
 
-from .chat import process_message, clear_session, conversations
-
 logger = logging.getLogger("axi_v19.interface")
 
-# Session active (pour simplifier, une seule session globale)
-# TODO: Migrer vers PostgreSQL pour multi-sessions
+# Import du module chat (sera initialisé avec la mémoire)
+from .chat import process_message, clear_session, init_memory
+
+# Session active
 current_session = str(uuid.uuid4())[:8]
 chat_history = []  # Messages affichés
 
@@ -26,7 +26,7 @@ chat_history = []  # Messages affichés
 # TEMPLATE HTML
 # =============================================================================
 
-def get_chat_html() -> str:
+def get_chat_html(memory_active: bool = False) -> str:
     """Génère la page HTML du chat."""
     
     # Construire les messages
@@ -50,6 +50,8 @@ def get_chat_html() -> str:
                     <div class="message-text">{format_message(msg["content"])}</div>
                 </div>
             </div>'''
+    
+    memory_status = "🧠 Mémoire PostgreSQL" if memory_active else "⚠️ Mode RAM"
     
     return f'''<!DOCTYPE html>
 <html lang="fr">
@@ -83,7 +85,6 @@ def get_chat_html() -> str:
             overflow: hidden;
         }}
         
-        /* SIDEBAR */
         .sidebar {{
             width: 260px;
             background: var(--bg-sidebar);
@@ -111,6 +112,7 @@ def get_chat_html() -> str:
             align-items: center;
             gap: 10px;
             transition: background 0.2s;
+            text-decoration: none;
         }}
         
         .new-chat-btn:hover {{ background: var(--bg-hover); }}
@@ -168,7 +170,6 @@ def get_chat_html() -> str:
             border-radius: 50%;
         }}
         
-        /* MAIN */
         .main {{
             flex: 1;
             display: flex;
@@ -234,7 +235,6 @@ def get_chat_html() -> str:
         
         .message-text strong {{ color: #fff; font-weight: 600; }}
         
-        /* INPUT */
         .input-container {{
             padding: 16px 24px 24px;
             background: var(--bg-primary);
@@ -303,7 +303,6 @@ def get_chat_html() -> str:
             margin-top: 8px;
         }}
         
-        /* Welcome */
         .welcome {{
             text-align: center;
             padding: 60px 20px;
@@ -357,7 +356,7 @@ def get_chat_html() -> str:
         <div class="sidebar-footer">
             <div class="status-badge">
                 <span class="status-dot"></span>
-                <span>Axi V19.2 • PostgreSQL</span>
+                <span>Axi V19.3 • {memory_status}</span>
             </div>
         </div>
     </div>
@@ -372,17 +371,17 @@ def get_chat_html() -> str:
         
         <div class="chat-container" id="chat">
             <div class="chat-messages">
-                {messages_html if messages_html else '''
+                {messages_html if messages_html else f"""
                 <div class="welcome">
                     <h1>👋 Salut Ludo !</h1>
-                    <p>Je suis Axi, ton compagnon IA. Comment puis-je t'aider aujourd'hui ?</p>
+                    <p>Je suis Axi, ton exocerveau. Comment puis-je t'aider ?</p>
                     <p style="margin-top: 20px; font-size: 14px;">
-                        ✅ Recherche web corrigée (Tavily avec filtrage français)<br>
-                        ✅ Claude Sonnet 4 pour les réponses<br>
-                        ✅ V19.2 Bunker sécurisé
+                        ✅ {memory_status}<br>
+                        ✅ Recherche web Tavily<br>
+                        ✅ Claude Sonnet 4
                     </p>
                 </div>
-                '''}
+                """}
             </div>
         </div>
         
@@ -409,16 +408,13 @@ def get_chat_html() -> str:
         const textarea = document.getElementById('messageInput');
         const chatBox = document.getElementById('chat');
         
-        // Auto-resize textarea
         textarea.addEventListener('input', function() {{
             this.style.height = 'auto';
             this.style.height = Math.min(this.scrollHeight, 200) + 'px';
         }});
         
-        // Scroll to bottom
         chatBox.scrollTop = chatBox.scrollHeight;
         
-        // Send message
         async function sendMessage() {{
             const input = document.getElementById('messageInput');
             const btn = document.getElementById('sendBtn');
@@ -462,7 +458,6 @@ def get_chat_html() -> str:
             input.focus();
         }}
         
-        // Enter to send
         textarea.addEventListener('keydown', function(e) {{
             if (e.key === 'Enter' && !e.shiftKey) {{
                 e.preventDefault();
@@ -470,7 +465,6 @@ def get_chat_html() -> str:
             }}
         }});
         
-        // Focus on load
         textarea.focus();
     </script>
 </body>
@@ -488,29 +482,28 @@ def escape_html(text: str) -> str:
 
 
 def format_message(text: str) -> str:
-    """Formate un message pour l'affichage HTML (markdown basique)."""
+    """Formate un message pour l'affichage HTML."""
     text = escape_html(text)
-    
-    # Bold: **text** -> <strong>text</strong>
     import re
     text = re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', text)
-    
-    # Emoji preservation
     return text
 
 
 # =============================================================================
-# HANDLERS
+# HANDLERS - CORRIGÉS avec bonne signature (query, headers=None)
 # =============================================================================
 
-def handle_chat_page(query: Dict) -> str:
+# Variable pour tracker si la mémoire est active
+_memory_active = False
+
+def handle_chat_page(query: Dict, headers=None) -> str:
     """GET / - Page principale du chat."""
-    return get_chat_html()
+    return get_chat_html(memory_active=_memory_active)
 
 
-def handle_chat_post(data: Dict) -> str:
+def handle_chat_post(data: Dict, headers=None) -> str:
     """POST /chat - Traite un message et redirige."""
-    global chat_history
+    global chat_history, _memory_active
     
     message = data.get("message", "")
     if not message:
@@ -518,24 +511,26 @@ def handle_chat_post(data: Dict) -> str:
 <html><head><meta http-equiv="refresh" content="0;url=/"></head>
 <body>Redirection...</body></html>'''
     
-    # Traiter le message
+    # Traiter le message avec mémoire persistante
     result = process_message(current_session, message)
+    
+    # Tracker si mémoire active
+    _memory_active = result.get("memory_active", False)
     
     # Ajouter à l'historique d'affichage
     chat_history.append({"role": "user", "content": message})
     chat_history.append({"role": "assistant", "content": result["response"]})
     
-    # Limiter l'historique
+    # Limiter l'historique affiché
     if len(chat_history) > 40:
         chat_history = chat_history[-40:]
     
-    # Rediriger vers la page principale
     return '''<!DOCTYPE html>
 <html><head><meta http-equiv="refresh" content="0;url=/"></head>
 <body>Redirection...</body></html>'''
 
 
-def handle_new_session(query: Dict) -> str:
+def handle_new_session(query: Dict, headers=None) -> str:
     """GET /nouvelle-session - Nouvelle conversation."""
     global current_session, chat_history
     current_session = str(uuid.uuid4())[:8]
@@ -547,8 +542,8 @@ def handle_new_session(query: Dict) -> str:
 <body>Redirection...</body></html>'''
 
 
-def handle_trio_page(query: Dict) -> str:
-    """GET /trio - Page Mode Trio (placeholder)."""
+def handle_trio_page(query: Dict, headers=None) -> str:
+    """GET /trio - Page Mode Trio."""
     return '''<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -573,16 +568,28 @@ def handle_trio_page(query: Dict) -> str:
 </html>'''
 
 
-def register_interface_routes(server):
-    """Enregistre les routes d'interface sur le serveur."""
+# =============================================================================
+# REGISTRATION
+# =============================================================================
+
+def register_interface_routes(server, db=None):
+    """Enregistre les routes d'interface et initialise la mémoire."""
+    global _memory_active
     
-    # On doit modifier le serveur pour supporter les réponses HTML
-    # Pour l'instant, on va utiliser une astuce: retourner le HTML comme string
-    # et le handler JSON va le détecter
+    # Initialiser la mémoire si DB fournie
+    if db:
+        try:
+            pool = db.pool if hasattr(db, 'pool') else db
+            init_memory(pool)
+            _memory_active = True
+            logger.info("✅ Mémoire persistante connectée")
+        except Exception as e:
+            logger.error(f"⚠️ Mémoire non disponible: {e}")
+            _memory_active = False
     
     server.register_route('GET', '/', handle_chat_page)
     server.register_route('GET', '/nouvelle-session', handle_new_session)
     server.register_route('GET', '/trio', handle_trio_page)
     server.register_route('POST', '/chat', handle_chat_post)
     
-    logger.info("📍 Routes interface enregistrées (/, /chat, /nouvelle-session, /trio)")
+    logger.info("📍 Routes interface V19.3 enregistrées (/, /chat, /nouvelle-session, /trio)")
