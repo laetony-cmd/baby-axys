@@ -356,7 +356,7 @@ class AxiV19:
         
         # Routes Interface (Chat avec Tavily corrigé) - PRIORITÉ
         if INTERFACE_OK:
-            register_interface_routes(server)
+            register_interface_routes(server, db)
             logger.info("✅ Interface Chat + Tavily activée")
         else:
             # Fallback: route racine basique si interface non disponible
