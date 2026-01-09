@@ -186,6 +186,8 @@ PUBLIC_ENDPOINTS = [
     "/trello/sync",          # Sync Trello -> v19_biens (V19.4)
     "/trello/match",         # Matching Biens -> Prospects (V19.4)
     "/trello/full",          # Sync + Match complet (V19.4)
+    "/chat-proxy",           # Chat sites vitrines (V19.5 - Lormont, Manzac)
+    "/contact",              # Contact sites vitrines (V19.5)
 ]
 
 # Endpoints qui NÉCESSITENT une authentification
