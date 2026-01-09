@@ -33,18 +33,19 @@ EMAIL_CC = os.getenv("EMAIL_CC", "laetony@gmail.com")
 # HANDLER: /chat-proxy
 # =============================================================================
 
-def chat_proxy_handler(data: Dict[str, Any], headers: Dict[str, str] = None) -> Dict[str, Any]:
+def chat_proxy_handler(body: Dict[str, Any]) -> Dict[str, Any]:
     """
     Proxy chat pour les sites vitrines (Manzac, Lormont, etc.)
     Reçoit: { system: "...", messages: [...], site_id: "..." }
     Renvoie: La réponse Claude au format { content: [...] }
     """
     try:
-        system_prompt = data.get('system', '')
-        messages = data.get('messages', [])
-        site_id = data.get('site_id', 'unknown')
+        system_prompt = body.get('system', '')
+        messages = body.get('messages', [])
+        site_id = body.get('site_id', 'unknown')
         
         if not ANTHROPIC_API_KEY:
+            logger.error("[CHAT-PROXY] API key not configured")
             return {"error": "API key not configured"}
         
         # Appel Claude API
@@ -71,7 +72,7 @@ def chat_proxy_handler(data: Dict[str, Any], headers: Dict[str, str] = None) -> 
                 "content": [{"type": "text", "text": result["content"][0]["text"]}]
             }
         else:
-            logger.error(f"[CHAT-PROXY] Claude error: {response.status_code}")
+            logger.error(f"[CHAT-PROXY] Claude error: {response.status_code} - {response.text}")
             return {"error": f"Claude API error: {response.status_code}"}
             
     except Exception as e:
@@ -83,18 +84,18 @@ def chat_proxy_handler(data: Dict[str, Any], headers: Dict[str, str] = None) -> 
 # HANDLER: /contact
 # =============================================================================
 
-def contact_handler(data: Dict[str, Any], headers: Dict[str, str] = None) -> Dict[str, Any]:
+def contact_handler(body: Dict[str, Any]) -> Dict[str, Any]:
     """
     Reçoit les demandes de contact des sites vitrines
     Envoie un email à l'agence
     """
     try:
-        name = data.get('name', 'Inconnu')
-        email = data.get('email', '')
-        phone = data.get('phone', 'Non renseigné')
-        message = data.get('message', '')
-        bien = data.get('bien', 'Non spécifié')
-        site = data.get('site', 'unknown')
+        name = body.get('name', 'Inconnu')
+        email = body.get('email', '')
+        phone = body.get('phone', 'Non renseigné')
+        message = body.get('message', '')
+        bien = body.get('bien', 'Non spécifié')
+        site = body.get('site', 'unknown')
         
         # Email HTML
         subject = f"🏠 Contact Site Vitrine - {bien}"
@@ -155,32 +156,8 @@ def contact_handler(data: Dict[str, Any], headers: Dict[str, str] = None) -> Dic
 def register_sites_vitrines_routes(server):
     """Enregistre les routes pour les sites vitrines."""
     
-    # Wrapper pour ajouter les headers CORS
-    def cors_wrapper(handler):
-        def wrapper(data=None, headers=None, **kwargs):
-            result = handler(data or {}, headers)
-            # Le serveur V19 gère les headers dans la réponse
-            return result
-        return wrapper
-    
     # Routes POST
-    server.register_route('POST', '/chat-proxy', cors_wrapper(chat_proxy_handler))
-    server.register_route('POST', '/contact', cors_wrapper(contact_handler))
+    server.register_route('POST', '/chat-proxy', chat_proxy_handler)
+    server.register_route('POST', '/contact', contact_handler)
     
     logger.info("✅ Routes sites vitrines enregistrées: /chat-proxy, /contact")
-
-
-# =============================================================================
-# GESTION CORS (pour OPTIONS)
-# =============================================================================
-
-def handle_cors_preflight():
-    """Réponse pour les requêtes OPTIONS (CORS preflight)."""
-    return {
-        "_cors": True,
-        "headers": {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type"
-        }
-    }
