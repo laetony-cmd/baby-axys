@@ -138,6 +138,10 @@ except ImportError as e:
 # Import module Trello (Sync + Matching) - V19.5
 try:
     from .modules.trello import register_routes as register_trello_routes
+
+    # Import Sites Vitrines (chat-proxy, contact)
+    from .modules.sites_vitrines import register_sites_vitrines_routes
+    print("  ✅ sites_vitrines: loaded", flush=True)
     print("  ✅ modules.trello loaded (Sync + Matching)", flush=True)
     TRELLO_OK = True
 except ImportError as e:
@@ -394,6 +398,13 @@ class AxiV19:
             logger.info("✅ Routes SweepBright activées (webhooks + biens)")
         else:
             logger.warning("⚠️ Routes SweepBright non disponibles")
+
+        # Routes Sites Vitrines (Lormont, Manzac, etc.)
+        try:
+            register_sites_vitrines_routes(server)
+            print("  ✅ Sites Vitrines routes registered", flush=True)
+        except Exception as e:
+            print(f"  ⚠️ Sites Vitrines routes: {e}", flush=True)
         
         # Routes Trello (Sync + Matching) - V19.4
         if TRELLO_OK:
@@ -493,3 +504,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
