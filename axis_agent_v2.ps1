@@ -1,14 +1,5 @@
-# =============================================================================
-# AXIS AGENT V2 - Agent PowerShell amélioré pour MS-01
+# AXIS AGENT V2 - Agent PowerShell pour MS-01
 # ICI Dordogne - 09/01/2026
-# =============================================================================
-# Améliorations:
-# - Polling toutes les 2 secondes (au lieu de 5)
-# - Exécution asynchrone des commandes longues
-# - Timeout configurable par commande
-# - Meilleure gestion des erreurs
-# - Logs détaillés
-# =============================================================================
 
 param(
     [string]$Token = "ici-dordogne-2026",
@@ -18,7 +9,6 @@ param(
 )
 
 $ErrorActionPreference = "Continue"
-$Host.UI.RawUI.WindowTitle = "AXIS Agent V2"
 
 function Write-Log {
     param([string]$Message, [string]$Level = "INFO")
@@ -45,18 +35,11 @@ function Send-Result {
             success = $Success
         } | ConvertTo-Json -Compress
         
-        $response = Invoke-RestMethod -Uri "$Url/agent/result/$CmdId" `
-            -Method POST `
-            -Headers @{ "X-Agent-Token" = $Token } `
-            -Body $body `
-            -ContentType "application/json" `
-            -TimeoutSec 10 `
-            -ErrorAction Stop
-        
+        Invoke-RestMethod -Uri "$Url/agent/result/$CmdId" -Method POST -Headers @{ "X-Agent-Token" = $Token } -Body $body -ContentType "application/json" -TimeoutSec 10 -ErrorAction Stop | Out-Null
         return $true
     }
     catch {
-        Write-Log "Erreur envoi résultat: $_" "ERROR"
+        Write-Log "Erreur envoi resultat: $_" "ERROR"
         return $false
     }
 }
@@ -67,29 +50,12 @@ function Execute-Command {
         [string]$Command
     )
     
-    Write-Log "Exécution: $Command" "INFO"
+    Write-Log "Exec: $Command" "INFO"
     
     try {
-        # Exécution avec timeout
-        $job = Start-Job -ScriptBlock {
-            param($cmd)
-            Invoke-Expression $cmd 2>&1 | Out-String
-        } -ArgumentList $Command
-        
-        $completed = Wait-Job $job -Timeout $CommandTimeout
-        
-        if ($completed) {
-            $result = Receive-Job $job
-            Remove-Job $job -Force
-            Write-Log "Commande terminée" "SUCCESS"
-            Send-Result -CmdId $CmdId -Result $result -Success $true
-        }
-        else {
-            Stop-Job $job
-            Remove-Job $job -Force
-            Write-Log "Timeout après ${CommandTimeout}s" "WARNING"
-            Send-Result -CmdId $CmdId -Result "Timeout après ${CommandTimeout}s" -Success $false
-        }
+        $result = Invoke-Expression $Command 2>&1 | Out-String
+        Write-Log "OK" "SUCCESS"
+        Send-Result -CmdId $CmdId -Result $result -Success $true
     }
     catch {
         $errorMsg = $_.Exception.Message
@@ -100,57 +66,45 @@ function Execute-Command {
 
 # Banner
 Write-Host ""
-Write-Host "  ╔═══════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "  ║  🤖 AXIS AGENT V2 - ICI Dordogne                          ║" -ForegroundColor Cyan
-Write-Host "  ║  Pilotage distant MS-01                                   ║" -ForegroundColor Cyan
-Write-Host "  ╚═══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+Write-Host "  =========================================" -ForegroundColor Cyan
+Write-Host "  AXIS AGENT V2 - ICI Dordogne" -ForegroundColor Cyan
+Write-Host "  Pilotage distant MS-01" -ForegroundColor Cyan
+Write-Host "  =========================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Log "Démarrage agent..." "INFO"
+Write-Log "Demarrage agent..." "INFO"
 Write-Log "URL: $Url" "INFO"
-Write-Log "Poll: ${PollInterval}s | Timeout: ${CommandTimeout}s" "INFO"
+Write-Log "Poll: ${PollInterval}s" "INFO"
 Write-Host ""
 
-# Vérification connexion
+# Verification connexion
 try {
-    $status = Invoke-RestMethod -Uri "$Url/agent/status" `
-        -Headers @{ "X-Agent-Token" = $Token } `
-        -TimeoutSec 5
-    Write-Log "Connecté à Railway ✓" "SUCCESS"
+    $status = Invoke-RestMethod -Uri "$Url/agent/status" -Headers @{ "X-Agent-Token" = $Token } -TimeoutSec 5
+    Write-Log "Connecte a Railway" "SUCCESS"
 }
 catch {
-    Write-Log "Impossible de se connecter à Railway" "ERROR"
-    Write-Log "Vérifiez l'URL et le token" "ERROR"
+    Write-Log "Impossible de se connecter a Railway" "ERROR"
     exit 1
 }
 
-# Boucle principale
-Write-Log "En attente de commandes... (Ctrl+C pour arrêter)" "INFO"
+Write-Log "En attente de commandes... (Ctrl+C pour arreter)" "INFO"
 Write-Host ""
 
-$lastPoll = [DateTime]::MinValue
-
+# Boucle principale
 while ($true) {
     try {
-        # Poll les commandes en attente
-        $response = Invoke-RestMethod -Uri "$Url/agent/pending" `
-            -Headers @{ "X-Agent-Token" = $Token } `
-            -TimeoutSec 5 `
-            -ErrorAction Stop
+        $response = Invoke-RestMethod -Uri "$Url/agent/pending" -Headers @{ "X-Agent-Token" = $Token } -TimeoutSec 5 -ErrorAction Stop
         
         if ($response.commands -and $response.commands.Count -gt 0) {
             foreach ($cmd in $response.commands) {
                 Write-Host ""
-                Write-Log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" "INFO"
                 Write-Log "Nouvelle commande: $($cmd.id)" "INFO"
                 Execute-Command -CmdId $cmd.id -Command $cmd.command
-                Write-Log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" "INFO"
                 Write-Host ""
             }
         }
     }
     catch {
-        # Erreur silencieuse (réseau, etc.)
-        Write-Host "." -NoNewline -ForegroundColor DarkGray
+        # Silencieux
     }
     
     Start-Sleep -Seconds $PollInterval
