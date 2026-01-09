@@ -1,123 +1,73 @@
 # MEMORY - CONSIGNES POUR AXIS
 
-*Mise à jour: V19.4 - 7 janvier 2026*
+*Mise à jour: 09 janvier 2026*
 
 ## WORKFLOW OBLIGATOIRE
 
 À chaque début de conversation, Axis doit:
-1. Appeler GET /memory sur ce service
+1. Appeler GET /memory ou GET /briefing
 2. Lire et appliquer ces consignes
-3. Ne jamais ignorer ces règles
+3. Utiliser l'agent MS-01 pour les actions
 
 ## RÈGLES ABSOLUES
 
-### Emails
-- ❌ Jamais d'envoi sans accord explicite de Ludo
+- ❌ Jamais d'envoi email sans accord explicite de Ludo
 - ✅ Toujours laetony@gmail.com en copie
-
-### Validation
 - ❌ Ne RIEN lancer/exécuter/déployer sans validation Ludo
-- ❌ Ne jamais changer de sujet sans confirmation que le précédent est terminé
 
-### Qualité
-- ✅ Toujours être critique sur le travail fait
-- ✅ Identifier les failles/manques AVANT de proposer la suite
+## MS-01 (SERVEUR AXISSERVEUR)
 
-## VERSION ACTUELLE
+### Agent V19
+- Script: C:\axi-v19\axis_agent_v19.ps1
+- Démarrage auto: ✅ Tâche planifiée "AXIS_Agent_V19"
+- Auto-login Windows: ✅ Configuré
 
-**V19.4 BUNKER + TRELLO** - Déployé le 7 janvier 2026
+### Commande agent
+```bash
+curl -s -X POST -H "X-Agent-Token: ici-dordogne-2026" -H "Content-Type: application/json" -d '{"command": "COMMANDE"}' https://baby-axys-production.up.railway.app/agent/execute
+```
 
-### Features V19.4 (NOUVEAU)
-- Module Trello: Sync biens + Matching prospects
-- Enrichissement v19_biens depuis Trello (proprio, TF, contact)
-- Matching automatique Biens -> Acquéreurs
-- Notifications désactivées par défaut (TRELLO_NOTIFICATIONS=false)
-- Référentiel secteurs en PostgreSQL (v19_secteurs)
+### Hardware
+- CPU: Intel i5-12600H, RAM: 32 GB
+- Disque C: 951 GB, Disque D: 3.7 TB
 
-### Endpoints Trello V19.4
-- /trello/status - Status du module
-- /trello/sync - Sync Trello -> v19_biens (LIVE)
-- /trello/match - Matching Biens -> Prospects (logs seulement)
-- /trello/full - Sync + Match complet
-
-### Features V19.3
-- Agent MS-01: Pilotage PowerShell distant
-- SweepBright: Webhooks + stockage biens
-
-### Features V19.2
-- Tables préfixées v19_* (isolation stricte)
-- Interface Chat HTML complète
-- Recherche Web Tavily (domaines français)
-
-## INTERFACE CHAT
-
-### ✅ URL Fonctionnelle
-https://baby-axys-production.up.railway.app/
-
-### ⚠️ axi.symbine.fr
-Pointe encore vers AXIS Station local (ancien code v12).
-→ Utiliser baby-axys-production.up.railway.app directement
-
-## CREDENTIALS ACTIFS
-
-### Gmail SMTP
-- Email: u5050786429@gmail.com
-- App password: izemquwmmqjdasrk
-
-### Trello
-- Key: dans variable TRELLO_KEY
-- Token: dans variable TRELLO_TOKEN
-
-### Destinataires
-- Principal: agence@icidordogne.fr
-- Copie: laetony@gmail.com
-
-## VEILLES ✅ OPÉRATIONNELLES
-
-### 1. Veille DPE
-- Cron: 08h00 Paris
-- Endpoint: /run-veille
-- Status: ✅ Opérationnelle
-
-### 2. Veille Concurrence
-- Cron: 07h00 Paris
-- Endpoint: /run-veille-concurrence
-- Status: ✅ Opérationnelle
-
-## MATCHING TRELLO
+## DRIVE WATCHER (Transcription Audio)
 
 ### Configuration
-- Notifications: **DÉSACTIVÉES** (mode silencieux)
-- Sync: **ACTIVÉ** (enrichissement v19_biens)
-- Pour activer les notifs: TRELLO_NOTIFICATIONS=true
+- Script: C:\axi-v19\drive_watcher_zip.py
+- Dossier Drive: Audios_Terrain
+- Folder ID: 1iKPgQa6NUJo8ETaMsM3MLNM7uKnZW5uJ
+- Compte: agence@icidordogne.fr
 
-### Seuils de matching
-- Budget: ±15% du prix du bien
-- Match FORT: Budget OK + (REF citée OU secteur match)
-- Match FAIBLE: Budget OK seulement
+### Commande transcription
+```
+python C:\axi-v19\drive_watcher_zip.py 1iKPgQa6NUJo8ETaMsM3MLNM7uKnZW5uJ --once
+```
 
-### Référentiel secteurs
-Table v19_secteurs avec mots-clés et codes postaux.
-Modifiable en base sans redéploiement.
+### Télécharger TOUS les fichiers (photos, zip, etc.)
+```
+python C:\axi-v19\download_all.py
+```
 
-## HISTORIQUE
+### Résultats
+- Transcriptions: C:\axi-v19\transcriptions\
+- Downloads: C:\axi-v19\downloads\
 
-| Date | Version | Modification |
-|------|---------|--------------|
-| **07/01/2026** | **V19.4** | **Module Trello (Sync + Matching)** |
-| 07/01/2026 | V19.3 | Agent MS-01 + SweepBright Webhooks |
-| 05/01/2026 | V19.2 | Interface Chat + Tavily corrigé |
-| 05/01/2026 | V19.1 | Veilles opérationnelles, sécurité API |
-| 04/01/2026 | V19.0 | Architecture Bunker déployée |
+## DOCKER CONTAINERS MS-01
 
----
+- postgres-axi: Port 5432 ✅
+- axi-agences: Port 8080 ✅  
+- axi-v19: Actif ✅
+- ollama: Port 11434
 
-*"Je ne lâche pas." 💪*
+## VEILLES
 
-## V19.4.1 - Module Trello (7 janvier 2026 08:05)
+- Veille DPE: 08h00 Paris ✅
+- Veille Concurrence: 07h00 Paris ✅
 
-- Module trello.py avec register_routes
-- Endpoints: /trello/status, /trello/sync, /trello/match, /trello/secteurs
-- MODE SILENCIEUX: ENABLE_NOTIFICATIONS=False
-- Sync Trello → v19_biens actif
-- Matching loggé uniquement (pas de notifications Trello)
+## NOTES IMPORTANTES
+
+1. Si agent timeout → faire exécuter directement sur MS-01
+2. Dossier Audios_Terrain peut contenir: ZIP (audio), JPG (photos)
+3. download_all.py télécharge TOUS les fichiers (pas juste audio)
+4. Credentials dans fichier CREDENTIALS_REFERENCE.md séparé
