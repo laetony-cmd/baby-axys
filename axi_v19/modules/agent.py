@@ -126,7 +126,7 @@ def handle_execute(query: dict, body: dict, headers: dict) -> tuple:
     command = body.get("command", "")
     description = body.get("description", "")
     wait = body.get("wait", True)  # Attendre le résultat par défaut
-    timeout = body.get("timeout", 30)
+    timeout = body.get("timeout", 60)
     
     if not command:
         return 400, {"error": "Commande manquante", "code": 400}
