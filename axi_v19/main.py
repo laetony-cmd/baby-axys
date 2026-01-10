@@ -142,6 +142,11 @@ try:
     # Import Sites Vitrines (chat-proxy, contact)
     from .modules.sites_vitrines import register_sites_vitrines_routes
     print("  ✅ sites_vitrines: loaded", flush=True)
+    
+    # Import Chat Vitrine V2 (template permanent)
+    from .modules.chat_vitrine import register_chat_vitrine_routes
+    print("  ✅ chat_vitrine V2: loaded", flush=True)
+    
     print("  ✅ modules.trello loaded (Sync + Matching)", flush=True)
     TRELLO_OK = True
 except ImportError as e:
@@ -405,6 +410,13 @@ class AxiV19:
             print("  ✅ Sites Vitrines routes registered", flush=True)
         except Exception as e:
             print(f"  ⚠️ Sites Vitrines routes: {e}", flush=True)
+        
+        # Routes Chat Vitrine V2 (Template permanent)
+        try:
+            register_chat_vitrine_routes(server)
+            print("  ✅ Chat Vitrine V2 routes registered", flush=True)
+        except Exception as e:
+            print(f"  ⚠️ Chat Vitrine V2 routes: {e}", flush=True)
         
         # Routes Trello (Sync + Matching) - V19.4
         if TRELLO_OK:
