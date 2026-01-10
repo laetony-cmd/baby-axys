@@ -127,7 +127,7 @@ BIENS_CONFIG = {
         
         # TRANSPORTS - Distances vérifiées Moovit 10/01/2026
         "transports": {
-            "tramway": "Ligne A - Arrêt Buttinière à 9 min à pied (629m)",
+            "tramway": "Ligne A - Arrêt Buttinière à 6 min à pied (629m)",
             "bus": "Arrêt Centre Commercial 4 Pavillons à 5 min (298m) - Lignes 27, 32, 64, 66, 67",
             "bus_detail": "Arrêt Place des 2 Villes à 5 min (379m), Arrêt Iris à 6 min (388m)",
             "voiture": "Rocade A630 sortie 2 (Lormont) à 3 min",
@@ -171,7 +171,7 @@ BIENS_CONFIG = {
             "✨ Très propre - ZÉRO travaux",
             "🌡️ Excellente isolation thermique",
             "🚌 Bus à 5 min - Centre commercial 4 Pavillons",
-            "🚃 Tramway ligne A à 9 min (Buttinière)",
+            "🚃 Tramway ligne A à 6 min (Buttinière)",
             "☀️ 4ème et dernier étage très lumineux",
             "🛗 Ascenseur dans le bâtiment",
             "👶 Crèche sur la même rue",
