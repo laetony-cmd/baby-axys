@@ -3,7 +3,7 @@
 Module Chat Vitrine V3.4 - Données officielles copropriété 10/01/2026
 =====================================================================
 - Surfaces officielles du plan TAGERIM
-- CORRECTION: 3ème étage (attestation notariale)
+- 4ème et dernier étage
 - Charges réelles (décomptes Citya 2024)
 - Taxe foncière 2025: 1351€/an
 - Syndic CITYA Lanaverre Talence
@@ -95,7 +95,7 @@ BIENS_CONFIG = {
         "balcon": True,
         
         # BÂTIMENT
-        "etage": "3ème étage avec ascenseur",
+        "etage": "4ème et dernier étage avec ascenseur",
         "batiment": "Bâtiment D - Porte D33",
         "ascenseur": True,
         "interphone": True,
@@ -172,7 +172,7 @@ BIENS_CONFIG = {
             "🌡️ Excellente isolation thermique",
             "🚌 Bus à 5 min - Centre commercial 4 Pavillons",
             "🚃 Tramway ligne A à 9 min (Buttinière)",
-            "☀️ 3ème étage très lumineux",
+            "☀️ 4ème et dernier étage très lumineux",
             "🛗 Ascenseur dans le bâtiment",
             "👶 Crèche sur la même rue",
             "💰 Prix/m² compétitif vs marché"
@@ -183,7 +183,7 @@ BIENS_CONFIG = {
             "investisseur": "Forte demande locative à Lormont (étudiants, jeunes actifs Bordeaux). Loyer estimé 750-850€/mois. Rentabilité ~5.5%. Résidence sécurisée = rassurant pour locataires.",
             "primo_accedant": "Idéal 1ère acquisition - prix accessible, 2 vraies chambres, piscine, résidence sécurisée, proche transports et commerces.",
             "famille": "2 chambres avec placards, piscine pour les enfants, crèche sur la même rue, résidence ultra-sécurisée (bip + code), quartier calme.",
-            "senior": "3ème étage avec ascenseur, résidence L'ARÈNE MARGAUX très sécurisée, tous commerces à 5 min à pied, pas d'entretien extérieur."
+            "senior": "4ème et dernier étage avec ascenseur, résidence L'ARÈNE MARGAUX très sécurisée, tous commerces à 5 min à pied, pas d'entretien extérieur."
         },
         
         # VISITE VIRTUELLE
