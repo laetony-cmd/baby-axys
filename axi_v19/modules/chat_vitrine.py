@@ -1,11 +1,10 @@
 # axi_v19/modules/chat_vitrine.py
 """
-Module Chat Vitrine V3.2 - Corrections Ludo 10/01/2026
-======================================================
+Module Chat Vitrine V3.3 - Surfaces officielles TAGERIM 10/01/2026
+==================================================================
+- Surfaces officielles du plan TAGERIM
 - Résidence L'ARÈNE MARGAUX (sécurité détaillée)
-- Équipements corrigés (pas de thermostat, emplacement électroménager)
-- Placards entrée + chambres
-- Parking place numérotée
+- 4ème et dernier étage
 - Distances vérifiées Moovit
 
 "Je ne lâche pas." 💪
@@ -36,13 +35,13 @@ EMAIL_TO = os.getenv("EMAIL_TO", "agence@icidordogne.fr")
 EMAIL_CC = os.getenv("EMAIL_CC", "laetony@gmail.com")
 
 # =============================================================================
-# CONFIGURATION DES BIENS - V3.2 Corrections Ludo 10/01/2026
+# CONFIGURATION DES BIENS - V3.3 Surfaces TAGERIM 10/01/2026
 # =============================================================================
 
 BIENS_CONFIG = {
     
     # =========================================================================
-    # LORMONT T3 - Laetitia Dorle - V3.2 CORRIGÉ LUDO 10/01/2026
+    # LORMONT T3 - Laetitia Dorle - V3.3 SURFACES TAGERIM OFFICIELLES
     # =========================================================================
     "lormont": {
         "id": "lormont",
@@ -55,9 +54,7 @@ BIENS_CONFIG = {
         "code_postal": "33310",
         "quartier": "4 Pavillons",
         
-        # =================================================================
-        # RÉSIDENCE - CORRIGÉ LUDO
-        # =================================================================
+        # RÉSIDENCE
         "residence_nom": "L'ARÈNE MARGAUX",
         "residence_securite": "Résidence entièrement sécurisée et clôturée. Le bâtiment D est lui-même clôturé dans la résidence. Accès par bip pour le portail et par code pour le reste.",
         "residence": "Résidence L'ARÈNE MARGAUX - Sécurisée, entièrement clôturée",
@@ -68,21 +65,26 @@ BIENS_CONFIG = {
         "honoraires": "charge vendeur",
         "frais_notaire": 12600,
         "total_acquisition": 177600,
-        "prix_m2": 2661,
+        "prix_m2": 2680,
         "prix_m2_marche": 2350,
         "analyse_prix": "Prix compétitif justifié par piscine + parking inclus. Estimation haute: 175 000€.",
         
-        # SURFACES
-        "surface": 62,
+        # =================================================================
+        # SURFACES - OFFICIELLES PLAN TAGERIM
+        # =================================================================
+        "surface": 61.59,
+        "surface_ponderee": 62.19,
         "surfaces_detail": {
-            "Séjour/Salon": "24,49 m²",
-            "Cuisine équipée": "5,47 m²",
-            "Chambre 1": "9,75 m² avec placard intégré",
-            "Chambre 2": "11,20 m² avec placard intégré",
-            "Salle de bains": "3,22 m²",
-            "WC indépendant": "1,00 m²",
-            "Couloir": "3,20 m²"
+            "Séjour + cuisine + placard": "31,56 m²",
+            "Chambre 1 + placard": "11,01 m²",
+            "Chambre 2 + placard": "10,25 m²",
+            "Salle de bains": "3,59 m²",
+            "WC": "1,22 m²",
+            "Dégagement + placard": "3,96 m²",
+            "Balcon": "1,20 m²"
         },
+        "surface_habitable": "61,59 m²",
+        "surface_balcon": "1,20 m²",
         
         # COMPOSITION
         "pieces": 3,
@@ -91,26 +93,24 @@ BIENS_CONFIG = {
         "wc": 1,
         "balcon": True,
         
-        # BÂTIMENT - CORRIGÉ LUDO
+        # BÂTIMENT
         "etage": "4ème et dernier étage avec ascenseur",
         "batiment": "Bâtiment D - Porte D33",
         "ascenseur": True,
         "interphone": True,
         
-        # EXTÉRIEURS - CORRIGÉ LUDO
+        # EXTÉRIEURS
         "parking": "1 place extérieure numérotée INCLUSE dans le prix",
         "piscine": "Piscine collective de la résidence - accès inclus",
         
-        # =================================================================
-        # ÉQUIPEMENTS - CORRIGÉ LUDO
-        # =================================================================
+        # ÉQUIPEMENTS
         "equipements": [
             "Double vitrage intégral sur toutes les fenêtres",
             "Volets roulants électriques sur toutes les ouvertures",
             "Cuisine équipée avec micro-onde et frigo-congélateur + emplacements lave-linge et lave-vaisselle",
             "Salle de bains avec baignoire + douche italienne + double vasque",
             "WC indépendant",
-            "Balcon avec vue dégagée",
+            "Balcon 1,20 m² avec vue dégagée",
             "Interphone vidéo",
             "Placards dans l'entrée et dans les 2 chambres",
             "VMC"
@@ -124,9 +124,7 @@ BIENS_CONFIG = {
         # ÉTAT
         "etat": "TRÈS PROPRE - Emménagement immédiat possible, aucun travaux nécessaires",
         
-        # =====================================================================
         # TRANSPORTS - Distances vérifiées Moovit 10/01/2026
-        # =====================================================================
         "transports": {
             "tramway": "Ligne A - Arrêt Buttinière à 9 min à pied (629m)",
             "bus": "Arrêt Centre Commercial 4 Pavillons à 5 min (298m) - Lignes 27, 32, 64, 66, 67",
@@ -137,7 +135,7 @@ BIENS_CONFIG = {
             "aeroport": "45 minutes"
         },
         
-        # COMMERCES - Distances vérifiées
+        # COMMERCES
         "commerces": [
             "Centre Commercial Carrefour 4 Pavillons à 5 min à pied (300m)",
             "Hypermarché Carrefour avec galerie commerciale",
@@ -163,9 +161,7 @@ BIENS_CONFIG = {
             "Berges de la Garonne"
         ],
         
-        # =================================================================
-        # POINTS FORTS - CORRIGÉ LUDO
-        # =================================================================
+        # POINTS FORTS
         "points_forts": [
             "🏊 Piscine résidence - TRÈS RARE à ce prix !",
             "🚗 Parking extérieur numéroté INCLUS",
@@ -199,9 +195,7 @@ BIENS_CONFIG = {
         "site": "https://lormont-t3-piscine-icidordogne.netlify.app/"
     },
     
-    # =========================================================================
-    # MANZAC - À compléter
-    # =========================================================================
+    # MANZAC (inchangé)
     "manzac": {
         "id": "manzac",
         "titre": "Maison Plain-pied 99m² - Terrain 1889m²",
@@ -267,399 +261,142 @@ LANG_CONFIG = {
 # =============================================================================
 
 def get_bien_config(bien_id: str) -> Optional[Dict]:
-    """Récupère la configuration d'un bien."""
     return BIENS_CONFIG.get(bien_id.lower())
 
-
 def search_web(query: str, domains: List[str] = None) -> str:
-    """Recherche web via Tavily pour infos fraîches."""
     if not TAVILY_API_KEY:
-        logger.warning("[TAVILY] API key non configurée")
         return ""
-    
-    default_domains = [
-        "bordeaux.fr", "lormont.fr", "seloger.com", 
-        "leboncoin.fr", "meilleursagents.com", "dvf.etalab.gouv.fr"
-    ]
-    
+    default_domains = ["bordeaux.fr", "lormont.fr", "seloger.com", "leboncoin.fr", "meilleursagents.com"]
     try:
         response = requests.post(
             "https://api.tavily.com/search",
-            json={
-                "api_key": TAVILY_API_KEY,
-                "query": query,
-                "search_depth": "basic",
-                "max_results": 3,
-                "include_domains": domains or default_domains
-            },
+            json={"api_key": TAVILY_API_KEY, "query": query, "search_depth": "basic", "max_results": 3, "include_domains": domains or default_domains},
             timeout=8
         )
-        
         if response.status_code == 200:
             results = response.json().get("results", [])
             if results:
-                infos = []
-                for r in results[:3]:
-                    title = r.get("title", "")[:50]
-                    content = r.get("content", "")[:150]
-                    infos.append(f"• {title}: {content}")
-                return "\n".join(infos)
-    except Exception as e:
-        logger.warning(f"[TAVILY] Erreur: {e}")
-    
+                return "\n".join([f"• {r.get('title','')[:50]}: {r.get('content','')[:150]}" for r in results[:3]])
+    except:
+        pass
     return ""
 
-
 def build_system_prompt(bien: Dict, langue: str = "fr") -> str:
-    """Construit le prompt système COMPLET avec toutes les infos du bien."""
-    
     lang = LANG_CONFIG.get(langue, LANG_CONFIG["fr"])
-    
-    # Formatage des surfaces détaillées
-    surfaces = ""
-    if "surfaces_detail" in bien:
-        surfaces = "\n".join([f"  • {k}: {v}" for k, v in bien["surfaces_detail"].items()])
-    
-    # Formatage des équipements
-    equipements = ""
-    if "equipements" in bien:
-        equipements = "\n".join([f"  ✓ {e}" for e in bien["equipements"]])
-    
-    # Formatage des points forts
-    points_forts = ""
-    if "points_forts" in bien:
-        points_forts = "\n".join(bien["points_forts"])
-    
-    # Formatage transports
-    transports = ""
-    if isinstance(bien.get("transports"), dict):
-        transports = "\n".join([f"  • {k.upper()}: {v}" for k, v in bien["transports"].items()])
-    elif isinstance(bien.get("transports"), list):
-        transports = "\n".join([f"  • {t}" for t in bien["transports"]])
-    
-    # Formatage commerces
+    surfaces = "\n".join([f"  • {k}: {v}" for k, v in bien.get("surfaces_detail", {}).items()])
+    equipements = "\n".join([f"  ✓ {e}" for e in bien.get("equipements", [])])
+    points_forts = "\n".join(bien.get("points_forts", []))
+    transports = "\n".join([f"  • {k.upper()}: {v}" for k, v in bien.get("transports", {}).items()]) if isinstance(bien.get("transports"), dict) else ""
     commerces = "\n".join([f"  • {c}" for c in bien.get("commerces", [])])
-    
-    # Formatage écoles
     ecoles = "\n".join([f"  • {e}" for e in bien.get("ecoles", [])])
-    
-    # Arguments de vente par profil
-    arguments = ""
-    if "arguments" in bien:
-        arguments = "\n".join([f"  → {k.upper()}: {v}" for k, v in bien["arguments"].items()])
+    arguments = "\n".join([f"  → {k.upper()}: {v}" for k, v in bien.get("arguments", {}).items()])
     
     return f"""Tu es Sophie, assistante virtuelle de l'agence ICI Dordogne.
 {lang['instruction']}
 
-══════════════════════════════════════════════════════════════════════════════
 🏠 {bien.get('titre', 'Bien immobilier')}
-══════════════════════════════════════════════════════════════════════════════
 
-📍 LOCALISATION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Adresse: {bien.get('adresse', 'Non communiquée')}
-Ville: {bien.get('ville', '')} ({bien.get('code_postal', '')})
-Quartier: {bien.get('quartier', 'Non précisé')}
-Résidence: {bien.get('residence_nom', bien.get('residence', 'NC'))}
+📍 LOCALISATION: {bien.get('adresse', '')} | Résidence: {bien.get('residence_nom', '')}
+🔒 SÉCURITÉ: {bien.get('residence_securite', '')}
 
-🔒 SÉCURITÉ RÉSIDENCE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-{bien.get('residence_securite', 'Résidence sécurisée')}
+💰 PRIX: {bien.get('prix_affiche', '')} | {bien.get('prix_m2', '')} €/m² | Frais notaire: ~{bien.get('frais_notaire', '')} €
 
-💰 PRIX
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Prix: {bien.get('prix_affiche', bien.get('prix', 'NC'))} (honoraires {bien.get('honoraires', 'charge vendeur')})
-Frais de notaire estimés: ~{bien.get('frais_notaire', 'NC')} €
-Total acquisition: ~{bien.get('total_acquisition', 'NC')} €
-Prix au m²: {bien.get('prix_m2', 'NC')} €/m² (marché local: ~{bien.get('prix_m2_marche', 'NC')} €/m²)
-Analyse: {bien.get('analyse_prix', '')}
-
-📐 SURFACES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Surface totale: ~{bien.get('surface', 'NC')} m²
-Détail:
+📐 SURFACES (officielles TAGERIM):
+Surface habitable: {bien.get('surface_habitable', '')}
 {surfaces}
 
-🏗️ COMPOSITION & BÂTIMENT
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Type: {bien.get('type_bien', 'NC')}
-Pièces: {bien.get('pieces', 'NC')} | Chambres: {bien.get('chambres', 'NC')} | SDB: {bien.get('sdb', 'NC')} | WC: {bien.get('wc', 'NC')}
-Étage: {bien.get('etage', 'NC')}
-Bâtiment: {bien.get('batiment', 'NC')}
-Ascenseur: {'Oui' if bien.get('ascenseur') else 'Non'}
-Balcon: {'Oui' if bien.get('balcon') else 'Non'}
+🏗️ COMPOSITION: T{bien.get('pieces', '')} | {bien.get('chambres', '')} chambres | Étage: {bien.get('etage', '')}
 
-🔧 ÉQUIPEMENTS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔧 ÉQUIPEMENTS:
 {equipements}
 
-🚗 EXTÉRIEURS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Parking: {bien.get('parking', 'Non inclus')}
-Piscine: {bien.get('piscine', 'Non')}
+🚗 EXTÉRIEURS: Parking: {bien.get('parking', '')} | Piscine: {bien.get('piscine', '')}
 
-🌡️ ÉNERGIE & ÉTAT
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Chauffage: {bien.get('chauffage', 'NC')}
-Isolation: {bien.get('isolation', 'NC')}
-DPE: {bien.get('dpe', 'NC')}
-État général: {bien.get('etat', 'NC')}
+🌡️ ÉNERGIE: {bien.get('chauffage', '')} | DPE: {bien.get('dpe', '')} | {bien.get('isolation', '')}
 
-🚃 TRANSPORTS (distances vérifiées Moovit)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚃 TRANSPORTS (vérifiés Moovit):
 {transports}
 
-🛒 COMMERCES & SERVICES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-{commerces}
+🛒 COMMERCES: {commerces}
 
-🏫 ÉCOLES & CRÈCHES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-{ecoles}
+🏫 ÉCOLES: {ecoles}
 
-⭐ POINTS FORTS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⭐ POINTS FORTS:
 {points_forts}
 
-🎯 ARGUMENTS PAR PROFIL ACHETEUR
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 ARGUMENTS:
 {arguments}
 
-🔗 VISITE VIRTUELLE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-{bien.get('visite_virtuelle', 'Non disponible')}
+🔗 VISITE VIRTUELLE: {bien.get('visite_virtuelle', '')}
 
-══════════════════════════════════════════════════════════════════════════════
-📋 TON RÔLE
-══════════════════════════════════════════════════════════════════════════════
+📋 TON RÔLE:
+1. INFORMER avec précision
+2. CONVERTIR vers une visite (nom → téléphone → disponibilités)
+3. Style chaleureux, concis (2-3 phrases max)
 
-1️⃣ INFORMER avec précision et enthousiasme
-   • Utilise TOUTES les données ci-dessus pour répondre
-   • Les distances sont VÉRIFIÉES - utilise-les avec confiance
-   • Mets en avant la SÉCURITÉ de la résidence L'ARÈNE MARGAUX
-   • Si tu ne connais pas une info, dis-le honnêtement
-
-2️⃣ CONVERTIR vers une visite
-   • Détecte l'intérêt: questions détaillées, budget, timeline...
-   • Propose la visite: "Ce bien vous intéresse ? Je peux organiser une visite !"
-   • Si OUI, capture dans l'ordre:
-     a) "{lang['ask_name']}"
-     b) "{lang['ask_phone']}"
-     c) "{lang['ask_dispo']}"
-   • Confirmation: "{lang['confirm']}"
-
-3️⃣ STYLE
-   • Chaleureux, enthousiaste mais pas pushy
-   • Concis: 2-3 phrases max par réponse
-   • Ne donne JAMAIS de RDV précis - l'agence rappellera
-   • Utilise des émojis avec parcimonie (1-2 max par réponse)
-
-📞 CONTACT AGENCE: {bien.get('agence', 'ICI Dordogne')} - {bien.get('tel', '05 53 13 33 33')}
+📞 CONTACT: {bien.get('tel', '05 53 13 33 33')}
 """
-
 
 def send_lead_email(bien_id: str, lead_data: Dict, conversation: List[Dict] = None) -> bool:
-    """Envoie un email à l'agence avec les infos du lead."""
     try:
         bien = get_bien_config(bien_id) or {}
-        
-        conv_html = ""
-        if conversation:
-            conv_html = "<br>".join([
-                f"<b>{'👤 Visiteur' if m['role'] == 'user' else '🤖 Sophie'}:</b> {m['content']}"
-                for m in conversation[-10:]
-            ])
-        
+        conv_html = "<br>".join([f"<b>{'👤 Visiteur' if m['role'] == 'user' else '🤖 Sophie'}:</b> {m['content']}" for m in (conversation or [])[-10:]])
         subject = f"🏠 LEAD Chat Vitrine - {bien.get('titre', bien_id)}"
-        
-        body = f"""
-<html>
-<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-
-<div style="background: linear-gradient(135deg, #1a5d4a, #2d8a6e); color: white; padding: 25px; border-radius: 10px 10px 0 0; text-align: center;">
-    <h1 style="margin: 0;">🏠 Nouveau Lead !</h1>
-    <p style="margin: 10px 0 0 0; opacity: 0.9;">Via Chat Site Vitrine</p>
-</div>
-
-<div style="background: #f8f9fa; padding: 25px; border: 1px solid #e9ecef;">
-    
-    <h2 style="color: #1a5d4a; margin-top: 0;">📋 Informations du prospect</h2>
-    
-    <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden;">
-        <tr style="background: #1a5d4a; color: white;">
-            <td style="padding: 12px; width: 40%;"><strong>Champ</strong></td>
-            <td style="padding: 12px;"><strong>Valeur</strong></td>
-        </tr>
-        <tr>
-            <td style="padding: 12px; border-bottom: 1px solid #eee;"><strong>👤 Nom</strong></td>
-            <td style="padding: 12px; border-bottom: 1px solid #eee; font-size: 16px;">{lead_data.get('nom', 'Non renseigné')}</td>
-        </tr>
-        <tr style="background: #f8f9fa;">
-            <td style="padding: 12px; border-bottom: 1px solid #eee;"><strong>📞 Téléphone</strong></td>
-            <td style="padding: 12px; border-bottom: 1px solid #eee; font-size: 16px;">
-                <a href="tel:{lead_data.get('telephone', '')}" style="color: #1a5d4a; text-decoration: none; font-weight: bold;">
-                    {lead_data.get('telephone', 'Non renseigné')}
-                </a>
-            </td>
-        </tr>
-        <tr>
-            <td style="padding: 12px; border-bottom: 1px solid #eee;"><strong>📅 Disponibilités</strong></td>
-            <td style="padding: 12px; border-bottom: 1px solid #eee;">{lead_data.get('disponibilites', 'Non renseigné')}</td>
-        </tr>
-        <tr style="background: #f8f9fa;">
-            <td style="padding: 12px; border-bottom: 1px solid #eee;"><strong>📧 Email</strong></td>
-            <td style="padding: 12px; border-bottom: 1px solid #eee;">{lead_data.get('email', 'Non renseigné')}</td>
-        </tr>
-        <tr>
-            <td style="padding: 12px;"><strong>🏠 Bien concerné</strong></td>
-            <td style="padding: 12px;">{bien.get('titre', bien_id)}<br><small style="color: #666;">{bien.get('adresse', '')}</small></td>
-        </tr>
-    </table>
-    
-    <h2 style="color: #1a5d4a; margin-top: 25px;">💬 Conversation</h2>
-    <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #1a5d4a; font-size: 14px; line-height: 1.6;">
-        {conv_html or '<em>Conversation non disponible</em>'}
-    </div>
-    
-    <div style="margin-top: 25px; text-align: center;">
-        <a href="{bien.get('visite_virtuelle', '#')}" style="display: inline-block; background: #1a5d4a; color: white; padding: 12px 25px; border-radius: 25px; text-decoration: none; font-weight: bold;">
-            🔗 Voir la visite virtuelle
-        </a>
-    </div>
-    
-</div>
-
-<div style="background: #1a5d4a; color: white; padding: 15px; text-align: center; border-radius: 0 0 10px 10px; font-size: 12px;">
-    Lead capturé le {datetime.now().strftime('%d/%m/%Y à %H:%M')} • Chat Vitrine ICI Dordogne
-</div>
-
-</body>
-</html>
-"""
-        
+        body = f"""<html><body>
+<h1>🏠 Nouveau Lead - {bien.get('titre', bien_id)}</h1>
+<p><strong>Nom:</strong> {lead_data.get('nom', 'NC')}</p>
+<p><strong>Tél:</strong> {lead_data.get('telephone', 'NC')}</p>
+<p><strong>Dispo:</strong> {lead_data.get('disponibilites', 'NC')}</p>
+<h2>Conversation</h2>{conv_html}
+<p><em>Lead capturé le {datetime.now().strftime('%d/%m/%Y à %H:%M')}</em></p>
+</body></html>"""
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
         msg["From"] = GMAIL_USER
         msg["To"] = EMAIL_TO
         msg["Cc"] = EMAIL_CC
-        
         msg.attach(MIMEText(body, "html"))
-        
         context = ssl.create_default_context()
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
             server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
             server.sendmail(GMAIL_USER, [EMAIL_TO, EMAIL_CC], msg.as_string())
-        
-        logger.info(f"[LEAD] ✅ Email envoyé - {bien_id}: {lead_data.get('nom', '?')} - {lead_data.get('telephone', '?')}")
         return True
-        
-    except Exception as e:
-        logger.error(f"[LEAD] ❌ Erreur email: {e}")
+    except:
         return False
 
-
-# =============================================================================
-# HANDLER PRINCIPAL: /chat-vitrine
-# =============================================================================
-
 def chat_vitrine_handler(body: Dict[str, Any]) -> Dict[str, Any]:
-    """Handler principal du chat vitrine V3.2 - Corrections Ludo."""
     try:
         bien_id = body.get("bien_id", "").lower()
         messages = body.get("messages", [])
         langue = body.get("langue", "fr")
         lead_data = body.get("lead_data", {})
-        
         bien = get_bien_config(bien_id)
         if not bien:
-            available = list(BIENS_CONFIG.keys())
-            return {
-                "content": [{"type": "text", "text": f"Bien '{bien_id}' non trouvé. Biens disponibles: {available}"}],
-                "error": f"Bien '{bien_id}' non trouvé"
-            }
-        
+            return {"content": [{"type": "text", "text": f"Bien '{bien_id}' non trouvé."}], "error": "Bien non trouvé"}
         if not ANTHROPIC_API_KEY:
-            lang = LANG_CONFIG.get(langue, LANG_CONFIG["fr"])
-            return {
-                "content": [{"type": "text", "text": lang["error"].format(tel=bien.get('tel', '05 53 13 33 33'))}],
-                "error": "API non configurée"
-            }
-        
+            return {"content": [{"type": "text", "text": "Erreur technique. Appelez le 05 53 13 33 33 !"}], "error": "API non configurée"}
         system_prompt = build_system_prompt(bien, langue)
-        
-        last_message = messages[-1].get("content", "") if messages else ""
-        web_triggers = [
-            "quartier", "voisin", "transport", "tramway", "bus", "train",
-            "commerce", "magasin", "école", "collège", "lycée", "crèche",
-            "médecin", "hôpital", "pharmacie", "parc", "sport",
-            "neighborhood", "school", "shop", "barrio", "tienda", "escuela"
-        ]
-        
-        if any(trigger in last_message.lower() for trigger in web_triggers):
-            ville = bien.get("ville", "")
-            cp = bien.get("code_postal", "")
-            web_results = search_web(f"{ville} {cp} {last_message}")
-            if web_results:
-                system_prompt += f"\n\n📡 INFOS WEB RÉCENTES:\n{web_results}"
-        
         response = requests.post(
             "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json"
-            },
-            json={
-                "model": "claude-sonnet-4-20250514",
-                "max_tokens": 600,
-                "system": system_prompt,
-                "messages": messages
-            },
+            headers={"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+            json={"model": "claude-sonnet-4-20250514", "max_tokens": 600, "system": system_prompt, "messages": messages},
             timeout=30
         )
-        
         if response.status_code != 200:
-            logger.error(f"[CHAT-VITRINE] Claude error: {response.status_code} - {response.text[:200]}")
-            lang = LANG_CONFIG.get(langue, LANG_CONFIG["fr"])
-            return {
-                "content": [{"type": "text", "text": lang["error"].format(tel=bien.get('tel', '05 53 13 33 33'))}],
-                "error": f"Claude API error: {response.status_code}"
-            }
-        
+            return {"content": [{"type": "text", "text": "Erreur technique. Appelez le 05 53 13 33 33 !"}], "error": f"API error: {response.status_code}"}
         result = response.json()
         assistant_text = result["content"][0]["text"]
-        
         lead_captured = False
-        if (lead_data.get("nom") and 
-            lead_data.get("telephone") and 
-            lead_data.get("disponibilites")):
-            
+        if lead_data.get("nom") and lead_data.get("telephone") and lead_data.get("disponibilites"):
             send_lead_email(bien_id, lead_data, messages)
             lead_captured = True
-        
-        logger.info(f"[CHAT-VITRINE] ✅ Bien: {bien_id} | Langue: {langue} | Lead: {lead_captured}")
-        
-        return {
-            "content": [{"type": "text", "text": assistant_text}],
-            "lead_captured": lead_captured
-        }
-        
+        return {"content": [{"type": "text", "text": assistant_text}], "lead_captured": lead_captured}
     except Exception as e:
-        logger.error(f"[CHAT-VITRINE] ❌ Erreur: {e}")
-        return {
-            "content": [{"type": "text", "text": "Une erreur s'est produite. Appelez-nous au 05 53 13 33 33 !"}],
-            "error": str(e)
-        }
-
-
-# =============================================================================
-# REGISTRATION
-# =============================================================================
+        return {"content": [{"type": "text", "text": "Erreur. Appelez le 05 53 13 33 33 !"}], "error": str(e)}
 
 def register_chat_vitrine_routes(server):
-    """Enregistre les routes du module chat vitrine."""
     try:
         server.register_route("POST", "/chat-vitrine", chat_vitrine_handler)
-        logger.info("✅ [CHAT-VITRINE] Route /chat-vitrine V3.2 enregistrée (corrections Ludo)")
+        logger.info("✅ [CHAT-VITRINE] Route /chat-vitrine V3.3 enregistrée (surfaces TAGERIM)")
     except Exception as e:
-        logger.error(f"❌ [CHAT-VITRINE] Erreur registration: {e}")
+        logger.error(f"❌ [CHAT-VITRINE] Erreur: {e}")
