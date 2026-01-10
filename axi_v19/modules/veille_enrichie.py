@@ -695,7 +695,6 @@ def creer_carte_trello_dpe(dpe_enrichi):
     data = {
         "idList": TRELLO_LIST_PROS_LUDO,
         "name": nom,
-        "desc": desc,
         "pos": "top",
         "due": due,
         "idMembers": TRELLO_JULIE_ID
@@ -708,6 +707,11 @@ def creer_carte_trello_dpe(dpe_enrichi):
     
     card_id = card.get("id")
     card_url = card.get("url")
+    
+    # IMPORTANT: Mettre à jour la description APRÈS création
+    # (pour contourner le template par défaut de la liste)
+    update_url = f"https://api.trello.com/1/cards/{card_id}?key={TRELLO_KEY}&token={TRELLO_TOKEN}"
+    api_request(update_url, method="PUT", data={"desc": desc})
     
     # Ajouter checklist
     checklist_url = f"https://api.trello.com/1/checklists?key={TRELLO_KEY}&token={TRELLO_TOKEN}"
