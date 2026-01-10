@@ -696,8 +696,7 @@ def register_veille_routes(server):
         """Statistiques de la veille DPE enrichie."""
         try:
             import sys
-            sys.path.insert(0, '/app')  # Pour trouver veille_enrichie.py à la racine
-            from veille_enrichie import TOUS_CODES_POSTAUX, get_stats_dpe_vus
+            from .veille_enrichie import TOUS_CODES_POSTAUX, get_stats_dpe_vus
             return {
                 "status": "ok",
                 "codes_postaux": TOUS_CODES_POSTAUX,
@@ -711,8 +710,8 @@ def register_veille_routes(server):
         """Exécute la veille DPE enrichie (cron 1h00)."""
         try:
             import sys
-            sys.path.insert(0, '/app')
-            from veille_enrichie import executer_veille_quotidienne
+            
+            from .veille_enrichie import executer_veille_quotidienne
             result = executer_veille_quotidienne()
             return {
                 "status": "ok",
@@ -729,8 +728,8 @@ def register_veille_routes(server):
         """Test veille enrichie sans Trello."""
         try:
             import sys
-            sys.path.insert(0, '/app')
-            from veille_enrichie import executer_veille_enrichie, TOUS_CODES_POSTAUX
+            
+            from .veille_enrichie import executer_veille_enrichie, TOUS_CODES_POSTAUX
             
             # Test sur 2 codes postaux sans Trello
             result = executer_veille_enrichie(
