@@ -47,8 +47,8 @@ _TRELLO_TOKEN_DEFAULT = "".join([
 ])
 TRELLO_KEY = os.environ.get("TRELLO_KEY", _TRELLO_KEY_DEFAULT)
 TRELLO_TOKEN = os.environ.get("TRELLO_TOKEN", _TRELLO_TOKEN_DEFAULT)
-TRELLO_LIST_PROS_LUDO = "694f52e6238e9746b814cae9"
-TRELLO_JULIE_ID = "59db340040eb2c01fb7d4851"
+TRELLO_LIST_DPE = "69620ff0fee1b6d2c9110a80"  # Colonne "🏠 Nouveaux DPE F/G"
+TRELLO_JULIE_ID = "59db340040eb2c01fb7d4851"  # Conservé pour référence mais non utilisé
 
 # API ADEME
 ADEME_BASE_URL = "https://data.ademe.fr/data-fair/api/v1/datasets/dpe03existant/lines"
@@ -682,23 +682,20 @@ def creer_carte_trello_dpe(dpe_enrichi):
 🤖 *Source : Veille DPE ADEME - Axis*
 """
     
-    # Calculer échéance (prochain lundi 9h)
+    # Calculer échéance (3 jours)
     today = datetime.now()
-    days_ahead = 7 - today.weekday()
-    if days_ahead <= 0:
-        days_ahead += 7
-    next_monday = today + timedelta(days=days_ahead)
-    due = next_monday.replace(hour=9, minute=0, second=0).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    due_date = today + timedelta(days=3)
+    due = due_date.replace(hour=9, minute=0, second=0).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     
-    # Créer la carte
+    # Créer la carte (sans assignation)
     url = f"https://api.trello.com/1/cards?key={TRELLO_KEY}&token={TRELLO_TOKEN}"
     
     data = {
-        "idList": TRELLO_LIST_PROS_LUDO,
+        "idList": TRELLO_LIST_DPE,
         "name": nom,
+        "desc": desc,
         "pos": "top",
-        "due": due,
-        "idMembers": TRELLO_JULIE_ID
+        "due": due
     }
     
     card = api_request(url, method="POST", data=data)
