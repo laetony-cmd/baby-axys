@@ -266,6 +266,24 @@ def api_request(url, method="GET", data=None, headers=None):
         return None
 
 
+def trello_api_json(url, method="POST", data=None):
+    """Requête Trello en JSON (pour descriptions longues)"""
+    headers = {
+        "User-Agent": "ICI-Dordogne-Veille/1.0",
+        "Content-Type": "application/json"
+    }
+    
+    body = json.dumps(data).encode() if data else None
+    req = urllib.request.Request(url, data=body, headers=headers, method=method)
+    
+    try:
+        with urllib.request.urlopen(req, timeout=30, context=SSL_CONTEXT) as resp:
+            return json.loads(resp.read().decode())
+    except Exception as e:
+        print(f"[TRELLO] Erreur: {e}")
+        return None
+
+
 def get_dpe_ademe(code_postal, jours=60, etiquettes=["F", "G"]):
     """
     Récupère les DPE récents depuis l'API ADEME
@@ -707,7 +725,7 @@ def creer_carte_trello_dpe(dpe_enrichi):
     due_date = today + timedelta(days=3)
     due = due_date.replace(hour=9, minute=0, second=0).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     
-    # Créer la carte (sans assignation)
+    # Créer la carte (sans assignation) - en JSON pour préserver la description
     url = f"https://api.trello.com/1/cards?key={TRELLO_KEY}&token={TRELLO_TOKEN}"
     
     data = {
@@ -718,7 +736,7 @@ def creer_carte_trello_dpe(dpe_enrichi):
         "due": due
     }
     
-    card = api_request(url, method="POST", data=data)
+    card = trello_api_json(url, method="POST", data=data)
     
     if not card:
         return None
@@ -729,10 +747,10 @@ def creer_carte_trello_dpe(dpe_enrichi):
     # IMPORTANT: Attendre que le template Trello soit appliqué, puis écraser
     time.sleep(0.5)  # Attendre 500ms
     
-    # Mettre à jour la description (écrase le template)
+    # Mettre à jour la description (écrase le template) - en JSON
     update_url = f"https://api.trello.com/1/cards/{card_id}?key={TRELLO_KEY}&token={TRELLO_TOKEN}"
     for attempt in range(3):  # 3 tentatives
-        api_request(update_url, method="PUT", data={"desc": desc})
+        trello_api_json(update_url, method="PUT", data={"desc": desc})
         time.sleep(0.3)
         
         # Vérifier que l'update a pris
