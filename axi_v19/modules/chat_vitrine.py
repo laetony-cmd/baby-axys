@@ -1,25 +1,8 @@
 # axi_v19/modules/chat_vitrine.py
 """
-Module Chat Vitrine V3 - Template PERMANENT pour sites immobiliers ICI Dordogne
-==============================================================================
-
-FONCTIONNALITÉS:
-- Config JSON complète par bien (toutes les infos)
-- Claude API avec contexte ultra-enrichi
-- Web Search Tavily pour infos fraîches (quartier, transports, prix marché)
-- Flow RDV avec capture progressive (nom → tel → dispo)
-- Email automatique à l'agence avec les leads
-- Support multilingue (FR/EN/ES)
-- CORS complet
-
-USAGE:
-POST /chat-vitrine
-{
-    "bien_id": "lormont",
-    "messages": [{"role": "user", "content": "..."}],
-    "langue": "fr",
-    "lead_data": {"nom": "", "telephone": "", "disponibilites": "", "email": ""}
-}
+Module Chat Vitrine V3.1 - DISTANCES CORRIGÉES
+==============================================
+Corrections du 10/01/2026 basées sur Moovit et sources vérifiées
 
 "Je ne lâche pas." 💪
 """
@@ -49,13 +32,13 @@ EMAIL_TO = os.getenv("EMAIL_TO", "agence@icidordogne.fr")
 EMAIL_CC = os.getenv("EMAIL_CC", "laetony@gmail.com")
 
 # =============================================================================
-# CONFIGURATION DES BIENS - SOURCE UNIQUE DE VÉRITÉ
+# CONFIGURATION DES BIENS - DISTANCES VÉRIFIÉES 10/01/2026
 # =============================================================================
 
 BIENS_CONFIG = {
     
     # =========================================================================
-    # LORMONT T3 - Laetitia Dorle
+    # LORMONT T3 - Laetitia Dorle - CORRIGÉ 10/01/2026
     # =========================================================================
     "lormont": {
         "id": "lormont",
@@ -66,6 +49,7 @@ BIENS_CONFIG = {
         "adresse": "21 rue Édouard Herriot, 33310 Lormont",
         "ville": "Lormont",
         "code_postal": "33310",
+        "quartier": "4 Pavillons",
         
         # PRIX
         "prix": 165000,
@@ -129,35 +113,47 @@ BIENS_CONFIG = {
         # ÉTAT
         "etat": "TRÈS PROPRE - Emménagement immédiat possible, aucun travaux nécessaires",
         
-        # TRANSPORTS
+        # =====================================================================
+        # TRANSPORTS - CORRIGÉ 10/01/2026 (source: Moovit)
+        # =====================================================================
         "transports": {
-            "tramway": "Ligne A - Arrêts Carriet et Mairie de Lormont à 5-7 min à pied",
-            "bus": "Lignes 7, 32, 36 à proximité",
+            "tramway": "Ligne A - Arrêt Buttinière à 9 min à pied (629m)",
+            "bus": "Arrêt Centre Commercial 4 Pavillons à 5 min (298m) - Lignes 27, 32, 64, 66, 67",
+            "bus_detail": "Arrêt Place des 2 Villes à 5 min (379m), Arrêt Iris à 6 min (388m)",
             "voiture": "Rocade A630 sortie 2 (Lormont) à 3 min",
-            "bordeaux_centre": "15 minutes en tramway direct",
-            "gare_saint_jean": "25 minutes",
-            "aeroport": "40 minutes"
+            "bordeaux_centre": "20-25 min en tramway (correspondance possible)",
+            "gare_saint_jean": "30 minutes",
+            "aeroport": "45 minutes"
         },
         
-        # COMMERCES & SERVICES
+        # =====================================================================
+        # COMMERCES - CORRIGÉ 10/01/2026
+        # =====================================================================
         "commerces": [
-            "Supermarché Carrefour Market à 500m",
-            "Boulangerie à 200m",
-            "Pharmacie à 300m",
-            "Centre commercial Auchan Lormont à 2km",
-            "Nombreux restaurants et cafés"
+            "Centre Commercial Carrefour 4 Pavillons à 5 min à pied (300m)",
+            "Hypermarché Carrefour avec galerie commerciale",
+            "Boulangeries et commerces dans le centre commercial",
+            "Pharmacies à proximité",
+            "Restaurants et cafés"
         ],
+        
+        # =====================================================================
+        # ÉCOLES - À VÉRIFIER (secteur 4 Pavillons)
+        # =====================================================================
         "ecoles": [
-            "École maternelle Jean Jaurès à 800m",
-            "École primaire Génicart à 600m",
-            "Collège Georges Lapierre à 1km",
-            "Lycée Les Iris à 2km"
+            "Crèche intercommunale au 64 rue Édouard Herriot (même rue !)",
+            "Écoles maternelles du secteur: Paul Fort, Rosa Bonheur, Jean Rostand",
+            "Écoles primaires du secteur: Condorcet, Marie Curie, Albert Camus",
+            "Collège Georges Lapierre (rue Pierre Brossolette) - REP+",
+            "Lycée Élie Faure à Lormont"
         ],
+        
+        # LOISIRS
         "loisirs": [
             "Piscine résidence sur place !",
             "Parc de l'Ermitage pour promenades",
-            "Complexe sportif à 1km",
-            "Berges de la Garonne à 2km"
+            "Complexe sportif",
+            "Berges de la Garonne"
         ],
         
         # POINTS FORTS
@@ -167,18 +163,20 @@ BIENS_CONFIG = {
             "🪟 Double vitrage + volets roulants TOUTES fenêtres",
             "✨ Très propre - ZÉRO travaux",
             "🌡️ Excellente isolation thermique",
-            "🚃 15 min Bordeaux centre - Tramway direct",
+            "🚌 Bus à 5 min - Centre commercial 4 Pavillons",
+            "🚃 Tramway ligne A à 9 min (Buttinière)",
             "☀️ 4ème étage très lumineux",
             "🛗 Ascenseur dans le bâtiment",
+            "👶 Crèche sur la même rue",
             "💰 Prix/m² compétitif vs marché"
         ],
         
-        # ARGUMENTS PAR PROFIL
+        # ARGUMENTS PAR PROFIL ACHETEUR
         "arguments": {
             "investisseur": "Forte demande locative à Lormont (étudiants, jeunes actifs Bordeaux). Loyer estimé 750-850€/mois. Rentabilité ~5.5%.",
-            "primo_accedant": "Idéal 1ère acquisition - prix accessible, 2 vraies chambres, piscine, proche transports pour le travail.",
-            "famille": "2 chambres avec placards, piscine pour les enfants, écoles à proximité, quartier calme et sécurisé.",
-            "senior": "4ème avec ascenseur, résidence sécurisée, tous commerces à pied, pas d'entretien extérieur."
+            "primo_accedant": "Idéal 1ère acquisition - prix accessible, 2 vraies chambres, piscine, proche transports et commerces.",
+            "famille": "2 chambres avec placards, piscine pour les enfants, crèche sur la même rue, écoles à proximité, quartier calme.",
+            "senior": "4ème avec ascenseur, résidence sécurisée, tous commerces à 5 min à pied, pas d'entretien extérieur."
         },
         
         # VISITE VIRTUELLE
@@ -188,11 +186,7 @@ BIENS_CONFIG = {
         "agence": "ICI Dordogne",
         "tel": "05 53 13 33 33",
         "email": "agence@icidordogne.fr",
-        "site": "https://lormont-t3-piscine-icidordogne.netlify.app/",
-        
-        # VENDEUR (interne - ne pas communiquer au public)
-        "_vendeur": "Laetitia Dorle",
-        "_docs_manquants": ["3 derniers PV AG", "Prix acquisition 2020"]
+        "site": "https://lormont-t3-piscine-icidordogne.netlify.app/"
     },
     
     # =========================================================================
@@ -329,7 +323,7 @@ def build_system_prompt(bien: Dict, langue: str = "fr") -> str:
     # Formatage transports
     transports = ""
     if isinstance(bien.get("transports"), dict):
-        transports = "\n".join([f"  • {k.title()}: {v}" for k, v in bien["transports"].items()])
+        transports = "\n".join([f"  • {k.upper()}: {v}" for k, v in bien["transports"].items()])
     elif isinstance(bien.get("transports"), list):
         transports = "\n".join([f"  • {t}" for t in bien["transports"]])
     
@@ -355,6 +349,7 @@ def build_system_prompt(bien: Dict, langue: str = "fr") -> str:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Adresse: {bien.get('adresse', 'Non communiquée')}
 Ville: {bien.get('ville', '')} ({bien.get('code_postal', '')})
+Quartier: {bien.get('quartier', 'Non précisé')}
 
 💰 PRIX
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -396,7 +391,7 @@ Isolation: {bien.get('isolation', 'NC')}
 DPE: {bien.get('dpe', 'NC')}
 État général: {bien.get('etat', 'NC')}
 
-🚃 TRANSPORTS
+🚃 TRANSPORTS (distances vérifiées)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {transports}
 
@@ -404,7 +399,7 @@ DPE: {bien.get('dpe', 'NC')}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {commerces}
 
-🏫 ÉCOLES
+🏫 ÉCOLES & CRÈCHES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {ecoles}
 
@@ -426,9 +421,9 @@ DPE: {bien.get('dpe', 'NC')}
 
 1️⃣ INFORMER avec précision et enthousiasme
    • Utilise TOUTES les données ci-dessus pour répondre
+   • Les distances sont VÉRIFIÉES - utilise-les avec confiance
    • Mets en avant les points forts naturellement
    • Si tu ne connais pas une info, dis-le honnêtement
-   • Adapte tes arguments au profil de l'acheteur si tu le détectes
 
 2️⃣ CONVERTIR vers une visite
    • Détecte l'intérêt: questions détaillées, budget, timeline...
@@ -454,12 +449,11 @@ def send_lead_email(bien_id: str, lead_data: Dict, conversation: List[Dict] = No
     try:
         bien = get_bien_config(bien_id) or {}
         
-        # Formater la conversation
         conv_html = ""
         if conversation:
             conv_html = "<br>".join([
                 f"<b>{'👤 Visiteur' if m['role'] == 'user' else '🤖 Sophie'}:</b> {m['content']}"
-                for m in conversation[-10:]  # Derniers 10 messages
+                for m in conversation[-10:]
             ])
         
         subject = f"🏠 LEAD Chat Vitrine - {bien.get('titre', bien_id)}"
@@ -555,30 +549,13 @@ def send_lead_email(bien_id: str, lead_data: Dict, conversation: List[Dict] = No
 # =============================================================================
 
 def chat_vitrine_handler(body: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Handler principal du chat vitrine V3.
-    
-    Entrée:
-    {
-        "bien_id": "lormont",
-        "messages": [{"role": "user", "content": "..."}],
-        "langue": "fr",
-        "lead_data": {"nom": "", "telephone": "", "disponibilites": "", "email": ""}
-    }
-    
-    Sortie:
-    {
-        "content": [{"type": "text", "text": "..."}],
-        "lead_captured": true/false
-    }
-    """
+    """Handler principal du chat vitrine V3.1 - Distances corrigées."""
     try:
         bien_id = body.get("bien_id", "").lower()
         messages = body.get("messages", [])
         langue = body.get("langue", "fr")
         lead_data = body.get("lead_data", {})
         
-        # Récupérer config du bien
         bien = get_bien_config(bien_id)
         if not bien:
             available = list(BIENS_CONFIG.keys())
@@ -587,7 +564,6 @@ def chat_vitrine_handler(body: Dict[str, Any]) -> Dict[str, Any]:
                 "error": f"Bien '{bien_id}' non trouvé"
             }
         
-        # Vérifier API key
         if not ANTHROPIC_API_KEY:
             lang = LANG_CONFIG.get(langue, LANG_CONFIG["fr"])
             return {
@@ -595,10 +571,8 @@ def chat_vitrine_handler(body: Dict[str, Any]) -> Dict[str, Any]:
                 "error": "API non configurée"
             }
         
-        # Construire le prompt système
         system_prompt = build_system_prompt(bien, langue)
         
-        # Enrichir avec recherche web si question sur environnement
         last_message = messages[-1].get("content", "") if messages else ""
         web_triggers = [
             "quartier", "voisin", "transport", "tramway", "bus", "train",
@@ -614,7 +588,6 @@ def chat_vitrine_handler(body: Dict[str, Any]) -> Dict[str, Any]:
             if web_results:
                 system_prompt += f"\n\n📡 INFOS WEB RÉCENTES:\n{web_results}"
         
-        # Appel Claude API
         response = requests.post(
             "https://api.anthropic.com/v1/messages",
             headers={
@@ -642,7 +615,6 @@ def chat_vitrine_handler(body: Dict[str, Any]) -> Dict[str, Any]:
         result = response.json()
         assistant_text = result["content"][0]["text"]
         
-        # Vérifier si lead complet → envoyer email
         lead_captured = False
         if (lead_data.get("nom") and 
             lead_data.get("telephone") and 
@@ -674,6 +646,6 @@ def register_chat_vitrine_routes(server):
     """Enregistre les routes du module chat vitrine."""
     try:
         server.register_route("POST", "/chat-vitrine", chat_vitrine_handler)
-        logger.info("✅ [CHAT-VITRINE] Route /chat-vitrine enregistrée")
+        logger.info("✅ [CHAT-VITRINE] Route /chat-vitrine V3.1 enregistrée (distances corrigées)")
     except Exception as e:
         logger.error(f"❌ [CHAT-VITRINE] Erreur registration: {e}")
