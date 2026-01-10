@@ -342,6 +342,29 @@ def build_system_prompt(bien: Dict, langue: str = "fr") -> str:
     ecoles = "\n".join([f"  • {e}" for e in bien.get("ecoles", [])])
     arguments = "\n".join([f"  → {k.upper()}: {v}" for k, v in bien.get("arguments", {}).items()])
     
+    # Charges et copropriété (V3.4)
+    charges_info = ""
+    if bien.get("charges_mensuelles") or bien.get("taxe_fonciere"):
+        charges_info = f"""
+💰 CHARGES & COPROPRIÉTÉ (données officielles):
+  • Charges copropriété: ~{bien.get('charges_mensuelles', 'NC')} €/mois
+  • Taxe foncière: {bien.get('taxe_fonciere', 'NC')} €/an ({bien.get('taxe_fonciere_mensuel', 'NC')} €/mois)
+  • Coût total mensuel: {bien.get('cout_total_mensuel', 'NC')}"""
+    
+    # Syndic
+    syndic_info = ""
+    syndic = bien.get("syndic", {})
+    if syndic:
+        syndic_info = f"""
+🏢 SYNDIC: {syndic.get('nom', 'NC')} | Gestionnaire: {syndic.get('gestionnaire', 'NC')} | Tél: {syndic.get('tel', 'NC')}"""
+    
+    # Copropriété
+    copro_info = ""
+    copro = bien.get("copropriete", {})
+    if copro:
+        copro_info = f"""
+📋 COPROPRIÉTÉ: Lots {copro.get('lot_appartement', 'NC')} + {copro.get('lot_parking', 'NC')} | Tantièmes: {copro.get('tantiemes_appart', 'NC')}"""
+    
     return f"""Tu es Sophie, assistante virtuelle de l'agence ICI Dordogne.
 {lang['instruction']}
 
@@ -351,6 +374,9 @@ def build_system_prompt(bien: Dict, langue: str = "fr") -> str:
 🔒 SÉCURITÉ: {bien.get('residence_securite', '')}
 
 💰 PRIX: {bien.get('prix_affiche', '')} | {bien.get('prix_m2', '')} €/m² | Frais notaire: ~{bien.get('frais_notaire', '')} €
+{charges_info}
+{syndic_info}
+{copro_info}
 
 📐 SURFACES (officielles TAGERIM):
 Surface habitable: {bien.get('surface_habitable', '')}
@@ -381,7 +407,7 @@ Surface habitable: {bien.get('surface_habitable', '')}
 🔗 VISITE VIRTUELLE: {bien.get('visite_virtuelle', '')}
 
 📋 TON RÔLE:
-1. INFORMER avec précision
+1. INFORMER avec précision (tu connais les charges exactes, la taxe foncière, etc.)
 2. CONVERTIR vers une visite (nom → téléphone → disponibilités)
 3. Style chaleureux, concis (2-3 phrases max)
 
@@ -451,3 +477,4 @@ def register_chat_vitrine_routes(server):
         logger.info("✅ [CHAT-VITRINE] Route /chat-vitrine V3.3 enregistrée (surfaces TAGERIM)")
     except Exception as e:
         logger.error(f"❌ [CHAT-VITRINE] Erreur: {e}")
+
