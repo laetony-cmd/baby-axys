@@ -387,24 +387,8 @@ def register_chat_vitrine_routes(server):
     """Enregistre les routes du module chat vitrine"""
     try:
         # Route principale
-        server.register_route(
-            "POST",
-            "/chat-vitrine",
-            chat_vitrine_handler,
-            public=True,
-            description="Chat IA pour sites vitrines immobiliers (V2)"
-        )
-        
-        # Route legacy (compatibilité)
-        server.register_route(
-            "POST",
-            "/chat-proxy",
-            chat_proxy_legacy_handler,
-            public=True,
-            description="Chat proxy legacy (redirige vers chat-vitrine)"
-        )
-        
-        logger.info("[CHAT-VITRINE] Routes enregistrées: /chat-vitrine, /chat-proxy")
+        server.register_route("POST", "/chat-vitrine", chat_vitrine_handler)
+        logger.info("[CHAT-VITRINE] Route /chat-vitrine enregistrée")
         
     except Exception as e:
         logger.error(f"[CHAT-VITRINE] Erreur registration: {e}")
