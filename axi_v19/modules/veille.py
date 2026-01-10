@@ -752,4 +752,15 @@ def register_veille_routes(server):
     server.register_route('GET', '/veille/dpe/enrichie', handle_veille_dpe_enrichie)
     server.register_route('GET', '/veille/dpe/test-enrichie', handle_veille_dpe_test_enrichie)
     
+    def handle_veille_dpe_reset(query):
+        """Reset la table des DPE vus (pour forcer re-création)"""
+        try:
+            from .veille_enrichie import reset_dpe_vus
+            result = reset_dpe_vus()
+            return {"status": "ok" if result["success"] else "error", **result}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+    
+    server.register_route('GET', '/veille/dpe/reset', handle_veille_dpe_reset)
+    
     logger.info("📍 Routes veille V19 enregistrées (DPE + Concurrence + Audit + Diagnose + Enrichie)")
