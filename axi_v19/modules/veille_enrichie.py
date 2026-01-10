@@ -14,6 +14,7 @@ Date: 10 janvier 2026
 
 import json
 import os
+import time
 import urllib.request
 import urllib.parse
 import gzip
@@ -708,10 +709,19 @@ def creer_carte_trello_dpe(dpe_enrichi):
     card_id = card.get("id")
     card_url = card.get("url")
     
-    # IMPORTANT: Mettre à jour la description APRÈS création
-    # (pour contourner le template par défaut de la liste)
+    # IMPORTANT: Attendre que le template Trello soit appliqué, puis écraser
+    time.sleep(0.5)  # Attendre 500ms
+    
+    # Mettre à jour la description (écrase le template)
     update_url = f"https://api.trello.com/1/cards/{card_id}?key={TRELLO_KEY}&token={TRELLO_TOKEN}"
-    api_request(update_url, method="PUT", data={"desc": desc})
+    for attempt in range(3):  # 3 tentatives
+        api_request(update_url, method="PUT", data={"desc": desc})
+        time.sleep(0.3)
+        
+        # Vérifier que l'update a pris
+        check = api_request(f"https://api.trello.com/1/cards/{card_id}?key={TRELLO_KEY}&token={TRELLO_TOKEN}&fields=desc")
+        if check and "PASSOIRE" in check.get("desc", ""):
+            break
     
     # Ajouter checklist
     checklist_url = f"https://api.trello.com/1/checklists?key={TRELLO_KEY}&token={TRELLO_TOKEN}"
