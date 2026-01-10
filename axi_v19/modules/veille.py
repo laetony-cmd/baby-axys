@@ -687,4 +687,70 @@ def register_veille_routes(server):
     
     server.register_route('GET', '/diagnose-all', handle_diagnose_all)
 
-    logger.info("📍 Routes veille V19 enregistrées (DPE + Concurrence + Audit + Diagnose)")
+
+    # =========================================================================
+    # VEILLE DPE ENRICHIE V1.0 (ajout 10 janvier 2026)
+    # =========================================================================
+    
+    def handle_veille_dpe_stats(query):
+        """Statistiques de la veille DPE enrichie."""
+        try:
+            import sys
+            sys.path.insert(0, '/app')  # Pour trouver veille_enrichie.py à la racine
+            from veille_enrichie import TOUS_CODES_POSTAUX, get_stats_dpe_vus
+            return {
+                "status": "ok",
+                "codes_postaux": TOUS_CODES_POSTAUX,
+                "nb_codes": len(TOUS_CODES_POSTAUX),
+                "dpe_vus": get_stats_dpe_vus()
+            }
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+    
+    def handle_veille_dpe_enrichie(query):
+        """Exécute la veille DPE enrichie (cron 1h00)."""
+        try:
+            import sys
+            sys.path.insert(0, '/app')
+            from veille_enrichie import executer_veille_quotidienne
+            result = executer_veille_quotidienne()
+            return {
+                "status": "ok",
+                "nouveaux": result["stats"]["nouveaux"],
+                "cartes_trello": result["stats"]["cartes_trello"],
+                "stats": result["stats"],
+                "timestamp": datetime.now().isoformat()
+            }
+        except Exception as e:
+            logger.error(f"Erreur veille enrichie: {e}")
+            return {"status": "error", "message": str(e)}
+    
+    def handle_veille_dpe_test_enrichie(query):
+        """Test veille enrichie sans Trello."""
+        try:
+            import sys
+            sys.path.insert(0, '/app')
+            from veille_enrichie import executer_veille_enrichie, TOUS_CODES_POSTAUX
+            
+            # Test sur 2 codes postaux sans Trello
+            result = executer_veille_enrichie(
+                codes_postaux=TOUS_CODES_POSTAUX[:2],
+                jours=30,
+                creer_trello=False,
+                email_rapport=False
+            )
+            return {
+                "status": "test",
+                "nouveaux": result["stats"]["nouveaux"],
+                "stats": result["stats"],
+                "codes_testes": TOUS_CODES_POSTAUX[:2]
+            }
+        except Exception as e:
+            logger.error(f"Erreur test veille enrichie: {e}")
+            return {"status": "error", "message": str(e)}
+    
+    server.register_route('GET', '/veille/dpe/stats', handle_veille_dpe_stats)
+    server.register_route('GET', '/veille/dpe/enrichie', handle_veille_dpe_enrichie)
+    server.register_route('GET', '/veille/dpe/test-enrichie', handle_veille_dpe_test_enrichie)
+    
+    logger.info("📍 Routes veille V19 enregistrées (DPE + Concurrence + Audit + Diagnose + Enrichie)")
