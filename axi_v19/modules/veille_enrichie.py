@@ -181,6 +181,26 @@ def get_stats_dpe_vus():
         return {"total": 0, "source": "erreur"}
 
 
+def reset_dpe_vus():
+    """Vide la table des DPE vus (pour forcer re-création des cartes)"""
+    conn = get_db_connection()
+    if not conn:
+        return {"success": False, "message": "Pas de connexion DB"}
+    
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM dpe_veille_vus")
+        deleted = cur.rowcount
+        conn.commit()
+        cur.close()
+        conn.close()
+        print(f"[DB] Table dpe_veille_vus vidée ({deleted} entrées supprimées)")
+        return {"success": True, "deleted": deleted}
+    except Exception as e:
+        print(f"[DB] Erreur reset: {e}")
+        return {"success": False, "message": str(e)}
+
+
 # === FALLBACK FICHIER LOCAL (si pas de PostgreSQL) ===
 
 _dpe_vus_fichier = set()
