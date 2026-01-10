@@ -153,6 +153,19 @@ class AxiRequestHandler(BaseHTTPRequestHandler):
         
         self.send_error(404, f"Endpoint POST non trouvé: {path}")
     
+    def do_OPTIONS(self):
+        """
+        Gère les requêtes OPTIONS (preflight CORS).
+        CRITIQUE pour que les sites vitrines puissent appeler Railway.
+        """
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
+        self.send_header('Access-Control-Max-Age', '86400')  # Cache preflight 24h
+        self.send_header('Content-Length', '0')
+        self.end_headers()
+    
     def _call_handler(self, handler, query, body, headers, path_params=None):
         """Appelle un handler avec les bons arguments."""
         import inspect
@@ -222,18 +235,21 @@ class AxiRequestHandler(BaseHTTPRequestHandler):
         })
     
     def _send_json(self, code: int, data: Any):
-        """Helper pour envoyer des réponses JSON ou HTML."""
+        """Helper pour envoyer des réponses JSON ou HTML avec CORS complet."""
         self.send_response(code)
+        
+        # Headers CORS complets (critiques pour sites vitrines)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
         
         # Détecter si c'est du HTML (string commençant par <!DOCTYPE ou <html)
         if isinstance(data, str) and (data.strip().startswith('<!DOCTYPE') or data.strip().startswith('<html')):
             self.send_header('Content-Type', 'text/html; charset=utf-8')
-            self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             self.wfile.write(data.encode('utf-8'))
         else:
             self.send_header('Content-Type', 'application/json; charset=utf-8')
-            self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             response = json.dumps(data, ensure_ascii=False, default=str)
             self.wfile.write(response.encode('utf-8'))
