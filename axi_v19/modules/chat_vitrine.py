@@ -1,11 +1,12 @@
 # axi_v19/modules/chat_vitrine.py
 """
-Module Chat Vitrine V3.3 - Surfaces officielles TAGERIM 10/01/2026
-==================================================================
+Module Chat Vitrine V3.4 - Données officielles copropriété 10/01/2026
+=====================================================================
 - Surfaces officielles du plan TAGERIM
-- Résidence L'ARÈNE MARGAUX (sécurité détaillée)
-- 4ème et dernier étage
-- Distances vérifiées Moovit
+- CORRECTION: 3ème étage (attestation notariale)
+- Charges réelles (décomptes Citya 2024)
+- Taxe foncière 2025: 1351€/an
+- Syndic CITYA Lanaverre Talence
 
 "Je ne lâche pas." 💪
 """
@@ -94,7 +95,7 @@ BIENS_CONFIG = {
         "balcon": True,
         
         # BÂTIMENT
-        "etage": "4ème et dernier étage avec ascenseur",
+        "etage": "3ème étage avec ascenseur",
         "batiment": "Bâtiment D - Porte D33",
         "ascenseur": True,
         "interphone": True,
@@ -171,7 +172,7 @@ BIENS_CONFIG = {
             "🌡️ Excellente isolation thermique",
             "🚌 Bus à 5 min - Centre commercial 4 Pavillons",
             "🚃 Tramway ligne A à 9 min (Buttinière)",
-            "☀️ 4ème et dernier étage très lumineux",
+            "☀️ 3ème étage très lumineux",
             "🛗 Ascenseur dans le bâtiment",
             "👶 Crèche sur la même rue",
             "💰 Prix/m² compétitif vs marché"
@@ -182,11 +183,61 @@ BIENS_CONFIG = {
             "investisseur": "Forte demande locative à Lormont (étudiants, jeunes actifs Bordeaux). Loyer estimé 750-850€/mois. Rentabilité ~5.5%. Résidence sécurisée = rassurant pour locataires.",
             "primo_accedant": "Idéal 1ère acquisition - prix accessible, 2 vraies chambres, piscine, résidence sécurisée, proche transports et commerces.",
             "famille": "2 chambres avec placards, piscine pour les enfants, crèche sur la même rue, résidence ultra-sécurisée (bip + code), quartier calme.",
-            "senior": "4ème et dernier étage avec ascenseur, résidence L'ARÈNE MARGAUX très sécurisée, tous commerces à 5 min à pied, pas d'entretien extérieur."
+            "senior": "3ème étage avec ascenseur, résidence L'ARÈNE MARGAUX très sécurisée, tous commerces à 5 min à pied, pas d'entretien extérieur."
         },
         
         # VISITE VIRTUELLE
         "visite_virtuelle": "https://my.matterport.com/show/?m=7zeq1p",
+        
+        # CHARGES & COPROPRIÉTÉ (données réelles 2024-2025)
+        "charges_mensuelles": 110,
+        "charges_detail": {
+            "total_annuel": "~1 300 €/an",
+            "par_mois": "~110 €/mois",
+            "trimestriel": "~334 €",
+            "detail": {
+                "Générales": "134 €/trim",
+                "Bâtiment D": "94 €/trim",
+                "Piscine": "34 €/trim",
+                "Ascenseur D": "48 €/trim",
+                "VMC": "2 €/trim",
+                "Antenne/Interphone": "9 €/trim",
+                "Fonds travaux ALUR": "17 €/trim"
+            }
+        },
+        "taxe_fonciere": 1351,
+        "taxe_fonciere_mensuel": 113,
+        "cout_total_mensuel": "~221 €/mois (charges 110€ + TF 113€)",
+        
+        # SYNDIC
+        "syndic": {
+            "nom": "CITYA Lanaverre Talence",
+            "gestionnaire": "Eric CLAVIER",
+            "tel": "05.57.35.87.00",
+            "email": "eclavier@citya.com",
+            "adresse": "170 cours Gambetta, 33400 Talence",
+            "espace_copro": "www.citya.com"
+        },
+        
+        # COPROPRIÉTÉ
+        "copropriete": {
+            "immeuble": "5074 - L'ARENE MARGAUX",
+            "lot_appartement": "1140",
+            "lot_parking": "1276 (P265)",
+            "tantiemes_appart": "79/11616",
+            "tantiemes_parking": "2/11616",
+            "reserve": "194,68 €",
+            "fonds_travaux": "~558 €"
+        },
+        
+        # POINTS ATTENTION RÉSIDENCE (CR CS Sept 2025)
+        "points_attention": [
+            "Assurance copro en hausse (sinistralité)",
+            "Franchise 2500€ si sinistre",
+            "Porte parking B en remplacement",
+            "Vidéosurveillance à moderniser",
+            "Ravalement en projet"
+        ],
         
         # CONTACT
         "agence": "ICI Dordogne",
