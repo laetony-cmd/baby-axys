@@ -147,6 +147,10 @@ try:
     from .modules.chat_vitrine import register_chat_vitrine_routes
     print("  ✅ chat_vitrine V2: loaded", flush=True)
     
+    # Import Email Watcher (IMAP polling agence@icidordogne.fr)
+    from .modules.email_watcher import process_new_emails, handle_check_emails, handle_email_status
+    print("  ✅ email_watcher: loaded", flush=True)
+    
     print("  ✅ modules.trello loaded (Sync + Matching)", flush=True)
     TRELLO_OK = True
 except ImportError as e:
@@ -259,6 +263,19 @@ class AxiV19:
                 name='Veille DPE 8h Paris'
             )
             logger.info("🏠 Job Veille DPE programmé: 8h00 Paris")
+        
+        # Email Watcher - Poll toutes les 5 minutes
+        try:
+            self._scheduler.add_job(
+                process_new_emails,
+                'interval',
+                minutes=5,
+                id='email_watcher',
+                name='Email Watcher IMAP'
+            )
+            logger.info("📧 Job Email Watcher programmé: toutes les 5 minutes")
+        except Exception as e:
+            logger.warning(f"⚠️ Email Watcher non activé: {e}")
         else:
             logger.warning("⚠️ Module veille non disponible - Crons veille désactivés")
         
