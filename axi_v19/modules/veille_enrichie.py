@@ -645,33 +645,40 @@ def creer_carte_trello_dpe(dpe_enrichi):
     # Nom de la carte
     nom = f"🏠 {dpe_enrichi['adresse'][:30]} - DPE {dpe_enrichi['dpe_lettre']} - {dpe_enrichi['commune']}"
     
+    # Préparer les valeurs DVF
+    dvf_prix = f"{dpe_enrichi['dvf_prix_derniere_vente']:,.0f} €" if dpe_enrichi['dvf_trouve'] else "Non trouvé"
+    dvf_date = dpe_enrichi['dvf_date_derniere_vente'] or "Non trouvé"
+    cout_energie = dpe_enrichi.get('cout_annuel_energie', 0) or 0
+    
     # Description
-    desc = f"""**Type** : Passoire énergétique {dpe_enrichi['dpe_lettre']}/{dpe_enrichi['ges_lettre']} (DPE du {dpe_enrichi['date_reception']})
-**Adresse** : {dpe_enrichi['adresse']}
-**Code postal** : {dpe_enrichi['code_postal']} {dpe_enrichi['commune']}
-**Surface** : {dpe_enrichi['surface_m2']} m²
-**Type** : {dpe_enrichi['type_batiment']}
-**Année construction** : {dpe_enrichi['annee_construction']}
+    desc = f"""🔥 **PASSOIRE ÉNERGÉTIQUE {dpe_enrichi['dpe_lettre']}/{dpe_enrichi['ges_lettre']}**
 
-**Consommation énergétique** :
-- DPE : {dpe_enrichi['dpe_lettre']} ({dpe_enrichi['dpe_valeur']} kWh/m²/an)
-- GES : {dpe_enrichi['ges_lettre']} ({dpe_enrichi['ges_valeur']} kg CO₂/m²/an)
-- Coût annuel : {dpe_enrichi['cout_annuel_energie']:.0f} €
+📍 **Adresse** : {dpe_enrichi['adresse']}
+📮 **Code postal** : {dpe_enrichi['code_postal']} {dpe_enrichi['commune']}
+📐 **Surface** : {dpe_enrichi['surface_m2']} m²
+🏠 **Type** : {dpe_enrichi['type_batiment']}
+🏗️ **Année construction** : {dpe_enrichi['annee_construction']}
 
-📍 Google Maps : {dpe_enrichi['lien_maps']}
-🛣️ Street View : {dpe_enrichi['lien_streetview']}
+⚡ **Consommation énergétique** :
+- DPE : **{dpe_enrichi['dpe_lettre']}** ({dpe_enrichi['dpe_valeur']} kWh/m²/an)
+- GES : **{dpe_enrichi['ges_lettre']}** ({dpe_enrichi['ges_valeur']} kg CO₂/m²/an)
+- Coût annuel estimé : **{cout_energie:.0f} €**
 
-**Historique DVF** :
-- Dernière vente : {dpe_enrichi['dvf_date_derniere_vente'] or 'Non trouvé'}
-- Prix d'achat : {dpe_enrichi['dvf_prix_derniere_vente']:,.0f} € si {dpe_enrichi['dvf_trouve']} else 'Non trouvé'
+📍 [Voir sur Google Maps]({dpe_enrichi['lien_maps']})
+🛣️ [Voir Street View]({dpe_enrichi['lien_streetview']})
+
+💰 **Historique DVF** :
+- Dernière vente : {dvf_date}
+- Prix d'achat : {dvf_prix}
 - Nb mutations : {dpe_enrichi['dvf_nb_mutations']}
 
-**Probabilité** : {dpe_enrichi['probable_vente_location']}
-**Priorité** : {dpe_enrichi['priorite']} ({', '.join(dpe_enrichi['priorite_raisons'])})
+🎯 **Probabilité** : **{dpe_enrichi['probable_vente_location']}**
+⚡ **Priorité** : **{dpe_enrichi['priorite']}** ({', '.join(dpe_enrichi['priorite_raisons'])})
 
 ---
-*Source : Veille DPE ADEME - Axis*
-*N° DPE : {dpe_enrichi['numero_dpe']}*
+📅 DPE reçu le : {dpe_enrichi['date_reception']}
+🔢 N° DPE : {dpe_enrichi['numero_dpe']}
+🤖 *Source : Veille DPE ADEME - Axis*
 """
     
     # Calculer échéance (prochain lundi 9h)
