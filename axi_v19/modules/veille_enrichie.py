@@ -982,7 +982,7 @@ def executer_veille_quotidienne():
     # Exécuter la veille
     result = executer_veille_enrichie(
         codes_postaux=TOUS_CODES_POSTAUX,
-        jours=7,  # Chercher sur 7 jours pour rattraper les éventuels ratés
+        jours=60,  # Chercher sur 60 jours pour les passoires F/G
         creer_trello=True,
         fichier_excel=None,  # Pas de fichier Excel en cron
         email_rapport=True
