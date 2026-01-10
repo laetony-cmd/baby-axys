@@ -1,8 +1,12 @@
 # axi_v19/modules/chat_vitrine.py
 """
-Module Chat Vitrine V3.1 - DISTANCES CORRIGÉES
-==============================================
-Corrections du 10/01/2026 basées sur Moovit et sources vérifiées
+Module Chat Vitrine V3.2 - Corrections Ludo 10/01/2026
+======================================================
+- Résidence L'ARÈNE MARGAUX (sécurité détaillée)
+- Équipements corrigés (pas de thermostat, emplacement électroménager)
+- Placards entrée + chambres
+- Parking place numérotée
+- Distances vérifiées Moovit
 
 "Je ne lâche pas." 💪
 """
@@ -32,13 +36,13 @@ EMAIL_TO = os.getenv("EMAIL_TO", "agence@icidordogne.fr")
 EMAIL_CC = os.getenv("EMAIL_CC", "laetony@gmail.com")
 
 # =============================================================================
-# CONFIGURATION DES BIENS - DISTANCES VÉRIFIÉES 10/01/2026
+# CONFIGURATION DES BIENS - V3.2 Corrections Ludo 10/01/2026
 # =============================================================================
 
 BIENS_CONFIG = {
     
     # =========================================================================
-    # LORMONT T3 - Laetitia Dorle - CORRIGÉ 10/01/2026
+    # LORMONT T3 - Laetitia Dorle - V3.2 CORRIGÉ LUDO 10/01/2026
     # =========================================================================
     "lormont": {
         "id": "lormont",
@@ -50,6 +54,13 @@ BIENS_CONFIG = {
         "ville": "Lormont",
         "code_postal": "33310",
         "quartier": "4 Pavillons",
+        
+        # =================================================================
+        # RÉSIDENCE - CORRIGÉ LUDO
+        # =================================================================
+        "residence_nom": "L'ARÈNE MARGAUX",
+        "residence_securite": "Résidence entièrement sécurisée et clôturée. Le bâtiment D est lui-même clôturé dans la résidence. Accès par bip pour le portail et par code pour le reste.",
+        "residence": "Résidence L'ARÈNE MARGAUX - Sécurisée, entièrement clôturée",
         
         # PRIX
         "prix": 165000,
@@ -80,41 +91,41 @@ BIENS_CONFIG = {
         "wc": 1,
         "balcon": True,
         
-        # BÂTIMENT
-        "etage": "4ème avec ascenseur",
-        "batiment": "D - Porte D33",
+        # BÂTIMENT - CORRIGÉ LUDO
+        "etage": "4ème et dernier étage avec ascenseur",
+        "batiment": "Bâtiment D - Porte D33",
         "ascenseur": True,
         "interphone": True,
-        "residence": "Résidence calme et sécurisée",
         
-        # EXTÉRIEURS
-        "parking": "1 place extérieure INCLUSE dans le prix",
+        # EXTÉRIEURS - CORRIGÉ LUDO
+        "parking": "1 place extérieure numérotée INCLUSE dans le prix",
         "piscine": "Piscine collective de la résidence - accès inclus",
         
-        # ÉQUIPEMENTS
+        # =================================================================
+        # ÉQUIPEMENTS - CORRIGÉ LUDO
+        # =================================================================
         "equipements": [
             "Double vitrage intégral sur toutes les fenêtres",
             "Volets roulants électriques sur toutes les ouvertures",
-            "Cuisine équipée avec micro-onde et frigo-congélateur",
+            "Cuisine équipée avec micro-onde et frigo-congélateur + emplacements lave-linge et lave-vaisselle",
             "Salle de bains avec baignoire + douche italienne + double vasque",
             "WC indépendant",
             "Balcon avec vue dégagée",
             "Interphone vidéo",
-            "Thermostat programmable",
-            "Placards intégrés dans les 2 chambres",
+            "Placards dans l'entrée et dans les 2 chambres",
             "VMC"
         ],
         
         # CHAUFFAGE & ÉNERGIE
         "chauffage": "Radiateurs électriques (conseil: modernisation ~2000€ pour économies)",
         "isolation": "Bonne isolation - Température 17-19°C maintenue sans chauffage en hiver",
-        "dpe": "D (estimation)",
+        "dpe": "D (estimation dans l'attente du DPE)",
         
         # ÉTAT
         "etat": "TRÈS PROPRE - Emménagement immédiat possible, aucun travaux nécessaires",
         
         # =====================================================================
-        # TRANSPORTS - CORRIGÉ 10/01/2026 (source: Moovit)
+        # TRANSPORTS - Distances vérifiées Moovit 10/01/2026
         # =====================================================================
         "transports": {
             "tramway": "Ligne A - Arrêt Buttinière à 9 min à pied (629m)",
@@ -126,9 +137,7 @@ BIENS_CONFIG = {
             "aeroport": "45 minutes"
         },
         
-        # =====================================================================
-        # COMMERCES - CORRIGÉ 10/01/2026
-        # =====================================================================
+        # COMMERCES - Distances vérifiées
         "commerces": [
             "Centre Commercial Carrefour 4 Pavillons à 5 min à pied (300m)",
             "Hypermarché Carrefour avec galerie commerciale",
@@ -137,9 +146,7 @@ BIENS_CONFIG = {
             "Restaurants et cafés"
         ],
         
-        # =====================================================================
-        # ÉCOLES - À VÉRIFIER (secteur 4 Pavillons)
-        # =====================================================================
+        # ÉCOLES
         "ecoles": [
             "Crèche intercommunale au 64 rue Édouard Herriot (même rue !)",
             "Écoles maternelles du secteur: Paul Fort, Rosa Bonheur, Jean Rostand",
@@ -156,16 +163,19 @@ BIENS_CONFIG = {
             "Berges de la Garonne"
         ],
         
-        # POINTS FORTS
+        # =================================================================
+        # POINTS FORTS - CORRIGÉ LUDO
+        # =================================================================
         "points_forts": [
             "🏊 Piscine résidence - TRÈS RARE à ce prix !",
-            "🚗 Parking extérieur INCLUS",
+            "🚗 Parking extérieur numéroté INCLUS",
+            "🔒 Résidence L'ARÈNE MARGAUX ultra-sécurisée (bip + code)",
             "🪟 Double vitrage + volets roulants TOUTES fenêtres",
             "✨ Très propre - ZÉRO travaux",
             "🌡️ Excellente isolation thermique",
             "🚌 Bus à 5 min - Centre commercial 4 Pavillons",
             "🚃 Tramway ligne A à 9 min (Buttinière)",
-            "☀️ 4ème étage très lumineux",
+            "☀️ 4ème et dernier étage très lumineux",
             "🛗 Ascenseur dans le bâtiment",
             "👶 Crèche sur la même rue",
             "💰 Prix/m² compétitif vs marché"
@@ -173,10 +183,10 @@ BIENS_CONFIG = {
         
         # ARGUMENTS PAR PROFIL ACHETEUR
         "arguments": {
-            "investisseur": "Forte demande locative à Lormont (étudiants, jeunes actifs Bordeaux). Loyer estimé 750-850€/mois. Rentabilité ~5.5%.",
-            "primo_accedant": "Idéal 1ère acquisition - prix accessible, 2 vraies chambres, piscine, proche transports et commerces.",
-            "famille": "2 chambres avec placards, piscine pour les enfants, crèche sur la même rue, écoles à proximité, quartier calme.",
-            "senior": "4ème avec ascenseur, résidence sécurisée, tous commerces à 5 min à pied, pas d'entretien extérieur."
+            "investisseur": "Forte demande locative à Lormont (étudiants, jeunes actifs Bordeaux). Loyer estimé 750-850€/mois. Rentabilité ~5.5%. Résidence sécurisée = rassurant pour locataires.",
+            "primo_accedant": "Idéal 1ère acquisition - prix accessible, 2 vraies chambres, piscine, résidence sécurisée, proche transports et commerces.",
+            "famille": "2 chambres avec placards, piscine pour les enfants, crèche sur la même rue, résidence ultra-sécurisée (bip + code), quartier calme.",
+            "senior": "4ème et dernier étage avec ascenseur, résidence L'ARÈNE MARGAUX très sécurisée, tous commerces à 5 min à pied, pas d'entretien extérieur."
         },
         
         # VISITE VIRTUELLE
@@ -350,6 +360,11 @@ def build_system_prompt(bien: Dict, langue: str = "fr") -> str:
 Adresse: {bien.get('adresse', 'Non communiquée')}
 Ville: {bien.get('ville', '')} ({bien.get('code_postal', '')})
 Quartier: {bien.get('quartier', 'Non précisé')}
+Résidence: {bien.get('residence_nom', bien.get('residence', 'NC'))}
+
+🔒 SÉCURITÉ RÉSIDENCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{bien.get('residence_securite', 'Résidence sécurisée')}
 
 💰 PRIX
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -373,7 +388,6 @@ Pièces: {bien.get('pieces', 'NC')} | Chambres: {bien.get('chambres', 'NC')} | S
 Bâtiment: {bien.get('batiment', 'NC')}
 Ascenseur: {'Oui' if bien.get('ascenseur') else 'Non'}
 Balcon: {'Oui' if bien.get('balcon') else 'Non'}
-Résidence: {bien.get('residence', 'NC')}
 
 🔧 ÉQUIPEMENTS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -391,7 +405,7 @@ Isolation: {bien.get('isolation', 'NC')}
 DPE: {bien.get('dpe', 'NC')}
 État général: {bien.get('etat', 'NC')}
 
-🚃 TRANSPORTS (distances vérifiées)
+🚃 TRANSPORTS (distances vérifiées Moovit)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {transports}
 
@@ -422,7 +436,7 @@ DPE: {bien.get('dpe', 'NC')}
 1️⃣ INFORMER avec précision et enthousiasme
    • Utilise TOUTES les données ci-dessus pour répondre
    • Les distances sont VÉRIFIÉES - utilise-les avec confiance
-   • Mets en avant les points forts naturellement
+   • Mets en avant la SÉCURITÉ de la résidence L'ARÈNE MARGAUX
    • Si tu ne connais pas une info, dis-le honnêtement
 
 2️⃣ CONVERTIR vers une visite
@@ -549,7 +563,7 @@ def send_lead_email(bien_id: str, lead_data: Dict, conversation: List[Dict] = No
 # =============================================================================
 
 def chat_vitrine_handler(body: Dict[str, Any]) -> Dict[str, Any]:
-    """Handler principal du chat vitrine V3.1 - Distances corrigées."""
+    """Handler principal du chat vitrine V3.2 - Corrections Ludo."""
     try:
         bien_id = body.get("bien_id", "").lower()
         messages = body.get("messages", [])
@@ -646,6 +660,6 @@ def register_chat_vitrine_routes(server):
     """Enregistre les routes du module chat vitrine."""
     try:
         server.register_route("POST", "/chat-vitrine", chat_vitrine_handler)
-        logger.info("✅ [CHAT-VITRINE] Route /chat-vitrine V3.1 enregistrée (distances corrigées)")
+        logger.info("✅ [CHAT-VITRINE] Route /chat-vitrine V3.2 enregistrée (corrections Ludo)")
     except Exception as e:
         logger.error(f"❌ [CHAT-VITRINE] Erreur registration: {e}")
