@@ -1,7 +1,8 @@
 # AXI ICI DORDOGNE V19.2.1 - TRIO CONSULT
 # Requirements Railway
-# Déployé: 2026-01-11
+# Deployed: 2026-01-11
 # Upgrade: Module Trio (Axis/Lumo consultation)
+# Force rebuild: yes
 
 # Claude API
 anthropic>=0.18.0
