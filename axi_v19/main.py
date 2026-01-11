@@ -157,6 +157,15 @@ except ImportError as e:
     print(f"  ⚠️ modules.trello not available: {e}", flush=True)
     TRELLO_OK = False
 
+# Import module Trio (Consultation Axis/Lumo) - V19.2.1
+try:
+    from .modules.trio import register_trio_routes
+    print("  ✅ modules.trio loaded (Axis/Lumo consultation)", flush=True)
+    TRIO_OK = True
+except ImportError as e:
+    print(f"  ⚠️ modules.trio not available: {e}", flush=True)
+    TRIO_OK = False
+
 
 # =============================================================================
 # IMPORTS STANDARDS
@@ -441,6 +450,13 @@ class AxiV19:
             logger.info("✅ Routes Trello activées (Sync + Matching)")
         else:
             logger.warning("⚠️ Routes Trello non disponibles")
+        
+        # Routes Trio (Consultation Axis/Lumo) - V19.2.1
+        if TRIO_OK:
+            register_trio_routes(server)
+            logger.info("✅ Routes Trio activées (Axis/Lumo)")
+        else:
+            logger.warning("⚠️ Routes Trio non disponibles")
     
     def start(self):
         """Démarre l'application V19 complète."""
