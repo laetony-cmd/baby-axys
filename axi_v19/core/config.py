@@ -222,6 +222,10 @@ def check_auth(path: str, method: str, query: dict, headers: dict) -> tuple:
     if path.startswith("/agent/"):
         return True, None
     
+    # Routes Trio (Axis/Lumo) - publiques
+    if path.startswith("/trio/"):
+        return True, None
+    
     # Routes SweepBright (patterns) - publiques
     if path.startswith("/sweepbright/") or path.startswith("/webhook/"):
         return True, None
