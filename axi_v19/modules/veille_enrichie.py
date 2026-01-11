@@ -24,6 +24,15 @@ import ssl
 
 # === CONFIGURATION ===
 
+# Étiquettes DPE à surveiller (toutes par défaut)
+ETIQUETTES_DPE = ["A", "B", "C", "D", "E", "F", "G"]
+
+# Date de début de collecte (format YYYY-MM-DD)
+DATE_DEBUT_COLLECTE = "2025-09-01"
+
+# Alertes email activées/désactivées
+ALERTES_EMAIL = False
+
 # Codes postaux par agence (8 codes uniques)
 CODES_POSTAUX = {
     "Le Bugue": ["24510", "24150", "24480", "24260", "24620", "24220"],
@@ -284,19 +293,30 @@ def trello_api_json(url, method="POST", data=None):
         return None
 
 
-def get_dpe_ademe(code_postal, jours=60, etiquettes=["F", "G"]):
+def get_dpe_ademe(code_postal, jours=None, etiquettes=None, date_debut=None):
     """
     Récupère les DPE récents depuis l'API ADEME
     
     Args:
         code_postal: Code postal à surveiller
-        jours: Nombre de jours en arrière
-        etiquettes: Liste des étiquettes DPE à filtrer (ex: ["F", "G"])
+        jours: Nombre de jours en arrière (optionnel, prioritaire sur date_debut)
+        etiquettes: Liste des étiquettes DPE à filtrer (None = toutes via ETIQUETTES_DPE)
+        date_debut: Date de début au format YYYY-MM-DD (None = DATE_DEBUT_COLLECTE)
     
     Returns:
         Liste des DPE correspondants
     """
-    date_limite = (datetime.now() - timedelta(days=jours)).strftime("%Y-%m-%d")
+    # Utiliser config globale si pas de paramètre
+    if etiquettes is None:
+        etiquettes = ETIQUETTES_DPE
+    
+    # Déterminer la date limite
+    if jours is not None:
+        date_limite = (datetime.now() - timedelta(days=jours)).strftime("%Y-%m-%d")
+    elif date_debut:
+        date_limite = date_debut
+    else:
+        date_limite = DATE_DEBUT_COLLECTE
     
     # Construire la requête avec le bon format qs=
     url = f"{ADEME_BASE_URL}?size=200&qs=code_postal_ban:{code_postal}&select={ADEME_FIELDS}&sort=-date_reception_dpe"
@@ -951,9 +971,9 @@ def executer_veille_enrichie(codes_postaux=None, jours=30, creer_trello=True, fi
     
     # Récupérer les DPE par code postal
     for cp in codes_postaux:
-        dpes_raw = get_dpe_ademe(cp, jours=jours, etiquettes=["F", "G"])
+        dpes_raw = get_dpe_ademe(cp)  # Utilise ETIQUETTES_DPE et DATE_DEBUT_COLLECTE
         stats["total_api"] += len(dpes_raw)
-        print(f"  [{cp}] {len(dpes_raw)} DPE F/G trouvés")
+        print(f"  [{cp}] {len(dpes_raw)} DPE trouvés (depuis {DATE_DEBUT_COLLECTE})")
         
         for dpe_raw in dpes_raw:
             numero_dpe = dpe_raw.get("numero_dpe", "")
@@ -1026,27 +1046,30 @@ def executer_veille_enrichie(codes_postaux=None, jours=30, creer_trello=True, fi
 def executer_veille_quotidienne():
     """
     Fonction appelée par le cron à 1h00
-    - Récupère les nouveaux DPE F/G sur les 8 codes postaux
+    - Récupère les nouveaux DPE (toutes classes A-G) sur les 12 codes postaux
     - Crée une carte Trello pour chaque nouveau
-    - Envoie email récap
+    - Email désactivé (ALERTES_EMAIL = False)
     """
     print("=" * 60)
     print("VEILLE DPE QUOTIDIENNE - ICI DORDOGNE")
     print(f"Exécution: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    print(f"Configuration: {len(ETIQUETTES_DPE)} classes DPE, depuis {DATE_DEBUT_COLLECTE}")
     print("=" * 60)
     
-    # Exécuter la veille
+    # Exécuter la veille (utilise la config globale)
     result = executer_veille_enrichie(
         codes_postaux=TOUS_CODES_POSTAUX,
-        jours=60,  # Chercher sur 60 jours pour les passoires F/G
+        jours=None,  # Utilise DATE_DEBUT_COLLECTE
         creer_trello=True,
-        fichier_excel=None,  # Pas de fichier Excel en cron
-        email_rapport=True
+        fichier_excel=None,
+        email_rapport=ALERTES_EMAIL  # Utilise la config globale
     )
     
-    # Envoyer email si nouveaux DPE
-    if result["stats"]["nouveaux"] > 0:
+    # Envoyer email si activé ET nouveaux DPE
+    if ALERTES_EMAIL and result["stats"]["nouveaux"] > 0:
         envoyer_email_rapport(result)
+    elif not ALERTES_EMAIL:
+        print("[EMAIL] Alertes email désactivées (ALERTES_EMAIL = False)")
     else:
         print("[EMAIL] Aucun nouveau DPE - pas d'email envoyé")
     
@@ -1158,8 +1181,8 @@ if __name__ == "__main__":
     
     # Test API ADEME
     print("[TEST] Récupération DPE 24380...")
-    dpes = get_dpe_ademe("24380", jours=60, etiquettes=["F", "G"])
-    print(f"  → {len(dpes)} DPE F/G trouvés")
+    dpes = get_dpe_ademe("24380")  # Utilise ETIQUETTES_DPE et DATE_DEBUT_COLLECTE
+    print(f"  → {len(dpes)} DPE trouvés (toutes classes, depuis {DATE_DEBUT_COLLECTE})")
     
     if dpes:
         # Enrichir le premier
