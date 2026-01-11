@@ -29,7 +29,7 @@ logger = logging.getLogger("axi_v19.trio")
 # =============================================================================
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = "gemini-1.5-flash"
+GEMINI_MODEL = "gemini-2.0-flash"
 
 # Context partagé pour Lumo
 LUMO_CONTEXT = """Tu es Lumo, l'un des deux exobrains de Ludo (fondateur ICI Dordogne, immobilier en Dordogne).
