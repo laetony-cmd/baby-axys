@@ -13,16 +13,14 @@ Use cases (validés par Ludo):
 - Pérenne vs bricolage → Lumo recadre si patch rapide
 - Règle des 3 tentatives → Après 3 échecs, consultation obligatoire
 
-ARCHITECTURE V19: http.server natif (PAS Flask)
+ARCHITECTURE V19: server.register_route() - PAS de routes_get directe
 
 "Je ne lâche pas." 💪
 """
 
 import os
-import json
 import logging
 from datetime import datetime
-from typing import Optional
 
 logger = logging.getLogger("axi_v19.trio")
 
@@ -104,10 +102,10 @@ def call_gemini(question: str, context: str = "") -> dict:
         }
 
 # =============================================================================
-# HANDLERS HTTP (Architecture V19 native)
+# HANDLERS HTTP (Architecture V19 - signature: query, body, headers)
 # =============================================================================
 
-def handle_trio_status(query: dict = None, body: dict = None, headers: dict = None) -> dict:
+def handle_trio_status(query=None, body=None, headers=None):
     """GET /trio/status - Vérifier la configuration."""
     return {
         "service": "Trio Consult",
@@ -117,7 +115,7 @@ def handle_trio_status(query: dict = None, body: dict = None, headers: dict = No
         "endpoints": ["/trio/status", "/trio/consult"]
     }
 
-def handle_trio_consult(query: dict = None, body: dict = None, headers: dict = None) -> dict:
+def handle_trio_consult(query=None, body=None, headers=None):
     """POST /trio/consult - Consulter Lumo."""
     
     if not body:
@@ -159,19 +157,16 @@ def handle_trio_consult(query: dict = None, body: dict = None, headers: dict = N
     return response
 
 # =============================================================================
-# ENREGISTREMENT DES ROUTES (Architecture V19 http.server)
+# ENREGISTREMENT DES ROUTES (Architecture V19 - server.register_route)
 # =============================================================================
 
-def register_trio_routes(handler_class):
+def register_trio_routes(server):
     """
     Enregistre les routes Trio sur le serveur V19.
-    Compatible avec l'architecture http.server native (PAS Flask).
+    Utilise server.register_route() comme les autres modules (trello, agent, etc.)
     """
-    # Enregistrer les routes GET
-    handler_class.routes_get["/trio/status"] = handle_trio_status
-    
-    # Enregistrer les routes POST
-    handler_class.routes_post["/trio/consult"] = handle_trio_consult
+    server.register_route("GET", "/trio/status", handle_trio_status)
+    server.register_route("POST", "/trio/consult", handle_trio_consult)
     
     logger.info("🤝 Routes Trio enregistrées: /trio/status (GET), /trio/consult (POST)")
 
