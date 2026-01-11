@@ -13,6 +13,8 @@ Use cases (validés par Ludo):
 - Pérenne vs bricolage → Lumo recadre si patch rapide
 - Règle des 3 tentatives → Après 3 échecs, consultation obligatoire
 
+ARCHITECTURE V19: http.server natif (PAS Flask)
+
 "Je ne lâche pas." 💪
 """
 
@@ -61,7 +63,7 @@ def call_gemini(question: str, context: str = "") -> dict:
     if not GEMINI_API_KEY:
         return {
             "success": False,
-            "error": "GEMINI_API_KEY non configurée",
+            "error": "GEMINI_API_KEY non configurée dans Railway",
             "response": None
         }
     
@@ -90,7 +92,7 @@ def call_gemini(question: str, context: str = "") -> dict:
     except ImportError:
         return {
             "success": False,
-            "error": "google-generativeai non installé (pip install google-generativeai)",
+            "error": "google-generativeai non installé",
             "response": None
         }
     except Exception as e:
@@ -102,28 +104,32 @@ def call_gemini(question: str, context: str = "") -> dict:
         }
 
 # =============================================================================
-# HANDLERS HTTP
+# HANDLERS HTTP (Architecture V19 native)
 # =============================================================================
 
-def handle_trio_status():
+def handle_trio_status(query: dict = None, body: dict = None, headers: dict = None) -> dict:
     """GET /trio/status - Vérifier la configuration."""
     return {
         "service": "Trio Consult",
         "gemini_configured": bool(GEMINI_API_KEY),
         "model": GEMINI_MODEL,
-        "description": "Consultation Axis ↔ Lumo pour second avis"
+        "description": "Consultation Axis ↔ Lumo pour second avis",
+        "endpoints": ["/trio/status", "/trio/consult"]
     }
 
-def handle_trio_consult(request_data: dict) -> dict:
+def handle_trio_consult(query: dict = None, body: dict = None, headers: dict = None) -> dict:
     """POST /trio/consult - Consulter Lumo."""
     
-    question = request_data.get("question", "")
-    context = request_data.get("context", "")
+    if not body:
+        body = {}
+    
+    question = body.get("question", "")
+    context = body.get("context", "")
     
     if not question:
         return {
             "success": False,
-            "error": "Paramètre 'question' requis",
+            "error": "Paramètre 'question' requis dans le body JSON",
             "timestamp": datetime.now().isoformat()
         }
     
@@ -153,28 +159,19 @@ def handle_trio_consult(request_data: dict) -> dict:
     return response
 
 # =============================================================================
-# ENREGISTREMENT DES ROUTES
+# ENREGISTREMENT DES ROUTES (Architecture V19 http.server)
 # =============================================================================
 
-def register_trio_routes(server):
-    """Enregistre les routes Trio sur le serveur."""
+def register_trio_routes(handler_class):
+    """
+    Enregistre les routes Trio sur le serveur V19.
+    Compatible avec l'architecture http.server native (PAS Flask).
+    """
+    # Enregistrer les routes GET
+    handler_class.routes_get["/trio/status"] = handle_trio_status
     
-    @server.route("/trio/status", methods=["GET"])
-    def trio_status():
-        from flask import jsonify
-        return jsonify(handle_trio_status())
+    # Enregistrer les routes POST
+    handler_class.routes_post["/trio/consult"] = handle_trio_consult
     
-    @server.route("/trio/consult", methods=["POST"])
-    def trio_consult():
-        from flask import request, jsonify
-        
-        try:
-            data = request.get_json() or {}
-        except:
-            data = {}
-        
-        result = handle_trio_consult(data)
-        status_code = 200 if result.get("success") else 400
-        return jsonify(result), status_code
-    
-    logger.info("🤝 Routes Trio enregistrées: /trio/status, /trio/consult")
+    logger.info("🤝 Routes Trio enregistrées: /trio/status (GET), /trio/consult (POST)")
+
