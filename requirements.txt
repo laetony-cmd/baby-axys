@@ -1,10 +1,13 @@
-# AXI ICI DORDOGNE V19.2 - CHAT + TAVILY CORRIGÉ
+# AXI ICI DORDOGNE V19.2.1 - TRIO CONSULT
 # Requirements Railway
-# Déployé: 2026-01-05
-# Upgrade: Interface Chat + Recherche Web Tavily corrigée
+# Déployé: 2026-01-11
+# Upgrade: Module Trio (Axis/Lumo consultation)
 
 # Claude API
 anthropic>=0.18.0
+
+# Gemini API (Lumo)
+google-generativeai>=0.3.0
 
 # PostgreSQL (OBLIGATOIRE pour Matching Engine V13.1)
 psycopg2-binary>=2.9.9
@@ -21,5 +24,4 @@ beautifulsoup4>=4.12.0
 
 # HTTP requests (API ADEME, Tavily, Claude)
 requests>=2.31.0
-
 
