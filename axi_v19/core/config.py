@@ -189,6 +189,8 @@ PUBLIC_ENDPOINTS = [
     "/chat-proxy",           # Chat sites vitrines (V19.5 - Lormont, Manzac)
     "/contact",              # Contact sites vitrines (V19.5)
     "/chat-vitrine",         # Chat Vitrine V2 - Template permanent (V19.6)
+    "/trio/status",          # Status Trio Axis/Lumo (V19.2.1)
+    "/trio/consult",         # Consultation Axis/Lumo (V19.2.1)
 ]
 
 # Endpoints qui NÉCESSITENT une authentification
