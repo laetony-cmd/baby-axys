@@ -124,21 +124,19 @@ Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Paris
 
 ## INTERFACE CHAT
 
-✅ URL Fonctionnelle: https://baby-axys-production.up.railway.app/
-
-⚠️ axi.symbine.fr pointe encore vers AXIS Station local (v12).
-   Pour chat avec recherche web fonctionnelle → utiliser Railway.
+✅ URL Railway: https://baby-axys-production.up.railway.app/
+✅ URL Custom: https://axi.symbine.fr/ (SSL OK)
 
 ## DÉCISIONS ACTIVES
 
-### 🟢 VALIDÉ (5 janvier 2026)
+### 🟢 VALIDÉ (11 janvier 2026)
 - ✅ V19.2 Chat + Tavily déployé
-- ✅ Interface HTML complète
+- ✅ axi.symbine.fr → Railway (DNS corrigé)
 - ✅ Recherche web corrigée (include_domains français)
 - ✅ Endpoints publics: /, /chat, /trio, /nouvelle-session
 
 ### 📅 DATES
-- 6 janvier: Tirage Bio Vergt (demain!)
+- ✅ 6 janvier: Tirage Bio Vergt (FAIT)
 - Fin janvier: Départ Maroc Ludo
 
 ## COMMANDES
