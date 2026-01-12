@@ -514,17 +514,8 @@ def run_veille_concurrence(db=None):
 def register_veille_routes(server):
     """Enregistre les routes de veille sur le serveur."""
     
-    def handle_run_veille(query):
-        return run_veille_dpe()
-    
-    def handle_test_veille(query):
-        # Test sans email
-        global _dpe_connus
-        count = 0
-        for cp in CODES_POSTAUX[:2]:  # Juste 2 CP
-            resultats = get_dpe_ademe(cp)
-            count += len(resultats)
-        return {"status": "test", "dpe_trouvés": count, "codes_testés": 2, "version": "V19"}
+    # SUPPRIMÉ: handle_run_veille et handle_test_veille
+    # Remplacés par /veille/dpe/enrichie - 12 janvier 2026
     
     def handle_run_veille_concurrence(query):
         return run_veille_concurrence()
@@ -539,8 +530,7 @@ def register_veille_routes(server):
             total += len(urls)
         return {"status": "test", "agences_testées": agences_test, "urls_trouvées": total, "version": "V19"}
     
-    server.register_route('GET', '/run-veille', handle_run_veille)
-    server.register_route('GET', '/test-veille', handle_test_veille)
+    # SUPPRIMÉ: /run-veille et /test-veille (remplacés par /veille/dpe/enrichie)
     server.register_route('GET', '/run-veille-concurrence', handle_run_veille_concurrence)
     server.register_route('GET', '/test-veille-concurrence', handle_test_veille_concurrence)
     
@@ -752,15 +742,7 @@ def register_veille_routes(server):
     server.register_route('GET', '/veille/dpe/enrichie', handle_veille_dpe_enrichie)
     server.register_route('GET', '/veille/dpe/test-enrichie', handle_veille_dpe_test_enrichie)
     
-    def handle_veille_dpe_reset(query):
-        """Reset la table des DPE vus (pour forcer re-création)"""
-        try:
-            from .veille_enrichie import reset_dpe_vus
-            result = reset_dpe_vus()
-            return {"status": "ok" if result["success"] else "error", **result}
-        except Exception as e:
-            return {"status": "error", "message": str(e)}
-    
-    server.register_route('GET', '/veille/dpe/reset', handle_veille_dpe_reset)
+    # SUPPRIMÉ: /veille/dpe/reset - Trop dangereux, suppression accidentelle possible
+    # Si reset nécessaire, faire SQL manuel après backup - 12 janvier 2026
     
     logger.info("📍 Routes veille V19 enregistrées (DPE + Concurrence + Audit + Diagnose + Enrichie)")
