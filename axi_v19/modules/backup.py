@@ -16,34 +16,33 @@ logger = logging.getLogger("axi_v19.backup")
 def export_dpe_vus(db):
     """Exporte la table dpe_veille_vus en JSON."""
     try:
-        conn = db.get_connection()
-        cur = conn.cursor()
-        
-        # Récupérer tous les DPE
-        cur.execute("""
-            SELECT numero_dpe, date_reception, code_postal, commune, 
-                   etiquette_dpe, trello_card_url, date_traitement
-            FROM dpe_veille_vus
-            ORDER BY date_traitement DESC
-        """)
-        
-        rows = cur.fetchall()
-        columns = ['numero_dpe', 'date_reception', 'code_postal', 'commune', 
-                   'etiquette_dpe', 'trello_card_url', 'date_traitement']
-        
-        data = []
-        for row in rows:
-            item = {}
-            for i, col in enumerate(columns):
-                val = row[i]
-                # Convertir datetime en string
-                if hasattr(val, 'isoformat'):
-                    val = val.isoformat()
-                item[col] = val
-            data.append(item)
-        
-        cur.close()
-        conn.close()
+        with db.get_connection() as conn:
+            cur = conn.cursor()
+            
+            # Récupérer tous les DPE
+            cur.execute("""
+                SELECT numero_dpe, date_reception, code_postal, commune, 
+                       etiquette_dpe, trello_card_url, date_traitement
+                FROM dpe_veille_vus
+                ORDER BY date_traitement DESC
+            """)
+            
+            rows = cur.fetchall()
+            columns = ['numero_dpe', 'date_reception', 'code_postal', 'commune', 
+                       'etiquette_dpe', 'trello_card_url', 'date_traitement']
+            
+            data = []
+            for row in rows:
+                item = {}
+                for i, col in enumerate(columns):
+                    val = row[i]
+                    # Convertir datetime en string
+                    if hasattr(val, 'isoformat'):
+                        val = val.isoformat()
+                    item[col] = val
+                data.append(item)
+            
+            cur.close()
         
         return {
             "success": True,
@@ -68,18 +67,17 @@ def register_backup_routes(server, db):
     def handle_backup_status(query):
         """Status des backups."""
         try:
-            conn = db.get_connection()
-            cur = conn.cursor()
-            
-            # Compter les entrées
-            cur.execute("SELECT COUNT(*) FROM dpe_veille_vus")
-            total = cur.fetchone()[0]
-            
-            cur.execute("SELECT MAX(date_traitement) FROM dpe_veille_vus")
-            last = cur.fetchone()[0]
-            
-            cur.close()
-            conn.close()
+            with db.get_connection() as conn:
+                cur = conn.cursor()
+                
+                # Compter les entrées
+                cur.execute("SELECT COUNT(*) FROM dpe_veille_vus")
+                total = cur.fetchone()[0]
+                
+                cur.execute("SELECT MAX(date_traitement) FROM dpe_veille_vus")
+                last = cur.fetchone()[0]
+                
+                cur.close()
             
             return {
                 "status": "ok",
