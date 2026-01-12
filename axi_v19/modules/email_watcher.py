@@ -495,11 +495,13 @@ def move_email_to_label(email_from: str = '', subject_contains: str = '', label:
         return {"success": False, "error": str(e)}
 
 
-def handle_move_email(params: Dict) -> Tuple[int, Dict]:
+def handle_move_email(query=None, body=None, headers=None) -> Tuple[int, Dict]:
     """Handler pour endpoint POST /email/move-acquereur"""
-    email_from = params.get('from', '')
-    subject_contains = params.get('subject', '')
-    label = params.get('label', LABEL_ACQUEREURS)
+    if not body:
+        body = {}
+    email_from = body.get('from', '')
+    subject_contains = body.get('subject', '')
+    label = body.get('label', LABEL_ACQUEREURS)
     
     result = move_email_to_label(email_from, subject_contains, label)
     status_code = 200 if result.get('success') else 400
