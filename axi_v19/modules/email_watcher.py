@@ -429,6 +429,83 @@ def handle_email_status(params: Dict) -> Tuple[int, Dict]:
     }
 
 
+
+
+# =============================================================================
+# MOVE EMAIL TO LABEL (ajouté 12/01/2026)
+# =============================================================================
+
+LABEL_ACQUEREURS = "**ACQUÉREURS"
+
+
+def move_email_to_label(email_from: str = '', subject_contains: str = '', label: str = None) -> Dict:
+    """
+    Déplace un email de INBOX vers un label Gmail (par défaut **ACQUÉREURS).
+    """
+    target_label = label or LABEL_ACQUEREURS
+    
+    try:
+        logger.info(f"📧 Déplacement email vers {target_label}...")
+        mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
+        mail.login(IMAP_EMAIL, IMAP_PASSWORD)
+        mail.select("inbox")
+        
+        search_parts = []
+        if email_from:
+            search_parts.append(f'FROM "{email_from}"')
+        if subject_contains:
+            search_parts.append(f'SUBJECT "{subject_contains}"')
+        
+        if not search_parts:
+            mail.logout()
+            return {"success": False, "error": "Paramètre 'from' ou 'subject' requis"}
+        
+        search_query = ' '.join(search_parts)
+        status, messages = mail.search(None, search_query)
+        
+        if status != 'OK' or not messages[0]:
+            mail.logout()
+            return {"success": False, "moved": 0, "message": f"Aucun email trouvé"}
+        
+        email_ids = messages[0].split()
+        moved_count = 0
+        
+        for email_id in email_ids[-5:]:
+            try:
+                copy_result = mail.copy(email_id, f'"{target_label}"')
+                if copy_result[0] == 'OK':
+                    mail.store(email_id, '+FLAGS', '\\Deleted')
+                    moved_count += 1
+            except Exception as e:
+                logger.warning(f"Erreur email {email_id}: {e}")
+                continue
+        
+        mail.expunge()
+        mail.logout()
+        
+        return {
+            "success": moved_count > 0,
+            "moved": moved_count,
+            "label": target_label,
+            "message": f"{moved_count} email(s) déplacé(s) vers {target_label}"
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur: {e}")
+        return {"success": False, "error": str(e)}
+
+
+def handle_move_email(params: Dict) -> Tuple[int, Dict]:
+    """Handler pour endpoint POST /email/move-acquereur"""
+    email_from = params.get('from', '')
+    subject_contains = params.get('subject', '')
+    label = params.get('label', LABEL_ACQUEREURS)
+    
+    result = move_email_to_label(email_from, subject_contains, label)
+    status_code = 200 if result.get('success') else 400
+    return status_code, result
+
+
 # Point d'entrée pour test manuel
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
