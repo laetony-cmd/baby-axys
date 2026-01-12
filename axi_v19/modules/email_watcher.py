@@ -48,6 +48,74 @@ PROCESSED_LABEL = "AXI_PROCESSED"
 # PARSERS EMAIL
 # =============================================================================
 
+
+# =============================================================================
+# DÉPLACEMENT EMAIL VIA MS-01
+# =============================================================================
+
+import requests
+
+def move_email_to_acquereurs_via_ms01(from_addr: str) -> bool:
+    """
+    Déplace un email vers **ACQUÉREURS via le MS-01.
+    Utilise l'agent PowerShell sur AXIS Station.
+    """
+    if not from_addr:
+        return False
+    
+    # Extraire un mot-clé de recherche du FROM
+    # Ex: "fafa via leboncoin <xxx@messagerie.leboncoin.fr>" -> "fafa"
+    # Ex: "SweepBright <noreply@sweepbright.com>" -> "sweepbright"
+    search_term = from_addr.lower()
+    
+    # Nettoyer pour extraire le nom ou domaine
+    if "<" in search_term:
+        # Prendre la partie avant le <
+        name_part = search_term.split("<")[0].strip()
+        if name_part:
+            # "fafa via leboncoin" -> "fafa"
+            search_term = name_part.split()[0] if name_part.split() else name_part
+        else:
+            # Prendre le domaine de l'email
+            email_part = search_term.split("<")[1].replace(">", "")
+            if "@" in email_part:
+                domain = email_part.split("@")[1].split(".")[0]
+                search_term = domain
+    
+    try:
+        logger.info(f"📧 Déplacement email via MS-01: {search_term}")
+        
+        # Appeler l'agent MS-01
+        response = requests.post(
+            "https://baby-axys-production.up.railway.app/agent/execute",
+            headers={
+                "X-Agent-Token": "ici-dordogne-2026",
+                "Content-Type": "application/json"
+            },
+            json={
+                "command": f'& "C:\\Users\\laeto\\AppData\\Local\\Programs\\Python\\Python312\\python.exe" C:\\axi-v19\\move_email.py {search_term}'
+            },
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            value = result.get("result", {}).get("value", "")
+            if '"ok": true' in value or '"ok":true' in value:
+                logger.info(f"✅ Email déplacé vers **ACQUÉREURS")
+                return True
+            else:
+                logger.warning(f"⚠️ Déplacement email: {value}")
+                return False
+        else:
+            logger.error(f"❌ Erreur agent MS-01: {response.status_code}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"❌ Erreur move_email_via_ms01: {e}")
+        return False
+
+
 def parse_leboncoin(body: str, subject: str) -> Optional[Dict]:
     """Parse un email Leboncoin et extrait les infos prospect."""
     try:
@@ -397,6 +465,8 @@ def process_new_emails() -> Dict:
             card_url = create_prospect_card(prospect)
             if card_url:
                 result["cards_created"] += 1
+                # Déplacer l'email vers **ACQUÉREURS via MS-01
+                move_email_to_acquereurs_via_ms01(prospect.get("raw_from", ""))
             else:
                 result["errors"].append(f"Échec création carte pour {prospect.get('email')}")
         
