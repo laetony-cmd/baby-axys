@@ -515,6 +515,62 @@ def handle_move_email(query=None, body=None, headers=None) -> Tuple[int, Dict]:
     return status_code, result
 
 
+
+
+def debug_imap_search(query=None, body=None, headers=None) -> Tuple[int, Dict]:
+    """Debug: voir ce que contient INBOX via IMAP"""
+    try:
+        mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
+        mail.login(IMAP_EMAIL, IMAP_PASSWORD)
+        
+        # Lister les dossiers
+        status, folders = mail.list()
+        folder_names = []
+        for f in folders[:20]:
+            folder_names.append(f.decode('utf-8', errors='ignore'))
+        
+        # Sélectionner INBOX
+        status, count = mail.select('INBOX')
+        inbox_count = count[0].decode() if count else '0'
+        
+        # Chercher TOUS les emails
+        status, messages = mail.search(None, 'ALL')
+        all_ids = messages[0].split() if messages[0] else []
+        
+        # Récupérer les 5 derniers sujets/from
+        last_emails = []
+        for eid in all_ids[-5:]:
+            try:
+                status, data = mail.fetch(eid, '(BODY[HEADER.FIELDS (SUBJECT FROM)])')
+                if data and data[0]:
+                    header = data[0][1].decode('utf-8', errors='ignore')
+                    last_emails.append(header.strip()[:150])
+            except:
+                pass
+        
+        # Tester recherche "fafa"
+        status_fafa, msg_fafa = mail.search(None, 'FROM "fafa"')
+        fafa_count = len(msg_fafa[0].split()) if msg_fafa[0] else 0
+        
+        # Tester recherche "leboncoin"
+        status_lbc, msg_lbc = mail.search(None, 'FROM "leboncoin"')
+        lbc_count = len(msg_lbc[0].split()) if msg_lbc[0] else 0
+        
+        mail.logout()
+        
+        return 200, {
+            "inbox_total": inbox_count,
+            "all_emails_count": len(all_ids),
+            "last_5_emails": last_emails,
+            "search_fafa": fafa_count,
+            "search_leboncoin": lbc_count,
+            "folders_sample": folder_names[:10]
+        }
+        
+    except Exception as e:
+        return 500, {"error": str(e)}
+
+
 # Point d'entrée pour test manuel
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
