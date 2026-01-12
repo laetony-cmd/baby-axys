@@ -56,7 +56,7 @@ _TRELLO_TOKEN_DEFAULT = "".join([
 ])
 TRELLO_KEY = os.environ.get("TRELLO_KEY", _TRELLO_KEY_DEFAULT)
 TRELLO_TOKEN = os.environ.get("TRELLO_TOKEN", _TRELLO_TOKEN_DEFAULT)
-TRELLO_LIST_DPE = "69620ff0fee1b6d2c9110a80"  # Colonne "🏠 Nouveaux DPE F/G"
+TRELLO_LIST_DPE = "696479aba93c15e0703ae957"  # Liste "🏠 Veille DPE ADEME" (sans Butler)
 TRELLO_JULIE_ID = "59db340040eb2c01fb7d4851"  # Conservé pour référence mais non utilisé
 
 # API ADEME
