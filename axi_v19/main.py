@@ -160,6 +160,7 @@ except ImportError as e:
 # Import module Trio (Consultation Axis/Lumo) - V19.2.1
 try:
     from .modules.trio import register_trio_routes
+    from .modules.backup import register_backup_routes
     print("  ✅ modules.trio loaded (Axis/Lumo consultation)", flush=True)
     TRIO_OK = True
 except ImportError as e:
@@ -449,6 +450,13 @@ class AxiV19:
             logger.info("✅ Routes Trio activées (Axis/Lumo)")
         else:
             logger.warning("⚠️ Routes Trio non disponibles")
+        
+        # Routes Backup PostgreSQL - 12 janvier 2026
+        try:
+            register_backup_routes(server, db)
+            logger.info("✅ Routes Backup activées (/backup/dpe, /backup/status)")
+        except Exception as e:
+            logger.warning(f"⚠️ Routes Backup non disponibles: {e}")
     
     def start(self):
         """Démarre l'application V19 complète."""
