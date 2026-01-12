@@ -325,7 +325,7 @@ def check_emails() -> List[Dict]:
         logger.info(f"📧 Connexion IMAP {IMAP_EMAIL}...")
         mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
         mail.login(IMAP_EMAIL, IMAP_PASSWORD)
-        mail.select("INBOX")
+        mail.select("inbox")
         
         # Chercher emails non lus
         status, messages = mail.search(None, "(UNSEEN)")
@@ -450,7 +450,7 @@ def move_email_to_label(email_from: str = '', subject_contains: str = '', label:
         logger.info(f"📧 Déplacement email vers {target_label}...")
         mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
         mail.login(IMAP_EMAIL, IMAP_PASSWORD)
-        mail.select("INBOX")
+        mail.select("inbox")
         
         search_parts = []
         if email_from:
@@ -463,18 +463,16 @@ def move_email_to_label(email_from: str = '', subject_contains: str = '', label:
             return {"success": False, "error": "Paramètre 'from' ou 'subject' requis"}
         
         search_query = ' '.join(search_parts)
-        logger.info(f"🔍 Recherche IMAP: {search_query}")
-        
         status, messages = mail.search(None, search_query)
-        logger.info(f"📊 Résultat search: status={status}, messages={messages}")
         
         if status != 'OK' or not messages[0]:
             mail.logout()
-            return {"success": False, "moved": 0, "message": f"Aucun email trouvé", "search_query": search_query, "status": status, "raw_messages": str(messages)}
+            return {"success": False, "moved": 0, "message": f"Aucun email trouvé"}
         
         email_ids = messages[0].split()
         moved_count = 0
         
+        errors = []
         for email_id in email_ids[-5:]:
             try:
                 # Encoder le label pour IMAP (UTF-7 modifié pour Gmail)
@@ -482,23 +480,37 @@ def move_email_to_label(email_from: str = '', subject_contains: str = '', label:
                 # **ACQUÉREURS -> encodage IMAP UTF-7
                 if 'ACQUÉREURS' in target_label:
                     imap_label = '**ACQU&AMk-REURS'
+                
+                logger.info(f"📋 COPY {email_id} -> {imap_label}")
                 copy_result = mail.copy(email_id, imap_label)
+                logger.info(f"   Résultat COPY: {copy_result}")
+                
                 if copy_result[0] == 'OK':
                     mail.store(email_id, '+FLAGS', '\\Deleted')
                     moved_count += 1
+                    logger.info(f"   ✅ Email {email_id} déplacé")
+                else:
+                    errors.append(f"COPY {email_id} failed: {copy_result}")
+                    logger.warning(f"   ❌ COPY failed: {copy_result}")
             except Exception as e:
+                errors.append(f"Email {email_id}: {str(e)}")
                 logger.warning(f"Erreur email {email_id}: {e}")
                 continue
         
         mail.expunge()
         mail.logout()
         
-        return {
+        result = {
             "success": moved_count > 0,
             "moved": moved_count,
+            "total_found": len(email_ids),
             "label": target_label,
+            "imap_label": imap_label,
             "message": f"{moved_count} email(s) déplacé(s) vers {target_label}"
         }
+        if errors:
+            result["errors"] = errors
+        return result
         
     except Exception as e:
         logger.error(f"❌ Erreur: {e}")
