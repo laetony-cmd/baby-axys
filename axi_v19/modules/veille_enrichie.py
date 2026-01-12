@@ -33,6 +33,9 @@ DATE_DEBUT_COLLECTE = "2025-12-01"
 # Alertes email activées/désactivées
 ALERTES_EMAIL = False
 
+# Healthchecks.io - Monitoring veille DPE (créé 12 janvier 2026)
+HEALTHCHECKS_URL = "https://hc-ping.com/e1ee556c-d0ae-4866-be19-465d8eea4c84"
+
 # Codes postaux par agence (8 codes uniques)
 CODES_POSTAUX = {
     "Le Bugue": ["24510", "24150", "24480", "24260", "24620", "24220"],
@@ -1092,6 +1095,29 @@ def executer_veille_enrichie(codes_postaux=None, jours=30, creer_trello=True, fi
     }
 
 
+def ping_healthchecks(status="success"):
+    """
+    Ping Healthchecks.io pour monitoring.
+    status: "success", "fail", ou "start"
+    """
+    if not HEALTHCHECKS_URL:
+        return
+    
+    try:
+        url = HEALTHCHECKS_URL
+        if status == "fail":
+            url += "/fail"
+        elif status == "start":
+            url += "/start"
+        
+        req = urllib.request.Request(url, method='GET')
+        req.add_header('User-Agent', 'Axi-ICI-Dordogne/1.0')
+        urllib.request.urlopen(req, timeout=10)
+        print(f"[HEALTHCHECKS] Ping {status} envoyé")
+    except Exception as e:
+        print(f"[HEALTHCHECKS] Erreur ping: {e}")
+
+
 def executer_veille_quotidienne():
     """
     Fonction appelée par le cron à 1h00
@@ -1099,30 +1125,43 @@ def executer_veille_quotidienne():
     - Crée une carte Trello pour chaque nouveau
     - Email désactivé (ALERTES_EMAIL = False)
     """
+    # Ping Healthchecks au démarrage
+    ping_healthchecks("start")
+    
     print("=" * 60)
     print("VEILLE DPE QUOTIDIENNE - ICI DORDOGNE")
     print(f"Exécution: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
     print(f"Configuration: {len(ETIQUETTES_DPE)} classes DPE, depuis {DATE_DEBUT_COLLECTE}")
     print("=" * 60)
     
-    # Exécuter la veille (utilise la config globale)
-    result = executer_veille_enrichie(
-        codes_postaux=TOUS_CODES_POSTAUX,
-        jours=None,  # Utilise DATE_DEBUT_COLLECTE
-        creer_trello=True,
-        fichier_excel=None,
-        email_rapport=ALERTES_EMAIL  # Utilise la config globale
-    )
-    
-    # Envoyer email si activé ET nouveaux DPE
-    if ALERTES_EMAIL and result["stats"]["nouveaux"] > 0:
-        envoyer_email_rapport(result)
-    elif not ALERTES_EMAIL:
-        print("[EMAIL] Alertes email désactivées (ALERTES_EMAIL = False)")
-    else:
-        print("[EMAIL] Aucun nouveau DPE - pas d'email envoyé")
-    
-    return result
+    try:
+        # Exécuter la veille (utilise la config globale)
+        result = executer_veille_enrichie(
+            codes_postaux=TOUS_CODES_POSTAUX,
+            jours=None,  # Utilise DATE_DEBUT_COLLECTE
+            creer_trello=True,
+            fichier_excel=None,
+            email_rapport=ALERTES_EMAIL  # Utilise la config globale
+        )
+        
+        # Envoyer email si activé ET nouveaux DPE
+        if ALERTES_EMAIL and result["stats"]["nouveaux"] > 0:
+            envoyer_email_rapport(result)
+        elif not ALERTES_EMAIL:
+            print("[EMAIL] Alertes email désactivées (ALERTES_EMAIL = False)")
+        else:
+            print("[EMAIL] Aucun nouveau DPE - pas d'email envoyé")
+        
+        # Ping Healthchecks succès
+        ping_healthchecks("success")
+        
+        return result
+        
+    except Exception as e:
+        # Ping Healthchecks échec
+        ping_healthchecks("fail")
+        print(f"[ERREUR CRITIQUE] Veille DPE plantée: {e}")
+        raise
 
 
 def envoyer_email_rapport(result):
