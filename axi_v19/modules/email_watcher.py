@@ -431,110 +431,72 @@ def handle_email_status(params: Dict) -> Tuple[int, Dict]:
 
 
 
-
-
-
-
 # =============================================================================
-# MOVE EMAIL TO LABEL (V2 - corrigé 12/01/2026)
+# MOVE EMAIL TO LABEL (ajouté 12/01/2026)
 # =============================================================================
 
 LABEL_ACQUEREURS = "**ACQUÉREURS"
+# Version encodée UTF-7 pour IMAP
+LABEL_ACQUEREURS_IMAP = "&ACoAKg-ACQ-U&AOk-REURS"  # **ACQUÉREURS en UTF-7 modifié
 
 
 def move_email_to_label(email_from: str = '', subject_contains: str = '', label: str = None) -> Dict:
     """
     Déplace un email de INBOX vers un label Gmail (par défaut **ACQUÉREURS).
-    Version corrigée avec meilleure gestion encodage.
     """
     target_label = label or LABEL_ACQUEREURS
     
     try:
-        logger.info(f"📧 Connexion IMAP {IMAP_EMAIL}...")
+        logger.info(f"📧 Déplacement email vers {target_label}...")
         mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
         mail.login(IMAP_EMAIL, IMAP_PASSWORD)
+        mail.select("inbox")
         
-        # Sélectionner INBOX (majuscules pour Gmail)
-        status, count = mail.select('INBOX')
-        logger.info(f"📬 INBOX sélectionné, {count[0].decode()} messages")
-        
-        # Construire recherche IMAP
         search_parts = []
         if email_from:
-            # Nettoyer et échapper
-            clean_from = email_from.replace('"', '')
-            search_parts.append(f'FROM "{clean_from}"')
+            search_parts.append(f'FROM "{email_from}"')
         if subject_contains:
-            clean_subject = subject_contains.replace('"', '')
-            search_parts.append(f'SUBJECT "{clean_subject}"')
+            search_parts.append(f'SUBJECT "{subject_contains}"')
         
         if not search_parts:
             mail.logout()
             return {"success": False, "error": "Paramètre 'from' ou 'subject' requis"}
         
-        search_query = '(' + ' '.join(search_parts) + ')'
-        logger.info(f"🔍 Recherche: {search_query}")
-        
-        # Essayer avec charset UTF-8 puis sans
-        try:
-            status, messages = mail.search('UTF-8', search_query.encode('utf-8'))
-        except Exception as e:
-            logger.warning(f"UTF-8 search failed: {e}, trying without charset")
-            status, messages = mail.search(None, search_query)
-        
-        logger.info(f"📊 Search status: {status}, results: {messages}")
+        search_query = ' '.join(search_parts)
+        status, messages = mail.search(None, search_query)
         
         if status != 'OK' or not messages[0]:
             mail.logout()
-            return {"success": False, "moved": 0, "message": "Aucun email trouvé"}
+            return {"success": False, "moved": 0, "message": f"Aucun email trouvé"}
         
         email_ids = messages[0].split()
-        logger.info(f"📬 {len(email_ids)} email(s) trouvé(s)")
-        
         moved_count = 0
-        errors = []
         
-        # Traiter les emails (max 10)
-        for email_id in email_ids[-10:]:
+        for email_id in email_ids[-5:]:
             try:
-                # Gmail: copier vers label puis supprimer de INBOX
-                # Le label Gmail doit être exact
-                copy_result = mail.copy(email_id, target_label)
-                logger.info(f"  Copy {email_id} -> {target_label}: {copy_result}")
-                
+                # Encoder le label pour IMAP (UTF-7 modifié pour Gmail)
+                imap_label = target_label
+                # **ACQUÉREURS -> encodage IMAP UTF-7
+                if 'ACQUÉREURS' in target_label:
+                    imap_label = '**ACQU&AMk-REURS'
+                copy_result = mail.copy(email_id, imap_label)
                 if copy_result[0] == 'OK':
-                    # Marquer pour suppression de INBOX
                     mail.store(email_id, '+FLAGS', '\\Deleted')
                     moved_count += 1
-                else:
-                    errors.append(f"Copy failed: {copy_result}")
-                    
             except Exception as e:
-                errors.append(f"Email {email_id}: {str(e)}")
-                logger.warning(f"  ⚠️ Erreur: {e}")
+                logger.warning(f"Erreur email {email_id}: {e}")
                 continue
         
-        # Appliquer les suppressions
         mail.expunge()
         mail.logout()
         
-        result = {
+        return {
             "success": moved_count > 0,
             "moved": moved_count,
-            "total_found": len(email_ids),
             "label": target_label,
             "message": f"{moved_count} email(s) déplacé(s) vers {target_label}"
         }
         
-        if errors:
-            result["errors"] = errors
-        
-        logger.info(f"✅ {result['message']}")
-        return result
-        
-    except imaplib.IMAP4.error as e:
-        logger.error(f"❌ Erreur IMAP: {e}")
-        return {"success": False, "error": f"Erreur IMAP: {str(e)}"}
     except Exception as e:
         logger.error(f"❌ Erreur: {e}")
         return {"success": False, "error": str(e)}
