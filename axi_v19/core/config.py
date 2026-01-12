@@ -186,6 +186,7 @@ PUBLIC_ENDPOINTS = [
     "/email/move-acquereur",  # Déplacer email vers label (V19.5)
     "/emails/check",          # Vérifier nouveaux emails (V19.5)
     "/emails/status",         # Status email watcher (V19.5)
+    "/emails/debug",          # Debug IMAP (V19.5)
     "/trello/sync",          # Sync Trello -> v19_biens (V19.4)
     "/trello/match",         # Matching Biens -> Prospects (V19.4)
     "/trello/full",          # Sync + Match complet (V19.4)
