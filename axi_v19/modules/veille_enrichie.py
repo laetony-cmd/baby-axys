@@ -814,7 +814,7 @@ def creer_carte_trello_dpe(dpe_enrichi):
     card_url = card.get("url")
     
     # IMPORTANT: Attendre que le template Trello soit appliqué, puis écraser
-    time.sleep(0.5)  # Attendre 500ms
+    time.sleep(2)  # Attendre 2s que le template Butler soit appliqué
     
     # Mettre à jour la description (écrase le template) - en JSON
     update_url = f"https://api.trello.com/1/cards/{card_id}?key={TRELLO_KEY}&token={TRELLO_TOKEN}"
