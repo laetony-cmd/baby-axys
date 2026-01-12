@@ -249,7 +249,7 @@ class AxiV19:
         # VEILLES QUOTIDIENNES - Ajouté le 5 janvier 2026
         # =================================================================
         if VEILLE_OK:
-            from .modules.veille import run_veille_dpe, run_veille_concurrence
+            from .modules.veille import run_veille_concurrence  # run_veille_dpe supprimé
             
             # Veille Concurrence à 7h00 Paris
             self._scheduler.add_job(
@@ -262,16 +262,8 @@ class AxiV19:
             )
             logger.info("📡 Job Veille Concurrence programmé: 7h00 Paris")
             
-            # Veille DPE à 8h00 Paris
-            self._scheduler.add_job(
-                lambda: run_veille_dpe(db),
-                'cron',
-                hour=8,
-                minute=0,
-                id='veille_dpe_8h',
-                name='Veille DPE 8h Paris'
-            )
-            logger.info("🏠 Job Veille DPE programmé: 8h00 Paris")
+            # SUPPRIMÉ: Veille DPE 8h00 - remplacée par cron Railway /veille/dpe/enrichie à 01h00
+            # Modification du 12 janvier 2026
         
         # Email Watcher - Poll toutes les 5 minutes
         try:
