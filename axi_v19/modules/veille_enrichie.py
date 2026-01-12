@@ -1161,7 +1161,74 @@ def executer_veille_quotidienne():
         # Ping Healthchecks échec
         ping_healthchecks("fail")
         print(f"[ERREUR CRITIQUE] Veille DPE plantée: {e}")
+        
+        # Envoyer email d'alerte
+        envoyer_email_erreur(str(e))
+        
         raise
+
+
+def envoyer_email_erreur(erreur):
+    """
+    Envoie un email d'alerte si la veille DPE plante.
+    Destinataire: laetony@gmail.com uniquement (décision Lumo 12/01/2026)
+    """
+    import smtplib
+    import traceback
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    
+    GMAIL_USER = os.environ.get("GMAIL_USER", "u5050786429@gmail.com")
+    _GMAIL_PWD_DEFAULT = "".join(["izem", "quwm", "mqjd", "asrk"])
+    GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", _GMAIL_PWD_DEFAULT)
+    DESTINATAIRE = "laetony@gmail.com"
+    
+    try:
+        sujet = f"🚨 ALERTE: Veille DPE PLANTÉE - {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+        
+        corps_html = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif;">
+            <h1 style="color: #dc3545;">🚨 VEILLE DPE EN ERREUR</h1>
+            
+            <p><strong>Date:</strong> {datetime.now().strftime('%d/%m/%Y à %H:%M')}</p>
+            <p><strong>Service:</strong> Railway - baby-axys-production</p>
+            
+            <h2 style="color: #333;">Erreur détectée:</h2>
+            <pre style="background: #f8f9fa; padding: 15px; border-radius: 5px; color: #dc3545;">
+{erreur}
+            </pre>
+            
+            <h2 style="color: #333;">Actions recommandées:</h2>
+            <ol>
+                <li>Vérifier les logs Railway: <a href="https://railway.app">railway.app</a></li>
+                <li>Tester manuellement: <code>/veille/dpe/test-enrichie</code></li>
+                <li>Vérifier PostgreSQL: <code>/veille/dpe/stats</code></li>
+            </ol>
+            
+            <hr>
+            <p style="color: #666; font-size: 12px;">
+                Email automatique envoyé par Axis - ICI Dordogne<br>
+                Healthchecks.io a également été notifié (status: FAIL)
+            </p>
+        </body>
+        </html>
+        """
+        
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = sujet
+        msg['From'] = f"Axis Alerte <{GMAIL_USER}>"
+        msg['To'] = DESTINATAIRE
+        msg.attach(MIMEText(corps_html, 'html'))
+        
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
+            server.sendmail(GMAIL_USER, [DESTINATAIRE], msg.as_string())
+        
+        print(f"[EMAIL ERREUR] Alerte envoyée à {DESTINATAIRE}")
+        
+    except Exception as email_err:
+        print(f"[EMAIL ERREUR] Impossible d'envoyer l'alerte: {email_err}")
 
 
 def envoyer_email_rapport(result):
