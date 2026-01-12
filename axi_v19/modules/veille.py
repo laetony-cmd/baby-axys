@@ -33,6 +33,9 @@ GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "izemquwmmqjdasrk")
 EMAIL_TO = os.environ.get("EMAIL_TO", "agence@icidordogne.fr")
 EMAIL_CC = os.environ.get("EMAIL_CC", "laetony@gmail.com")
 
+# Healthchecks.io - Monitoring veille DPE Railway
+HEALTHCHECKS_VEILLE_URL = "https://hc-ping.com/e1ee556c-d0ae-4866-be19-465d8eea4c84"
+
 # Codes postaux surveillés
 CODES_POSTAUX = [
     "24260", "24480", "24150", "24510", "24220", "24620",  # Zone Le Bugue
@@ -511,6 +514,43 @@ def run_veille_concurrence(db=None):
 # REGISTRATION
 # =============================================================================
 
+def envoyer_email_alerte_veille(erreur):
+    """Envoie un email d'alerte quand la veille DPE plante."""
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = GMAIL_USER
+        msg['To'] = EMAIL_CC  # laetony@gmail.com
+        msg['Subject'] = "🚨 ALERTE - Veille DPE Railway PLANTÉE"
+        
+        body = f"""
+⚠️ ALERTE AUTOMATIQUE - VEILLE DPE
+
+La veille DPE enrichie a rencontré une erreur.
+
+📅 Date: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+❌ Erreur: {erreur}
+
+🔧 Action requise:
+1. Vérifier les logs Railway
+2. Relancer manuellement si besoin: /veille/dpe/enrichie
+
+--
+Axi ICI Dordogne - Monitoring automatique
+"""
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+        
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
+            server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
+            server.send_message(msg)
+        
+        logger.info(f"📧 Email alerte envoyé à {EMAIL_CC}")
+        return True
+    except Exception as e:
+        logger.error(f"Erreur envoi email alerte: {e}")
+        return False
+
+
 def register_veille_routes(server):
     """Enregistre les routes de veille sur le serveur."""
     
@@ -697,12 +737,24 @@ def register_veille_routes(server):
             return {"status": "error", "message": str(e)}
     
     def handle_veille_dpe_enrichie(query):
-        """Exécute la veille DPE enrichie (cron 1h00)."""
+        """Exécute la veille DPE enrichie (cron 1h00) avec monitoring Healthchecks."""
+        # Ping START pour signaler le début
         try:
-            import sys
-            
+            requests.get(f"{HEALTHCHECKS_VEILLE_URL}/start", timeout=10)
+        except:
+            pass  # Continue même si ping échoue
+        
+        try:
             from .veille_enrichie import executer_veille_quotidienne
             result = executer_veille_quotidienne()
+            
+            # Ping SUCCESS
+            try:
+                requests.get(HEALTHCHECKS_VEILLE_URL, timeout=10)
+                logger.info("✅ Healthchecks.io pingé (succès)")
+            except:
+                pass
+            
             return {
                 "status": "ok",
                 "nouveaux": result["stats"]["nouveaux"],
@@ -711,7 +763,21 @@ def register_veille_routes(server):
                 "timestamp": datetime.now().isoformat()
             }
         except Exception as e:
-            logger.error(f"Erreur veille enrichie: {e}")
+            logger.error(f"❌ Erreur veille enrichie: {e}")
+            
+            # Ping FAIL
+            try:
+                requests.get(f"{HEALTHCHECKS_VEILLE_URL}/fail", timeout=10)
+                logger.info("🔴 Healthchecks.io pingé (échec)")
+            except:
+                pass
+            
+            # Email d'alerte
+            try:
+                envoyer_email_alerte_veille(str(e))
+            except Exception as mail_err:
+                logger.error(f"Échec envoi email alerte: {mail_err}")
+            
             return {"status": "error", "message": str(e)}
     
     def handle_veille_dpe_test_enrichie(query):
