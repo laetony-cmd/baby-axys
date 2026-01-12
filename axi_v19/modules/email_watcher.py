@@ -325,7 +325,7 @@ def check_emails() -> List[Dict]:
         logger.info(f"📧 Connexion IMAP {IMAP_EMAIL}...")
         mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
         mail.login(IMAP_EMAIL, IMAP_PASSWORD)
-        mail.select("inbox")
+        mail.select("INBOX")
         
         # Chercher emails non lus
         status, messages = mail.search(None, "(UNSEEN)")
@@ -450,7 +450,7 @@ def move_email_to_label(email_from: str = '', subject_contains: str = '', label:
         logger.info(f"📧 Déplacement email vers {target_label}...")
         mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
         mail.login(IMAP_EMAIL, IMAP_PASSWORD)
-        mail.select("inbox")
+        mail.select("INBOX")
         
         search_parts = []
         if email_from:
