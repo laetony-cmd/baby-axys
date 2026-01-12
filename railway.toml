@@ -9,14 +9,14 @@ healthcheckPath = "/health"
 healthcheckTimeout = 120
 
 # Crons avec token de sécurité
+# Veille DPE Enrichie - 01:00 Paris (00:00 UTC)
 [[crons]]
 schedule = "0 0 * * *"
 endpoint = "/veille/dpe/enrichie?token=fa5e235b1eab41d4937f6cc9bf78abf8"
 
+# Veille Concurrence 16 agences - 07:00 Paris (06:00 UTC)
 [[crons]]
 schedule = "0 6 * * *"
 endpoint = "/run-veille-concurrence?token=fa5e235b1eab41d4937f6cc9bf78abf8"
 
-[[crons]]
-schedule = "0 7 * * *"
-endpoint = "/run-veille?token=fa5e235b1eab41d4937f6cc9bf78abf8"
+# SUPPRIMÉ: /run-veille (ancienne veille DPE) - remplacé par /veille/dpe/enrichie
