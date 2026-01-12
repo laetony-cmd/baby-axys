@@ -28,7 +28,7 @@ import ssl
 ETIQUETTES_DPE = ["A", "B", "C", "D", "E", "F", "G"]
 
 # Date de début de collecte (format YYYY-MM-DD)
-DATE_DEBUT_COLLECTE = "2026-01-01"
+DATE_DEBUT_COLLECTE = "2025-12-01"
 
 # Alertes email activées/désactivées
 ALERTES_EMAIL = False
