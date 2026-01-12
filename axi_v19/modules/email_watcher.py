@@ -48,74 +48,6 @@ PROCESSED_LABEL = "AXI_PROCESSED"
 # PARSERS EMAIL
 # =============================================================================
 
-
-# =============================================================================
-# DÉPLACEMENT EMAIL VIA MS-01
-# =============================================================================
-
-import requests
-
-def move_email_to_acquereurs_via_ms01(from_addr: str) -> bool:
-    """
-    Déplace un email vers **ACQUÉREURS via le MS-01.
-    Utilise l'agent PowerShell sur AXIS Station.
-    """
-    if not from_addr:
-        return False
-    
-    # Extraire un mot-clé de recherche du FROM
-    # Ex: "fafa via leboncoin <xxx@messagerie.leboncoin.fr>" -> "fafa"
-    # Ex: "SweepBright <noreply@sweepbright.com>" -> "sweepbright"
-    search_term = from_addr.lower()
-    
-    # Nettoyer pour extraire le nom ou domaine
-    if "<" in search_term:
-        # Prendre la partie avant le <
-        name_part = search_term.split("<")[0].strip()
-        if name_part:
-            # "fafa via leboncoin" -> "fafa"
-            search_term = name_part.split()[0] if name_part.split() else name_part
-        else:
-            # Prendre le domaine de l'email
-            email_part = search_term.split("<")[1].replace(">", "")
-            if "@" in email_part:
-                domain = email_part.split("@")[1].split(".")[0]
-                search_term = domain
-    
-    try:
-        logger.info(f"📧 Déplacement email via MS-01: {search_term}")
-        
-        # Appeler l'agent MS-01
-        response = requests.post(
-            "https://baby-axys-production.up.railway.app/agent/execute",
-            headers={
-                "X-Agent-Token": "ici-dordogne-2026",
-                "Content-Type": "application/json"
-            },
-            json={
-                "command": f'& "C:\\Users\\laeto\\AppData\\Local\\Programs\\Python\\Python312\\python.exe" C:\\axi-v19\\move_email.py {search_term}'
-            },
-            timeout=30
-        )
-        
-        if response.status_code == 200:
-            result = response.json()
-            value = result.get("result", {}).get("value", "")
-            if '"ok": true' in value or '"ok":true' in value:
-                logger.info(f"✅ Email déplacé vers **ACQUÉREURS")
-                return True
-            else:
-                logger.warning(f"⚠️ Déplacement email: {value}")
-                return False
-        else:
-            logger.error(f"❌ Erreur agent MS-01: {response.status_code}")
-            return False
-            
-    except Exception as e:
-        logger.error(f"❌ Erreur move_email_via_ms01: {e}")
-        return False
-
-
 def parse_leboncoin(body: str, subject: str) -> Optional[Dict]:
     """Parse un email Leboncoin et extrait les infos prospect."""
     try:
@@ -465,8 +397,6 @@ def process_new_emails() -> Dict:
             card_url = create_prospect_card(prospect)
             if card_url:
                 result["cards_created"] += 1
-                # Déplacer l'email vers **ACQUÉREURS via MS-01
-                move_email_to_acquereurs_via_ms01(prospect.get("raw_from", ""))
             else:
                 result["errors"].append(f"Échec création carte pour {prospect.get('email')}")
         
@@ -587,6 +517,55 @@ def move_email_to_label(email_from: str = '', subject_contains: str = '', label:
     except Exception as e:
         logger.error(f"❌ Erreur: {e}")
         return {"success": False, "error": str(e)}
+
+
+
+
+def debug_imap_search(query=None, body=None, headers=None) -> Tuple[int, Dict]:
+    """Debug: voir ce que contient INBOX via IMAP"""
+    try:
+        mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
+        mail.login(IMAP_EMAIL, IMAP_PASSWORD)
+        
+        # Lister les dossiers
+        status, folders = mail.list()
+        folder_names = [f.decode('utf-8', errors='ignore') for f in folders[:15]]
+        
+        # Sélectionner INBOX
+        status, count = mail.select('INBOX')
+        inbox_count = count[0].decode() if count else '0'
+        
+        # Chercher TOUS les emails
+        status, messages = mail.search(None, 'ALL')
+        all_ids = messages[0].split() if messages[0] else []
+        
+        # Récupérer les 5 derniers sujets/from
+        last_emails = []
+        for eid in all_ids[-5:]:
+            try:
+                status, data = mail.fetch(eid, '(BODY[HEADER.FIELDS (SUBJECT FROM)])')
+                if data and data[0]:
+                    header = data[0][1].decode('utf-8', errors='ignore')
+                    last_emails.append(header.strip()[:150])
+            except:
+                pass
+        
+        # Tester recherche "leboncoin"
+        status_lbc, msg_lbc = mail.search(None, 'FROM "leboncoin"')
+        lbc_count = len(msg_lbc[0].split()) if msg_lbc[0] else 0
+        
+        mail.logout()
+        
+        return 200, {
+            "inbox_total": inbox_count,
+            "all_emails_count": len(all_ids),
+            "last_5_emails": last_emails,
+            "search_leboncoin": lbc_count,
+            "folders_sample": folder_names[:10]
+        }
+        
+    except Exception as e:
+        return 500, {"error": str(e)}
 
 
 def handle_move_email(query=None, body=None, headers=None) -> Tuple[int, Dict]:
