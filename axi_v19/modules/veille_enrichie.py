@@ -61,7 +61,7 @@ TRELLO_JULIE_ID = "59db340040eb2c01fb7d4851"  # Conservé pour référence mais 
 
 # API ADEME
 ADEME_BASE_URL = "https://data.ademe.fr/data-fair/api/v1/datasets/dpe03existant/lines"
-ADEME_FIELDS = "numero_dpe,date_reception_dpe,adresse_brut,adresse_ban,code_postal_ban,nom_commune_ban,surface_habitable_logement,type_batiment,etiquette_dpe,conso_5_usages_par_m2_ep,etiquette_ges,emission_ges_5_usages_par_m2,_geopoint,annee_construction,cout_total_5_usages"
+ADEME_FIELDS = "numero_dpe,date_reception_dpe,date_visite_diagnostiqueur,adresse_brut,adresse_ban,code_postal_ban,nom_commune_ban,surface_habitable_logement,type_batiment,nombre_niveau_logement,periode_construction,annee_construction,etiquette_dpe,conso_5_usages_par_m2_ep,etiquette_ges,emission_ges_5_usages_par_m2,type_energie_principale_chauffage,cout_chauffage,cout_ecs,cout_total_5_usages,indicateur_confort_ete,_geopoint"
 
 # SSL context pour éviter les erreurs de certificat
 SSL_CONTEXT = ssl.create_default_context()
@@ -646,6 +646,14 @@ def enrichir_dpe(dpe_raw):
         "surface_m2": dpe_raw.get("surface_habitable_logement", 0),
         "type_batiment": dpe_raw.get("type_batiment", ""),
         "annee_construction": dpe_raw.get("annee_construction", ""),
+        "date_visite": dpe_raw.get("date_visite_diagnostiqueur", ""),
+        "periode_construction": dpe_raw.get("periode_construction", ""),
+        "nb_niveaux": dpe_raw.get("nombre_niveau_logement", ""),
+        "type_chauffage": dpe_raw.get("type_energie_principale_chauffage", ""),
+        "cout_chauffage": dpe_raw.get("cout_chauffage", 0),
+        "cout_ecs": dpe_raw.get("cout_ecs", 0),
+        "confort_ete": dpe_raw.get("indicateur_confort_ete", ""),
+        "geopoint": dpe_raw.get("_geopoint", ""),
         
         # DPE
         "dpe_lettre": dpe_raw.get("etiquette_dpe", ""),
@@ -709,19 +717,59 @@ def creer_carte_trello_dpe(dpe_enrichi):
     dvf_date = dpe_enrichi['dvf_date_derniere_vente'] or "Non trouvé"
     cout_energie = dpe_enrichi.get('cout_annuel_energie', 0) or 0
     
-    # Description
-    desc = f"""🔥 **PASSOIRE ÉNERGÉTIQUE {dpe_enrichi['dpe_lettre']}/{dpe_enrichi['ges_lettre']}**
+    # Préparer les valeurs enrichies
+    periode = dpe_enrichi.get('periode_construction', '')
+    if periode:
+        if 'avant 1948' in periode.lower():
+            periode_info = f"{periode} 🏛️ Charme/Ancien"
+        elif '1949' in periode or '1974' in periode or '1975' in periode:
+            periode_info = f"{periode} ⚠️ Travaux probables"
+        else:
+            periode_info = periode
+    else:
+        periode_info = "Non renseignée"
+    
+    chauffage = dpe_enrichi.get('type_chauffage', '')
+    chauffage_alerte = ""
+    if chauffage:
+        if 'fioul' in chauffage.lower() or 'fuel' in chauffage.lower():
+            chauffage_alerte = "🔴 FIOUL - Très motivé!"
+        elif 'lectri' in chauffage.lower():
+            chauffage_alerte = "🟠 Électrique"
+        elif 'gaz' in chauffage.lower():
+            chauffage_alerte = "🟡 Gaz"
+        else:
+            chauffage_alerte = ""
+    
+    cout_chauff = dpe_enrichi.get('cout_chauffage', 0) or 0
+    cout_ecs = dpe_enrichi.get('cout_ecs', 0) or 0
+    confort = dpe_enrichi.get('confort_ete', '')
+    nb_niveaux = dpe_enrichi.get('nb_niveaux', '')
+    date_visite = dpe_enrichi.get('date_visite', '')
+    
+    # Description enrichie
+    desc = f"""🔥 **PASSOIRE ÉNERGÉTIQUE {dpe_enrichi['dpe_lettre']}/{dpe_enrichi['ges_lettre']}** {chauffage_alerte}
 
 📍 **Adresse** : {dpe_enrichi['adresse']}
 📮 **Code postal** : {dpe_enrichi['code_postal']} {dpe_enrichi['commune']}
-📐 **Surface** : {dpe_enrichi['surface_m2']} m²
-🏠 **Type** : {dpe_enrichi['type_batiment']}
-🏗️ **Année construction** : {dpe_enrichi['annee_construction']}
 
-⚡ **Consommation énergétique** :
+🏠 **Caractéristiques du bien** :
+- Surface : **{dpe_enrichi['surface_m2']} m²**
+- Type : {dpe_enrichi['type_batiment']}
+- Niveaux : {nb_niveaux}
+- Période : {periode_info}
+- Année : {dpe_enrichi['annee_construction']}
+
+⚡ **Performance énergétique** :
 - DPE : **{dpe_enrichi['dpe_lettre']}** ({dpe_enrichi['dpe_valeur']} kWh/m²/an)
 - GES : **{dpe_enrichi['ges_lettre']}** ({dpe_enrichi['ges_valeur']} kg CO₂/m²/an)
-- Coût annuel estimé : **{cout_energie:.0f} €**
+- Chauffage : {chauffage}
+- Confort été : {confort}
+
+💸 **Coûts annuels énergie** :
+- Chauffage : **{cout_chauff:.0f} €**
+- Eau chaude : **{cout_ecs:.0f} €**
+- **TOTAL : {cout_energie:.0f} €/an**
 
 📍 [Voir sur Google Maps]({dpe_enrichi['lien_maps']})
 🛣️ [Voir Street View]({dpe_enrichi['lien_streetview']})
@@ -735,6 +783,7 @@ def creer_carte_trello_dpe(dpe_enrichi):
 ⚡ **Priorité** : **{dpe_enrichi['priorite']}** ({', '.join(dpe_enrichi['priorite_raisons'])})
 
 ---
+📅 Visite diagnostiqueur : {date_visite}
 📅 DPE reçu le : {dpe_enrichi['date_reception']}
 🔢 N° DPE : {dpe_enrichi['numero_dpe']}
 🤖 *Source : Veille DPE ADEME - Axis*
