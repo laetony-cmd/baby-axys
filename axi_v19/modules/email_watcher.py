@@ -435,6 +435,7 @@ def handle_email_status(params: Dict) -> Tuple[int, Dict]:
 # MOVE EMAIL TO LABEL (ajouté 12/01/2026)
 # =============================================================================
 
+EMAIL_WATCHER_VERSION = "V5-12JAN2026-0730"
 LABEL_ACQUEREURS = "**ACQUÉREURS"
 # Version encodée UTF-7 pour IMAP
 LABEL_ACQUEREURS_IMAP = "&ACoAKg-ACQ-U&AOk-REURS"  # **ACQUÉREURS en UTF-7 modifié
@@ -501,6 +502,7 @@ def move_email_to_label(email_from: str = '', subject_contains: str = '', label:
         mail.logout()
         
         result = {
+            "version": EMAIL_WATCHER_VERSION,
             "success": moved_count > 0,
             "moved": moved_count,
             "total_found": len(email_ids),
