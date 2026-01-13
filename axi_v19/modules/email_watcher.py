@@ -872,3 +872,119 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     result = process_new_emails()
     print(json.dumps(result, indent=2, ensure_ascii=False))
+
+
+# =============================================================================
+# SCAN ALL EMAILS (TEST ENDPOINT)
+# =============================================================================
+
+def scan_all_emails_in_inbox() -> List[Dict]:
+    """
+    Scanne TOUS les emails de INBOX (pas seulement UNSEEN).
+    Retourne les prospects détectés SANS créer de cartes.
+    Pour test uniquement.
+    """
+    prospects = []
+    
+    try:
+        logger.info(f"📧 [SCAN-ALL] Connexion IMAP {IMAP_EMAIL}...")
+        mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
+        mail.login(IMAP_EMAIL, IMAP_PASSWORD)
+        mail.select("INBOX")
+        
+        # TOUS les emails (pas seulement UNSEEN)
+        status, messages = mail.search(None, "ALL")
+        email_ids = messages[0].split() if messages[0] else []
+        
+        logger.info(f"📬 [SCAN-ALL] {len(email_ids)} emails dans INBOX")
+        
+        for mail_id in email_ids:
+            try:
+                status, msg_data = mail.fetch(mail_id, "(RFC822)")
+                
+                # Vérifier si lu ou non
+                flags_data = mail.fetch(mail_id, "(FLAGS)")
+                is_seen = b"\\Seen" in flags_data[1][0] if flags_data[1] else False
+                
+                for response_part in msg_data:
+                    if isinstance(response_part, tuple):
+                        msg = email.message_from_bytes(response_part[1])
+                        
+                        subject_raw = msg.get("Subject", "")
+                        subject, encoding = decode_header(subject_raw)[0]
+                        if isinstance(subject, bytes):
+                            subject = subject.decode(encoding or "utf-8", errors='ignore')
+                        
+                        from_addr = msg.get("From", "")
+                        date_str = msg.get("Date", "")
+                        body = get_email_body(msg)
+                        
+                        # Détecter le type
+                        prospect_type = "unknown"
+                        prospect = None
+                        
+                        if "sweepbright" in from_addr.lower() or "noreply@sweepbright" in from_addr.lower():
+                            prospect_type = "sweepbright"
+                            prospect = parse_sweepbright(body, subject)
+                        elif "leboncoin" in from_addr.lower() or "leboncoin" in subject.lower():
+                            prospect_type = "leboncoin"
+                            prospect = parse_leboncoin(body, subject)
+                        elif "seloger" in from_addr.lower() or "seloger" in subject.lower():
+                            prospect_type = "seloger"
+                            prospect = parse_seloger(body, subject)
+                        elif any(kw in subject.lower() for kw in ["contact", "demande", "visite", "information", "intéressé"]):
+                            prospect_type = "generic"
+                            prospect = parse_generic(body, subject, from_addr)
+                        
+                        email_info = {
+                            "mail_id": mail_id.decode(),
+                            "subject": subject,
+                            "from": from_addr,
+                            "date": date_str,
+                            "is_read": is_seen,
+                            "prospect_type": prospect_type,
+                            "body_preview": body[:500] if body else "",
+                            "parsed_data": prospect
+                        }
+                        
+                        prospects.append(email_info)
+                        
+                        if prospect:
+                            logger.info(f"🔥 [SCAN-ALL] Prospect détecté: {prospect.get('nom', prospect.get('email', 'inconnu'))} ({prospect_type})")
+                        
+            except Exception as e:
+                logger.error(f"[SCAN-ALL] Erreur email {mail_id}: {e}")
+                continue
+        
+        mail.logout()
+        
+    except Exception as e:
+        logger.error(f"❌ [SCAN-ALL] Erreur IMAP: {e}")
+    
+    return prospects
+
+
+def handle_scan_all(query=None, body=None, headers=None) -> Tuple[int, Dict]:
+    """
+    Handler pour endpoint GET /emails/scan-all
+    Scanne TOUS les emails, retourne les prospects détectés SANS créer de cartes.
+    """
+    try:
+        prospects = scan_all_emails_in_inbox()
+        
+        # Filtrer ceux qui sont des prospects valides
+        valid_prospects = [p for p in prospects if p.get("parsed_data")]
+        
+        return 200, {
+            "version": EMAIL_WATCHER_VERSION,
+            "endpoint": "scan-all (TEST)",
+            "timestamp": datetime.now().isoformat(),
+            "total_emails": len(prospects),
+            "prospects_detected": len(valid_prospects),
+            "emails": prospects,
+            "note": "Mode TEST - Aucune carte créée"
+        }
+    
+    except Exception as e:
+        return 500, {"error": str(e)}
+
