@@ -354,8 +354,8 @@ def create_enriched_prospect_card(prospect: Dict) -> Optional[Dict]:
     
     logger.info(f"✅ Carte créée: {card_url}")
     
-    # 6b. ATTENDRE puis PUT pour écraser le template de liste avec la vraie description
-    time.sleep(1)
+    # 6b. ATTENDRE que Butler finisse puis PUT pour écraser avec la vraie description
+    time.sleep(5)  # Butler applique son template, on attend qu'il finisse
     put_result = trello_put(f"/cards/{card_id}", {"desc": description})
     if put_result:
         logger.info(f"   📝 Description mise à jour via PUT")
