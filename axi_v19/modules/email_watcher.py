@@ -1251,3 +1251,630 @@ def handle_test_create_card(query=None, body=None, headers=None) -> Tuple[int, D
     status_code = 200 if result.get("card_created") else 400
     return status_code, result
 
+
+
+# =============================================================================
+# V2 FUNCTIONS - WORKFLOW AMÉLIORÉ (13/01/2026)
+# =============================================================================
+# Ces fonctions sont NOUVELLES et ne modifient PAS le code existant.
+# Elles seront activées après validation via l'endpoint /emails/v2/test
+# =============================================================================
+
+def v2_check_prospect_exists(nom: str, email_addr: str = "") -> Dict:
+    """
+    V2: Vérifie si un prospect existe déjà dans Trello.
+    NOUVEAU: Distingue carte ACTIVE vs ARCHIVÉE.
+    
+    Returns:
+        {
+            "found": bool,
+            "status": "active" | "archived" | "not_found",
+            "card_id": str | None,
+            "card_url": str | None,
+            "card_name": str | None,
+            "board_id": str | None
+        }
+    """
+    result = {
+        "found": False,
+        "status": "not_found",
+        "card_id": None,
+        "card_url": None,
+        "card_name": None,
+        "board_id": None
+    }
+    
+    search_terms = []
+    if nom:
+        search_terms.append(nom.upper())
+    if email_addr and "@" in email_addr:
+        search_terms.append(email_addr.split("@")[0])
+    
+    if not search_terms:
+        return result
+    
+    query = " ".join(search_terms[:2])
+    logger.info(f"🔍 [V2] Recherche prospect: '{query}'")
+    
+    # Chercher avec cards:all pour inclure les archivées
+    search_result = trello_get(
+        f"/search?query={urllib.parse.quote(query)}&modelTypes=cards"
+        f"&card_fields=name,shortUrl,idBoard,closed&cards_limit=20"
+    )
+    
+    if not search_result or not search_result.get("cards"):
+        logger.info(f"  → Aucun résultat")
+        return result
+    
+    nom_upper = nom.upper() if nom else ""
+    
+    for card in search_result.get("cards", []):
+        card_name = card.get("name", "").upper()
+        
+        if nom_upper and nom_upper in card_name:
+            result["found"] = True
+            result["card_id"] = card.get("id")
+            result["card_url"] = card.get("shortUrl")
+            result["card_name"] = card.get("name")
+            result["board_id"] = card.get("idBoard")
+            
+            if card.get("closed"):
+                result["status"] = "archived"
+                logger.info(f"  → ARCHIVÉE trouvée: {card.get('name')}")
+            else:
+                result["status"] = "active"
+                logger.info(f"  → ACTIVE trouvée: {card.get('name')}")
+            
+            return result
+    
+    logger.info(f"  → Aucune correspondance exacte")
+    return result
+
+
+def v2_unarchive_and_update(card_id: str, new_info: Dict) -> Dict:
+    """
+    V2: Désarchive une carte et ajoute les nouvelles infos.
+    
+    Args:
+        card_id: ID de la carte archivée
+        new_info: Nouvelles infos du prospect (email, tel, message, etc.)
+    
+    Returns:
+        {"success": bool, "card_url": str, "action": str}
+    """
+    logger.info(f"🔄 [V2] Désarchivage carte {card_id}")
+    
+    # 1. Désarchiver la carte
+    unarchive_result = trello_put(f"/cards/{card_id}", {"closed": "false"})
+    
+    if not unarchive_result:
+        logger.error(f"  → Échec désarchivage")
+        return {"success": False, "error": "Échec désarchivage"}
+    
+    logger.info(f"  → Carte désarchivée")
+    
+    # 2. Ajouter un commentaire avec les nouvelles infos
+    comment_parts = [f"📩 **Nouvelle demande reçue le {datetime.now().strftime('%d/%m/%Y %H:%M')}**"]
+    comment_parts.append("")
+    
+    if new_info.get("source"):
+        comment_parts.append(f"**Source:** {new_info.get('source')}")
+    if new_info.get("email"):
+        comment_parts.append(f"**Email:** {new_info.get('email')}")
+    if new_info.get("tel"):
+        comment_parts.append(f"**Tél:** {new_info.get('tel')}")
+    if new_info.get("message"):
+        comment_parts.append(f"**Message:** {new_info.get('message')}")
+    if new_info.get("bien_ville"):
+        comment_parts.append(f"**Bien demandé:** {new_info.get('bien_ville')}")
+    if new_info.get("bien_prix"):
+        comment_parts.append(f"**Prix:** {new_info.get('bien_prix')} €")
+    
+    comment_parts.append("")
+    comment_parts.append("*Carte désarchivée automatiquement par Axi*")
+    
+    comment_text = "\n".join(comment_parts)
+    comment_result = trello_post(f"/cards/{card_id}/actions/comments", {"text": comment_text})
+    
+    if comment_result:
+        logger.info(f"  → Commentaire ajouté")
+    
+    # 3. Remettre le label "Pas traité"
+    trello_post(f"/cards/{card_id}/idLabels", {"value": LABEL_PAS_TRAITE})
+    
+    return {
+        "success": True,
+        "card_id": card_id,
+        "card_url": unarchive_result.get("shortUrl"),
+        "action": "unarchived_and_updated"
+    }
+
+
+def v2_search_property_on_site(ville: str, prix: str = None) -> Optional[Dict]:
+    """
+    V2: Recherche un bien sur icidordogne.fr par ville et prix.
+    Retourne la référence du bien si trouvé.
+    
+    Args:
+        ville: Nom de la ville
+        prix: Prix approximatif (optionnel)
+    
+    Returns:
+        {
+            "found": bool,
+            "reference": str | None,
+            "url": str | None,
+            "title": str | None
+        }
+    """
+    result = {
+        "found": False,
+        "reference": None,
+        "url": None,
+        "title": None
+    }
+    
+    if not ville:
+        return result
+    
+    logger.info(f"🌐 [V2] Recherche sur icidordogne.fr: ville={ville}, prix={prix}")
+    
+    # Construire l'URL de recherche
+    search_url = f"https://www.icidordogne.fr/?s={urllib.parse.quote(ville)}"
+    
+    try:
+        req = urllib.request.Request(search_url, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        })
+        
+        with urllib.request.urlopen(req, timeout=15) as response:
+            html_content = response.read().decode('utf-8', errors='ignore')
+        
+        # Chercher les références de biens (format: REF-XXXXX ou juste des nombres)
+        # Pattern pour trouver les liens de biens
+        bien_links = re.findall(r'href="(https://www\.icidordogne\.fr/[^"]+)"[^>]*>([^<]+)</a>', html_content)
+        
+        # Chercher les références SweepBright (5 chiffres)
+        references = re.findall(r'\b(\d{5})\b', html_content)
+        
+        if bien_links:
+            # Prendre le premier lien qui ressemble à un bien
+            for link, title in bien_links:
+                if ville.lower() in link.lower() or ville.lower() in title.lower():
+                    result["found"] = True
+                    result["url"] = link
+                    result["title"] = title.strip()
+                    
+                    # Chercher la référence dans le lien ou le titre
+                    ref_match = re.search(r'\b(\d{5})\b', link + " " + title)
+                    if ref_match:
+                        result["reference"] = ref_match.group(1)
+                    
+                    logger.info(f"  → Trouvé: {title[:50]} - Ref: {result['reference']}")
+                    return result
+        
+        # Fallback: si on a trouvé des références
+        if references:
+            result["reference"] = references[0]
+            result["url"] = search_url
+            logger.info(f"  → Référence possible trouvée: {references[0]}")
+            return result
+        
+        logger.info(f"  → Aucun bien trouvé sur le site")
+        
+    except Exception as e:
+        logger.error(f"  → Erreur scraping: {e}")
+    
+    return result
+
+
+def v2_search_property_all_boards(reference: str = None, ville: str = None, prix: str = None) -> Optional[Dict]:
+    """
+    V2: Recherche un bien sur Trello - d'abord board BIENS, puis TOUS les boards.
+    
+    Args:
+        reference: Référence SweepBright (prioritaire)
+        ville: Nom de la ville (fallback)
+        prix: Prix (pour affiner)
+    
+    Returns:
+        {
+            "found": bool,
+            "card_id": str | None,
+            "card_url": str | None,
+            "card_name": str | None,
+            "members": list,
+            "board_name": str | None
+        }
+    """
+    result = {
+        "found": False,
+        "card_id": None,
+        "card_url": None,
+        "card_name": None,
+        "members": [],
+        "board_name": None
+    }
+    
+    search_query = reference if reference else ville
+    if not search_query:
+        return result
+    
+    logger.info(f"🏠 [V2] Recherche bien Trello: query='{search_query}'")
+    
+    # Étape 1: Chercher sur le board BIENS
+    search_result = trello_get(
+        f"/search?query={urllib.parse.quote(search_query)}"
+        f"&modelTypes=cards"
+        f"&board_ids={BOARD_BIENS}"
+        f"&card_fields=name,shortUrl,idMembers,closed,idBoard"
+    )
+    
+    if search_result and search_result.get("cards"):
+        for card in search_result.get("cards", []):
+            if not card.get("closed"):
+                result["found"] = True
+                result["card_id"] = card.get("id")
+                result["card_url"] = card.get("shortUrl")
+                result["card_name"] = card.get("name")
+                result["members"] = card.get("idMembers", [])
+                result["board_name"] = "BIENS"
+                logger.info(f"  → Trouvé sur BIENS: {card.get('name')[:50]}")
+                return result
+    
+    # Étape 2: Si pas trouvé, chercher sur TOUS les boards
+    logger.info(f"  → Pas sur BIENS, recherche sur tous les boards...")
+    
+    search_all = trello_get(
+        f"/search?query={urllib.parse.quote(search_query)}"
+        f"&modelTypes=cards"
+        f"&card_fields=name,shortUrl,idMembers,closed,idBoard"
+        f"&cards_limit=20"
+    )
+    
+    if search_all and search_all.get("cards"):
+        for card in search_all.get("cards", []):
+            if not card.get("closed"):
+                result["found"] = True
+                result["card_id"] = card.get("id")
+                result["card_url"] = card.get("shortUrl")
+                result["card_name"] = card.get("name")
+                result["members"] = card.get("idMembers", [])
+                result["board_name"] = f"Board {card.get('idBoard')}"
+                logger.info(f"  → Trouvé sur autre board: {card.get('name')[:50]}")
+                return result
+    
+    logger.info(f"  → Bien non trouvé sur Trello")
+    return result
+
+
+def v2_format_card_name(nom: str, tel: str = None) -> str:
+    """
+    V2: Formate le nom de la carte avec téléphone si présent.
+    Exemple: "DUPONT Jean - 0612345678"
+    
+    Args:
+        nom: Nom du prospect (déjà formaté "NOM Prénom")
+        tel: Numéro de téléphone (optionnel)
+    
+    Returns:
+        Nom formaté pour la carte
+    """
+    if not nom:
+        return "PROSPECT"
+    
+    # Nettoyer le nom
+    card_name = clean_html_entities(nom)
+    card_name = format_prospect_name(card_name)
+    
+    # Ajouter le téléphone si présent
+    if tel:
+        # Nettoyer le numéro
+        tel_clean = re.sub(r'[^\d+]', '', tel)
+        if len(tel_clean) >= 10:
+            card_name = f"{card_name} - {tel_clean}"
+    
+    # Limiter à 100 caractères
+    if len(card_name) > 100:
+        card_name = card_name[:97] + "..."
+    
+    return card_name
+
+
+def v2_create_prospect_card(prospect: Dict, dry_run: bool = False) -> Dict:
+    """
+    V2: Workflow complet de création de carte prospect.
+    
+    NOUVEAU:
+    - Gestion carte archivée (désarchiver + update)
+    - Recherche bien sur site AVANT Trello
+    - Recherche sur tous les boards si pas sur BIENS
+    - Téléphone dans le nom de carte
+    
+    Args:
+        prospect: Données du prospect parsées
+        dry_run: Si True, simule sans créer réellement
+    
+    Returns:
+        Résultat de la création
+    """
+    result = {
+        "version": "V2",
+        "timestamp": datetime.now().isoformat(),
+        "dry_run": dry_run,
+        "action": None,
+        "card_id": None,
+        "card_url": None,
+        "card_name": None,
+        "steps": []
+    }
+    
+    nom = prospect.get("nom", "")
+    email_addr = prospect.get("email", "")
+    tel = prospect.get("tel", "")
+    
+    # ÉTAPE C: Vérification doublon
+    result["steps"].append("C. Vérification doublon")
+    existing = v2_check_prospect_exists(nom, email_addr)
+    
+    if existing["found"]:
+        if existing["status"] == "active":
+            # C2: Carte active → STOP
+            result["action"] = "stopped_duplicate_active"
+            result["card_url"] = existing["card_url"]
+            result["steps"].append(f"  → Carte ACTIVE trouvée: {existing['card_url']}")
+            logger.info(f"⛔ [V2] Doublon actif, création annulée")
+            return result
+        
+        elif existing["status"] == "archived":
+            # C3: Carte archivée → Désarchiver + Update
+            result["steps"].append(f"  → Carte ARCHIVÉE trouvée, désarchivage...")
+            
+            if dry_run:
+                result["action"] = "would_unarchive"
+                result["card_url"] = existing["card_url"]
+                result["steps"].append(f"  → [DRY-RUN] Aurait désarchivé: {existing['card_url']}")
+                return result
+            
+            unarchive_result = v2_unarchive_and_update(existing["card_id"], {
+                "source": prospect.get("source"),
+                "email": email_addr,
+                "tel": tel,
+                "message": prospect.get("message"),
+                "bien_ville": prospect.get("ville"),
+                "bien_prix": prospect.get("bien_prix")
+            })
+            
+            result["action"] = "unarchived"
+            result["card_id"] = existing["card_id"]
+            result["card_url"] = unarchive_result.get("card_url")
+            result["steps"].append(f"  → Carte désarchivée et mise à jour")
+            return result
+    
+    result["steps"].append("  → Aucun doublon, création nouvelle carte")
+    
+    # ÉTAPE D: Recherche du bien
+    result["steps"].append("D. Recherche du bien")
+    
+    ville = prospect.get("ville")
+    prix = prospect.get("bien_prix")
+    
+    # D2: Chercher sur icidordogne.fr d'abord
+    site_result = v2_search_property_on_site(ville, prix)
+    result["steps"].append(f"  D2. Site icidordogne.fr: {'trouvé' if site_result['found'] else 'non trouvé'}")
+    
+    reference = site_result.get("reference")
+    site_url = site_result.get("url")
+    
+    # D3: Chercher sur Trello (BIENS puis tous)
+    trello_bien = v2_search_property_all_boards(reference, ville, prix)
+    result["steps"].append(f"  D3. Trello: {'trouvé sur ' + trello_bien.get('board_name', '?') if trello_bien['found'] else 'non trouvé'}")
+    
+    # ÉTAPE E: Préparation carte
+    result["steps"].append("E. Préparation carte")
+    
+    # E1: Nom de la carte avec téléphone
+    if not nom:
+        raw_from = prospect.get("raw_from", "")
+        nom = extract_name_from_header(raw_from)
+    
+    card_name = v2_format_card_name(nom, tel)
+    result["card_name"] = card_name
+    result["steps"].append(f"  E1. Nom: {card_name}")
+    
+    # E2: Description
+    desc_parts = ["**Contact**"]
+    desc_parts.append(f"- Tél : {tel or '-'}")
+    desc_parts.append(f"- Email : {email_addr or '-'}")
+    desc_parts.append(f"- Source : {prospect.get('source', '-')}")
+    desc_parts.append("")
+    
+    desc_parts.append("**Bien demandé**")
+    if ville:
+        desc_parts.append(f"- Ville : {ville}")
+    if prix:
+        desc_parts.append(f"- Prix : {prix} €")
+    if trello_bien["found"]:
+        desc_parts.append(f"- 🔗 Carte Trello bien : {trello_bien['card_url']}")
+    if site_url:
+        desc_parts.append(f"- 🌐 Site ICI Dordogne : {site_url}")
+    
+    desc_parts.append("")
+    desc_parts.append("---")
+    desc_parts.append(f"*Créé automatiquement par Axi V2 le {datetime.now().strftime('%d/%m/%Y %H:%M')}*")
+    
+    description = "\n".join(desc_parts)
+    
+    # E3: Membres
+    members_to_assign = [JULIE_ID]
+    if trello_bien["found"] and trello_bien.get("members"):
+        for m in trello_bien["members"]:
+            if m not in members_to_assign:
+                members_to_assign.append(m)
+    
+    result["steps"].append(f"  E3. Membres: {len(members_to_assign)}")
+    
+    if dry_run:
+        result["action"] = "would_create"
+        result["steps"].append("  [DRY-RUN] Aurait créé la carte")
+        return result
+    
+    # ÉTAPE F: Création carte
+    result["steps"].append("F. Création carte")
+    
+    # F1: POST sans description
+    card_data = {
+        "idList": LIST_SUIVI_CLIENTS,
+        "name": card_name,
+        "pos": "top",
+        "idMembers": ",".join(members_to_assign),
+        "idLabels": f"{LABEL_PAS_SWEEPBRIGHT},{LABEL_PAS_TRAITE}"
+    }
+    
+    card_result = trello_post("/cards", card_data)
+    
+    if not card_result:
+        result["action"] = "error"
+        result["steps"].append("  → Échec création carte")
+        return result
+    
+    card_id = card_result.get("id")
+    card_url = card_result.get("url")
+    result["card_id"] = card_id
+    result["card_url"] = card_url
+    result["steps"].append(f"  F1. Carte créée: {card_url}")
+    
+    # F2: Attendre Butler
+    time.sleep(5)
+    result["steps"].append("  F2. Attente Butler (5s)")
+    
+    # F3: PUT description
+    trello_put(f"/cards/{card_id}", {"desc": description})
+    result["steps"].append("  F3. Description mise à jour")
+    
+    # ÉTAPE G: Enrichissement
+    result["steps"].append("G. Enrichissement")
+    
+    # G1: Commentaire avec message
+    message = prospect.get("message")
+    if message:
+        comment_text = f"📩 **Message du prospect:**\n\n{message}"
+        trello_post(f"/cards/{card_id}/actions/comments", {"text": comment_text})
+        result["steps"].append("  G1. Commentaire ajouté")
+    
+    # G2-G3: Checklists
+    add_checklists(card_id)
+    result["steps"].append("  G2-G3. Checklists ajoutées")
+    
+    result["action"] = "created"
+    result["steps"].append("H. Terminé ✅")
+    
+    logger.info(f"✅ [V2] Carte créée: {card_url}")
+    return result
+
+
+def handle_v2_test(query=None, body=None, headers=None) -> Tuple[int, Dict]:
+    """
+    Handler pour endpoint GET /emails/v2/test
+    Teste le workflow V2 avec le dernier email de INBOX.
+    
+    Params:
+        ?dry_run=true  → Simule sans créer
+        ?folder=INBOX  → Dossier à scanner
+    """
+    dry_run = False
+    folder = "INBOX"
+    
+    if query:
+        if 'dry_run' in query:
+            dry_run = query['dry_run'][0].lower() == 'true' if isinstance(query['dry_run'], list) else query['dry_run'].lower() == 'true'
+        if 'folder' in query:
+            folder = query['folder'][0] if isinstance(query['folder'], list) else query['folder']
+    
+    result = {
+        "version": "V2 TEST",
+        "timestamp": datetime.now().isoformat(),
+        "dry_run": dry_run,
+        "folder": folder,
+        "email_found": None,
+        "workflow_result": None,
+        "errors": []
+    }
+    
+    try:
+        # Scanner le dossier
+        logger.info(f"📧 [V2 TEST] Scan {folder}, dry_run={dry_run}")
+        
+        mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
+        mail.login(IMAP_EMAIL, IMAP_PASSWORD)
+        mail.select(folder)
+        
+        status, messages = mail.search(None, "ALL")
+        email_ids = messages[0].split() if messages[0] else []
+        
+        if not email_ids:
+            mail.logout()
+            result["errors"].append("Aucun email dans le dossier")
+            return 400, result
+        
+        # Prendre le dernier email
+        mail_id = email_ids[-1]
+        status, msg_data = mail.fetch(mail_id, "(RFC822)")
+        
+        for response_part in msg_data:
+            if isinstance(response_part, tuple):
+                msg = email.message_from_bytes(response_part[1])
+                
+                subject_raw = msg.get("Subject", "")
+                subject, encoding = decode_header(subject_raw)[0]
+                if isinstance(subject, bytes):
+                    subject = subject.decode(encoding or "utf-8", errors='ignore')
+                
+                # Ignorer les réponses
+                if is_reply_email(subject):
+                    mail.logout()
+                    result["errors"].append(f"Email ignoré (réponse): {subject[:50]}")
+                    return 400, result
+                
+                from_addr = msg.get("From", "")
+                body_text = get_email_body(msg)
+                
+                result["email_found"] = {
+                    "subject": subject,
+                    "from": from_addr
+                }
+                
+                # Parser l'email
+                prospect = None
+                if "sweepbright" in from_addr.lower():
+                    prospect = parse_sweepbright(body_text, subject)
+                elif "leboncoin" in from_addr.lower() or "leboncoin" in subject.lower():
+                    prospect = parse_leboncoin(body_text, subject)
+                elif "seloger" in from_addr.lower():
+                    prospect = parse_seloger(body_text, subject)
+                else:
+                    prospect = parse_generic(body_text, subject, from_addr)
+                
+                if not prospect:
+                    mail.logout()
+                    result["errors"].append("Impossible de parser l'email")
+                    return 400, result
+                
+                prospect["raw_subject"] = subject
+                prospect["raw_from"] = from_addr
+                
+                # Exécuter le workflow V2
+                workflow_result = v2_create_prospect_card(prospect, dry_run=dry_run)
+                result["workflow_result"] = workflow_result
+                
+                mail.logout()
+                return 200, result
+        
+        mail.logout()
+        result["errors"].append("Erreur lecture email")
+        return 500, result
+        
+    except Exception as e:
+        result["errors"].append(str(e))
+        return 500, result
+
