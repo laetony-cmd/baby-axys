@@ -28,6 +28,7 @@ import email
 import logging
 import urllib.request
 import urllib.parse
+import time
 from email.header import decode_header
 from datetime import datetime
 from typing import Optional, List, Dict, Tuple
@@ -110,6 +111,11 @@ def trello_get(endpoint: str) -> Optional[dict]:
 def trello_post(endpoint: str, data: dict) -> Optional[dict]:
     """POST request vers l'API Trello."""
     return trello_request("POST", endpoint, data)
+
+
+def trello_put(endpoint: str, data: dict) -> Optional[dict]:
+    """PUT request vers l'API Trello."""
+    return trello_request("PUT", endpoint, data)
 
 
 # =============================================================================
@@ -323,18 +329,17 @@ def create_enriched_prospect_card(prospect: Dict) -> Optional[Dict]:
             if member_id not in members_to_assign:
                 members_to_assign.append(member_id)
     
-    # 6. Créer la carte
+    # 6. Créer la carte (SANS description - sera écrasée par template de liste)
     card_data = {
         "idList": LIST_SUIVI_CLIENTS,
         "name": card_name,
-        "desc": description,
         "pos": "top",
         "idMembers": ",".join(members_to_assign),
         "idLabels": f"{LABEL_PAS_SWEEPBRIGHT},{LABEL_PAS_TRAITE}"
     }
     
     logger.info(f"📝 Création carte: {card_name}")
-    logger.info(f"   Liste: SUIVI CLIENTS ACTIFS")
+    logger.info(f"   Liste: TEST ACQUÉREURS (Pros LUDO)")
     logger.info(f"   Membres: {len(members_to_assign)}")
     logger.info(f"   Labels: Pas dans Sweepbright, Pas traité")
     
@@ -348,6 +353,14 @@ def create_enriched_prospect_card(prospect: Dict) -> Optional[Dict]:
     card_url = card_result.get("url")
     
     logger.info(f"✅ Carte créée: {card_url}")
+    
+    # 6b. ATTENDRE puis PUT pour écraser le template de liste avec la vraie description
+    time.sleep(1)
+    put_result = trello_put(f"/cards/{card_id}", {"desc": description})
+    if put_result:
+        logger.info(f"   📝 Description mise à jour via PUT")
+    else:
+        logger.warning(f"   ⚠️ Échec PUT description")
     
     # 7. Ajouter le message en COMMENTAIRE
     message = prospect.get("message")
