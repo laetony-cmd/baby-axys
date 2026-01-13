@@ -284,15 +284,34 @@ def create_enriched_prospect_card(prospect: Dict) -> Optional[Dict]:
     site_url = find_property_on_website(ville)
     
     # 3. Construire le nom de la carte
+    # Essayer d'extraire le nom du champ From si le parsing a échoué
+    if not nom or len(nom) > 50:
+        # Essayer d'extraire du From: "Prénom NOM <email@example.com>"
+        raw_from = prospect.get("raw_from", "")
+        from_match = re.match(r'^([^<]+)<', raw_from)
+        if from_match:
+            nom = from_match.group(1).strip()
+        elif not nom:
+            nom = ""
+    
+    # Nettoyer le nom
     if nom:
+        # Supprimer les caractères HTML et limiter
+        nom = re.sub(r'&[a-z]+;', ' ', nom)
+        nom = re.sub(r'\s+', ' ', nom).strip()
+        nom = nom[:50]  # Max 50 caractères
+        
         parts = nom.split()
         if len(parts) >= 2:
-            card_name = f"{parts[0].upper()} {' '.join(parts[1:])}"
+            card_name = f"{parts[-1].upper()} {' '.join(parts[:-1])}"  # NOM Prénom
         else:
             card_name = nom.upper()
     else:
         card_name = email_addr.split("@")[0].upper() if email_addr else "PROSPECT"
     
+    # Limiter le nom de carte à 100 caractères
+    if len(card_name) > 100:
+        card_name = card_name[:97] + "..."
     # 4. Construire la description (SANS le message)
     desc_parts = ["**Contact**"]
     desc_parts.append(f"- Tél : {prospect.get('tel', '-')}")
@@ -464,7 +483,7 @@ def parse_sweepbright(body: str, subject: str) -> Optional[Dict]:
 
 
 def parse_leboncoin(body: str, subject: str) -> Optional[Dict]:
-    """Parse un email Leboncoin."""
+    """Parse un email Leboncoin - VERSION AMÉLIORÉE V2."""
     try:
         data = {
             "source": "Leboncoin",
@@ -478,29 +497,66 @@ def parse_leboncoin(body: str, subject: str) -> Optional[Dict]:
             "ville": None
         }
         
-        nom_match = re.search(r'Nom\s*:\s*([^\n<]+)', body, re.IGNORECASE)
-        if nom_match:
-            data["nom"] = nom_match.group(1).strip()
+        # Nettoyer le body HTML
+        clean_body = re.sub(r'<[^>]+>', ' ', body)
+        clean_body = re.sub(r'&nbsp;', ' ', clean_body)
+        clean_body = re.sub(r'\s+', ' ', clean_body).strip()
         
-        email_match = re.search(r'E-mail\s*:\s*([^\s<>]+@[^\s<>]+)', body, re.IGNORECASE)
+        # Pattern Leboncoin original: "Nom : XXX"
+        nom_match = re.search(r'Nom\s*:\s*([A-Za-zÀ-ÿ\-\s]+?)(?:\s+E-mail|\s+Ville|\s+Téléphone|$)', clean_body, re.IGNORECASE)
+        if nom_match:
+            nom = nom_match.group(1).strip()
+            # Limiter à 50 caractères max
+            data["nom"] = nom[:50] if len(nom) > 50 else nom
+        
+        # Email
+        email_match = re.search(r'E-mail\s*:\s*([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)', clean_body, re.IGNORECASE)
         if email_match:
             data["email"] = email_match.group(1).strip()
+        else:
+            # Fallback: chercher n'importe quel email dans le body
+            any_email = re.search(r'([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)', clean_body)
+            if any_email:
+                email_found = any_email.group(1)
+                # Exclure les emails de l'agence et de leboncoin
+                if not any(x in email_found.lower() for x in ['icidordogne', 'leboncoin', 'noreply']):
+                    data["email"] = email_found
         
-        tel_match = re.search(r'T[éè]l[éè]phone\s*:\s*([+\d\s\-\.]+)', body, re.IGNORECASE)
+        # Téléphone
+        tel_match = re.search(r'T[éè]l[éè]phone\s*:\s*([+\d\s\-\.]+)', clean_body, re.IGNORECASE)
         if tel_match:
             data["tel"] = re.sub(r'[^\d+]', '', tel_match.group(1))
+        else:
+            # Fallback: chercher un numéro français
+            tel_fallback = re.search(r'(\+33|0[67])\s*[\d\s\.\-]{8,}', clean_body)
+            if tel_fallback:
+                data["tel"] = re.sub(r'[^\d+]', '', tel_fallback.group(0))
         
-        msg_match = re.search(r'[«"]([^»"]+)[»"]', body)
+        # Message entre guillemets
+        msg_match = re.search(r'[«"]([^»"]{10,200})[»"]', clean_body)
         if msg_match:
             data["message"] = msg_match.group(1).strip()
         
-        prix_match = re.search(r'(\d[\d\s]*)\s*€', subject + " " + body)
+        # Prix
+        prix_match = re.search(r'(\d[\d\s]{0,10})\s*€', subject + " " + clean_body)
         if prix_match:
             data["bien_prix"] = re.sub(r'\s', '', prix_match.group(1))
         
-        ville_match = re.search(r'Ville\s*:\s*([^\n<]+)', body, re.IGNORECASE)
+        # Ville - pattern Leboncoin: "Ville : XXX"
+        ville_match = re.search(r'Ville\s*:\s*([A-Za-zÀ-ÿ\-\s]+?)(?:\s+[«"]|\s+Répondre|\s+Maison|\s+$)', clean_body, re.IGNORECASE)
         if ville_match:
-            data["ville"] = ville_match.group(1).strip()
+            ville = ville_match.group(1).strip()
+            data["ville"] = ville[:30] if len(ville) > 30 else ville
+        
+        # Référence Leboncoin
+        ref_match = re.search(r'R[ée]f[ée]rence\s*:\s*([A-Z0-9\-]+)', clean_body, re.IGNORECASE)
+        if ref_match:
+            data["bien_ref"] = ref_match.group(1)
+        
+        # Titre du bien depuis le sujet
+        titre_match = re.search(r'pour\s+"([^"]+)"', subject)
+        if titre_match:
+            data["bien_titre"] = titre_match.group(1)
         
         if data["email"] or data["tel"]:
             return data
