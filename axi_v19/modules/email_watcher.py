@@ -988,3 +988,138 @@ def handle_scan_all(query=None, body=None, headers=None) -> Tuple[int, Dict]:
     except Exception as e:
         return 500, {"error": str(e)}
 
+
+
+# =============================================================================
+# TEST: SCAN FOLDER ACQUÉREURS ET CRÉER CARTE
+# =============================================================================
+
+def scan_folder_and_create_card(folder: str = "**ACQU&AMk-REURS", limit: int = 5) -> Dict:
+    """
+    Scanne un dossier Gmail spécifique et crée une carte Trello pour le premier prospect trouvé.
+    Pour TEST uniquement - sur board Pros LUDO.
+    """
+    result = {
+        "version": EMAIL_WATCHER_VERSION,
+        "folder": folder,
+        "timestamp": datetime.now().isoformat(),
+        "emails_scanned": 0,
+        "prospect_found": None,
+        "card_created": None,
+        "errors": []
+    }
+    
+    try:
+        logger.info(f"📧 [TEST] Connexion IMAP - dossier: {folder}")
+        mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
+        mail.login(IMAP_EMAIL, IMAP_PASSWORD)
+        
+        # Sélectionner le dossier spécifique
+        status, count = mail.select(folder)
+        if status != 'OK':
+            result["errors"].append(f"Impossible de sélectionner le dossier: {folder}")
+            mail.logout()
+            return result
+        
+        folder_count = count[0].decode() if count else '0'
+        logger.info(f"📬 [TEST] {folder_count} emails dans {folder}")
+        
+        # Récupérer les derniers emails
+        status, messages = mail.search(None, "ALL")
+        email_ids = messages[0].split() if messages[0] else []
+        
+        # Prendre les N derniers
+        recent_ids = email_ids[-limit:] if len(email_ids) > limit else email_ids
+        recent_ids = recent_ids[::-1]  # Plus récent en premier
+        
+        result["emails_scanned"] = len(recent_ids)
+        
+        for mail_id in recent_ids:
+            try:
+                status, msg_data = mail.fetch(mail_id, "(RFC822)")
+                
+                for response_part in msg_data:
+                    if isinstance(response_part, tuple):
+                        msg = email.message_from_bytes(response_part[1])
+                        
+                        subject_raw = msg.get("Subject", "")
+                        subject, encoding = decode_header(subject_raw)[0]
+                        if isinstance(subject, bytes):
+                            subject = subject.decode(encoding or "utf-8", errors='ignore')
+                        
+                        from_addr = msg.get("From", "")
+                        date_str = msg.get("Date", "")
+                        body = get_email_body(msg)
+                        
+                        # Parser selon la source
+                        prospect = None
+                        source_type = "unknown"
+                        
+                        if "sweepbright" in from_addr.lower():
+                            source_type = "sweepbright"
+                            prospect = parse_sweepbright(body, subject)
+                        elif "leboncoin" in from_addr.lower() or "leboncoin" in subject.lower():
+                            source_type = "leboncoin"
+                            prospect = parse_leboncoin(body, subject)
+                        elif "seloger" in from_addr.lower():
+                            source_type = "seloger"
+                            prospect = parse_seloger(body, subject)
+                        else:
+                            # Parser générique pour les emails du dossier ACQUÉREURS
+                            source_type = "generic"
+                            prospect = parse_generic(body, subject, from_addr)
+                        
+                        if prospect:
+                            prospect["raw_subject"] = subject
+                            prospect["raw_from"] = from_addr
+                            prospect["date"] = date_str
+                            prospect["source_type"] = source_type
+                            
+                            result["prospect_found"] = {
+                                "subject": subject,
+                                "from": from_addr,
+                                "date": date_str,
+                                "source_type": source_type,
+                                "parsed_data": prospect
+                            }
+                            
+                            logger.info(f"🔥 [TEST] Prospect trouvé: {prospect.get('nom', prospect.get('email'))}")
+                            
+                            # Créer la carte Trello
+                            card_result = create_enriched_prospect_card(prospect)
+                            result["card_created"] = card_result
+                            
+                            mail.logout()
+                            return result
+                        
+            except Exception as e:
+                result["errors"].append(f"Erreur email {mail_id}: {str(e)}")
+                continue
+        
+        mail.logout()
+        result["errors"].append("Aucun prospect valide trouvé dans les emails scannés")
+        
+    except Exception as e:
+        result["errors"].append(f"Erreur IMAP: {str(e)}")
+    
+    return result
+
+
+def handle_test_create_card(query=None, body=None, headers=None) -> Tuple[int, Dict]:
+    """
+    Handler pour endpoint GET /emails/test-create-card
+    Scanne le dossier ACQUÉREURS et crée une carte pour le premier prospect.
+    """
+    folder = "**ACQU&AMk-REURS"  # Dossier ACQUÉREURS encodé IMAP
+    limit = 10
+    
+    if query:
+        if 'folder' in query:
+            folder = query['folder'][0] if isinstance(query['folder'], list) else query['folder']
+        if 'limit' in query:
+            limit = int(query['limit'][0] if isinstance(query['limit'], list) else query['limit'])
+    
+    result = scan_folder_and_create_card(folder, limit)
+    status_code = 200 if result.get("card_created") else 400
+    return status_code, result
+
