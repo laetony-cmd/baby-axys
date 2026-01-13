@@ -148,7 +148,7 @@ try:
     print("  ✅ chat_vitrine V2: loaded", flush=True)
     
     # Import Email Watcher (IMAP polling agence@icidordogne.fr)
-    from .modules.email_watcher import process_new_emails, handle_check_emails, handle_email_status, handle_move_email, debug_imap_search, handle_scan_all, handle_test_create_card
+    from .modules.email_watcher import process_new_emails, handle_check_emails, handle_email_status, handle_move_email, debug_imap_search, handle_scan_all, handle_test_create_card, handle_v2_test
     print("  ✅ email_watcher: loaded", flush=True)
     
     print("  ✅ modules.trello loaded (Sync + Matching)", flush=True)
@@ -387,6 +387,7 @@ class AxiV19:
         server.register_route('GET', '/emails/debug', debug_imap_search)
         server.register_route('GET', '/emails/scan-all', handle_scan_all)
         server.register_route('GET', '/emails/test-create-card', handle_test_create_card)
+        server.register_route('GET', '/emails/v2/test', handle_v2_test)
         
         logger.info("📍 Routes API V19 enregistrées")
         
