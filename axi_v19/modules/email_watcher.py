@@ -29,9 +29,88 @@ import logging
 import urllib.request
 import urllib.parse
 import time
+import html
 from email.header import decode_header
 from datetime import datetime
 from typing import Optional, List, Dict, Tuple
+
+# =============================================================================
+# UTILITAIRES EMAIL (ajouté 13/01/2026 - recommandé par Lumo)
+# =============================================================================
+
+def is_reply_email(subject: str) -> bool:
+    """Détecte si l'email est une réponse (Re:, Fwd:, etc.)"""
+    if not subject:
+        return False
+    subject_lower = subject.lower().strip()
+    return subject_lower.startswith("re:") or subject_lower.startswith("fwd:") or subject_lower.startswith("tr:")
+
+
+def extract_name_from_header(from_header: str) -> Optional[str]:
+    """
+    Extrait le nom depuis un header From.
+    Exemple: "Sonia Sharpe <sharpe32@hotmail.com>" -> "Sonia Sharpe"
+    """
+    if not from_header:
+        return None
+    
+    try:
+        # Décoder le header MIME si nécessaire
+        decoded_parts = decode_header(from_header)
+        decoded_str = ""
+        for part, encoding in decoded_parts:
+            if isinstance(part, bytes):
+                decoded_str += part.decode(encoding or 'utf-8', errors='ignore')
+            else:
+                decoded_str += str(part)
+        
+        # Extraire le nom avant le <email>
+        match = re.search(r'^([^<]+)<', decoded_str)
+        if match:
+            name = match.group(1).strip()
+            # Nettoyer les guillemets
+            name = name.strip('"\'')
+            if name and len(name) > 1:
+                return name
+        
+        return None
+    except Exception:
+        return None
+
+
+def clean_html_entities(text: str) -> str:
+    """Nettoie les entités HTML d'un texte."""
+    if not text:
+        return text
+    # Utiliser html.unescape pour les entités HTML
+    text = html.unescape(text)
+    # Supprimer les balises HTML restantes
+    text = re.sub(r'<[^>]+>', ' ', text)
+    # Normaliser les espaces
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
+def format_prospect_name(name: str) -> str:
+    """
+    Formate un nom en "NOM Prénom".
+    Exemple: "Sonia Sharpe" -> "SHARPE Sonia"
+    """
+    if not name:
+        return "PROSPECT"
+    
+    # Nettoyer
+    name = clean_html_entities(name)
+    name = name[:50]  # Limiter à 50 caractères
+    
+    parts = name.split()
+    if len(parts) >= 2:
+        # Supposer que le dernier mot est le nom de famille
+        return f"{parts[-1].upper()} {' '.join(parts[:-1])}"
+    elif len(parts) == 1:
+        return parts[0].upper()
+    return "PROSPECT"
+
 
 # =============================================================================
 # CONFIGURATION
@@ -283,29 +362,16 @@ def create_enriched_prospect_card(prospect: Dict) -> Optional[Dict]:
     bien_trello = find_property_on_trello(ville=ville, reference=prospect.get("bien_ref"))
     site_url = find_property_on_website(ville)
     
-    # 3. Construire le nom de la carte
-    # Essayer d'extraire le nom du champ From si le parsing a échoué
+    # 3. Construire le nom de la carte (utilise les fonctions utilitaires)
+    # Priorité: nom parsé → nom du From → email
     if not nom or len(nom) > 50:
-        # Essayer d'extraire du From: "Prénom NOM <email@example.com>"
+        # Fallback: extraire depuis le champ From
         raw_from = prospect.get("raw_from", "")
-        from_match = re.match(r'^([^<]+)<', raw_from)
-        if from_match:
-            nom = from_match.group(1).strip()
-        elif not nom:
-            nom = ""
+        nom = extract_name_from_header(raw_from)
     
-    # Nettoyer le nom
+    # Formater le nom en "NOM Prénom"
     if nom:
-        # Supprimer les caractères HTML et limiter
-        nom = re.sub(r'&[a-z]+;', ' ', nom)
-        nom = re.sub(r'\s+', ' ', nom).strip()
-        nom = nom[:50]  # Max 50 caractères
-        
-        parts = nom.split()
-        if len(parts) >= 2:
-            card_name = f"{parts[-1].upper()} {' '.join(parts[:-1])}"  # NOM Prénom
-        else:
-            card_name = nom.upper()
+        card_name = format_prospect_name(nom)
     else:
         card_name = email_addr.split("@")[0].upper() if email_addr else "PROSPECT"
     
@@ -998,6 +1064,7 @@ def scan_all_emails_in_inbox() -> List[Dict]:
                             "from": from_addr,
                             "date": date_str,
                             "is_read": is_seen,
+                            "is_reply": is_reply_email(subject),
                             "prospect_type": prospect_type,
                             "body_preview": body[:500] if body else "",
                             "parsed_data": prospect
@@ -1103,6 +1170,11 @@ def scan_folder_and_create_card(folder: str = "**ACQU&AMk-REURS", limit: int = 5
                         if isinstance(subject, bytes):
                             subject = subject.decode(encoding or "utf-8", errors='ignore')
                         
+                        
+                        # Ignorer les réponses (Re:, Fwd:, Tr:)
+                        if is_reply_email(subject):
+                            logger.info(f"⏭️ [TEST] Email ignoré (réponse): {subject[:50]}")
+                            continue
                         from_addr = msg.get("From", "")
                         date_str = msg.get("Date", "")
                         body = get_email_body(msg)
