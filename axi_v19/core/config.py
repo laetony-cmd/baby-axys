@@ -189,6 +189,7 @@ PUBLIC_ENDPOINTS = [
     "/emails/debug",          # Debug IMAP (V19.5)
     "/emails/scan-all",       # Scan ALL emails (V19.6)
     "/emails/test-create-card", # Test: scan ACQUÉREURS et créer carte (V19.6)
+    "/emails/v2/test",          # V2 workflow test (13/01/2026)
     "/trello/sync",          # Sync Trello -> v19_biens (V19.4)
     "/trello/match",         # Matching Biens -> Prospects (V19.4)
     "/trello/full",          # Sync + Match complet (V19.4)
