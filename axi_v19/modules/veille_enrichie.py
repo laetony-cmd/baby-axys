@@ -26,7 +26,11 @@ import ssl
 
 # Étiquettes DPE à surveiller (toutes par défaut)
 ETIQUETTES_DPE = ["A", "B", "C", "D", "E", "F", "G"]
+# Etiquettes pour création cartes Trello (passoires uniquement)
+ETIQUETTES_TRELLO = ["F", "G"]
 
+# Champs obligatoires API ADEME (pour détecter changements)
+CHAMPS_API_OBLIGATOIRES = ["numero_dpe", "date_reception_dpe", "etiquette_dpe", "code_postal_ban"]
 # Date de début de collecte (format YYYY-MM-DD)
 DATE_DEBUT_COLLECTE = "2025-12-01"
 
@@ -329,6 +333,16 @@ def get_dpe_ademe(code_postal, jours=None, etiquettes=None, date_debut=None):
     if not result or "results" not in result:
         print(f"[ADEME] Pas de résultats pour {code_postal}")
         return []
+    
+    # Validation des champs obligatoires (détection changement API)
+    results = result.get("results", [])
+    if results:
+        premier_dpe = results[0]
+        champs_manquants = [c for c in CHAMPS_API_OBLIGATOIRES if c not in premier_dpe]
+        if champs_manquants:
+            erreur = f"⚠️ API ADEME a changé ! Champs manquants: {champs_manquants}"
+            print(f"[ADEME] {erreur}")
+            raise ValueError(erreur)
     
     # Filtrer par étiquette DPE et par date
     dpes = []
@@ -1013,6 +1027,7 @@ def executer_veille_enrichie(codes_postaux=None, jours=30, creer_trello=True, fi
         "total_api": 0,
         "deja_vus": 0,
         "nouveaux": 0,
+        "nouveaux_fg": 0,  # Passoires F/G uniquement
         "p1": 0,
         "p2": 0,
         "p3": 0,
@@ -1051,10 +1066,15 @@ def executer_veille_enrichie(codes_postaux=None, jours=30, creer_trello=True, fi
             if dpe_enrichi["probable_vente_location"] == "VENTE":
                 stats["ventes_probables"] += 1
             
-            # Créer carte Trello pour CHAQUE nouveau DPE
+            # Vérifier si passoire F/G
+            is_passoire = dpe_enrichi.get("dpe_lettre", dpe_enrichi.get("etiquette_dpe", "")) in ETIQUETTES_TRELLO
+            if is_passoire:
+                stats["nouveaux_fg"] += 1
+            
+            # Créer carte Trello UNIQUEMENT pour passoires F/G
             trello_url = None
-            if creer_trello:
-                print(f"      → Création carte Trello...")
+            if creer_trello and is_passoire:
+                print(f"      → 🔥 PASSOIRE {dpe_enrichi.get('dpe_lettre', '?')} - Création carte Trello...")
                 trello_url = creer_carte_trello_dpe(dpe_enrichi)
                 if trello_url:
                     dpe_enrichi["trello_card_url"] = trello_url
@@ -1063,8 +1083,10 @@ def executer_veille_enrichie(codes_postaux=None, jours=30, creer_trello=True, fi
                 else:
                     stats["erreurs_trello"] += 1
                     print(f"      ✗ Échec création carte")
+            elif creer_trello and not is_passoire:
+                print(f"      → DPE {dpe_enrichi.get('dpe_lettre', '?')} - Stocké (pas de carte Trello)")
             
-            # Marquer comme traité
+            # Marquer comme traité (tous les DPE, historique complet)
             marquer_dpe_vu(dpe_enrichi, trello_url)
             
             nouveaux_dpes.append(dpe_enrichi)
@@ -1082,8 +1104,9 @@ def executer_veille_enrichie(codes_postaux=None, jours=30, creer_trello=True, fi
     print(f"\n[VEILLE] Terminé!")
     print(f"  Total API: {stats['total_api']} DPE")
     print(f"  Déjà vus: {stats['deja_vus']}")
-    print(f"  NOUVEAUX: {stats['nouveaux']}")
+    print(f"  NOUVEAUX: {stats['nouveaux']} (dont {stats['nouveaux_fg']} passoires F/G 🔥)")
     print(f"  P1: {stats['p1']} | P2: {stats['p2']} | P3: {stats['p3']}")
+    print(f"  Cartes Trello créées: {stats['cartes_trello']} (F/G uniquement)")
     print(f"  Ventes probables: {stats['ventes_probables']}")
     print(f"  Cartes Trello créées: {stats['cartes_trello']}")
     if stats['erreurs_trello']:
@@ -1131,7 +1154,7 @@ def executer_veille_quotidienne():
     print("=" * 60)
     print("VEILLE DPE QUOTIDIENNE - ICI DORDOGNE")
     print(f"Exécution: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
-    print(f"Configuration: {len(ETIQUETTES_DPE)} classes DPE, depuis {DATE_DEBUT_COLLECTE}")
+    print(f"Configuration: Stockage {len(ETIQUETTES_DPE)} classes, Trello F/G uniquement, depuis {DATE_DEBUT_COLLECTE}")
     print("=" * 60)
     
     try:
@@ -1144,12 +1167,13 @@ def executer_veille_quotidienne():
             email_rapport=ALERTES_EMAIL  # Utilise la config globale
         )
         
-        # Envoyer email de rapport (heartbeat quotidien)
+        # Envoyer email basé sur passoires F/G uniquement
         if ALERTES_EMAIL:
-            if result["stats"]["nouveaux"] > 0:
+            if result["stats"]["nouveaux_fg"] > 0:
+                # Nouvelles passoires F/G → Rapport complet
                 envoyer_email_rapport(result)
             else:
-                # Heartbeat quotidien - confirme que la veille tourne
+                # Pas de nouvelles passoires F/G → Heartbeat quotidien (avec stats toutes classes)
                 envoyer_email_heartbeat(result["stats"])
         else:
             print("[EMAIL] Alertes email désactivées (ALERTES_EMAIL = False)")
@@ -1235,7 +1259,8 @@ def envoyer_email_erreur(erreur):
 
 def envoyer_email_heartbeat(stats):
     """
-    Envoie un email de heartbeat quotidien quand 0 nouveaux DPE.
+    Envoie un email de heartbeat quotidien quand 0 nouvelles passoires F/G.
+    Affiche les stats complètes toutes classes A-G.
     Permet de confirmer que la veille tourne correctement.
     Ajouté 15 janvier 2026 - Solution pérenne pour visibilité.
     """
@@ -1249,7 +1274,10 @@ def envoyer_email_heartbeat(stats):
     DESTINATAIRE = "laetony@gmail.com"  # Heartbeat uniquement pour Ludo
     
     try:
-        sujet = f"✅ Veille DPE OK - 0 nouveau - {datetime.now().strftime('%d/%m/%Y')}"
+        nouveaux = stats.get('nouveaux', 0)
+        nouveaux_fg = stats.get('nouveaux_fg', 0)
+        
+        sujet = f"✅ Veille DPE OK - {nouveaux} DPE (0 passoire F/G) - {datetime.now().strftime('%d/%m/%Y')}"
         
         corps_html = f"""
         <html>
@@ -1259,21 +1287,24 @@ def envoyer_email_heartbeat(stats):
             <p>La veille DPE a tourné correctement à {datetime.now().strftime('%H:%M')}.</p>
             
             <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 15px 0;">
-                <strong>📊 Résumé:</strong><br>
-                • DPE analysés: {stats['total_api']}<br>
+                <strong>📊 Résumé toutes classes A-G:</strong><br>
+                • DPE analysés (API ADEME): {stats['total_api']}<br>
                 • Déjà en base: {stats['deja_vus']}<br>
-                • <strong>Nouveaux: 0</strong><br>
-                • Cartes Trello: {stats['cartes_trello']}
+                • <strong>Nouveaux stockés: {nouveaux}</strong><br>
+                • <strong style="color: #dc3545;">🔥 Passoires F/G: {nouveaux_fg}</strong><br>
+                • Cartes Trello créées: {stats['cartes_trello']}
             </div>
             
             <p style="color: #666;">
-                💡 Aucun nouveau DPE F/G sur les 12 codes postaux surveillés.<br>
-                C'est normal - les nouveaux DPE F/G sont rares (quelques par semaine).
+                💡 {"Aucune nouvelle passoire F/G détectée." if nouveaux_fg == 0 else ""}
+                {f"({nouveaux} autres DPE A-E stockés en base pour historique)" if nouveaux > 0 and nouveaux_fg == 0 else ""}
+                {"C'est normal - les passoires sont rares (quelques par semaine)." if nouveaux == 0 else ""}
             </p>
             
             <hr>
             <p style="color: #888; font-size: 11px;">
                 Axis - ICI Dordogne | Veille quotidienne 01h00<br>
+                Stockage: toutes classes A-G | Cartes Trello: F/G uniquement<br>
                 "Je ne lâche pas." 💪
             </p>
         </body>
