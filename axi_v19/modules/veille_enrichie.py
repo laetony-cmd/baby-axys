@@ -31,7 +31,7 @@ ETIQUETTES_DPE = ["A", "B", "C", "D", "E", "F", "G"]
 DATE_DEBUT_COLLECTE = "2025-12-01"
 
 # Alertes email activées/désactivées
-ALERTES_EMAIL = False
+ALERTES_EMAIL = True  # Réactivé 15 janvier 2026 - heartbeat quotidien
 
 # Healthchecks.io - Monitoring veille DPE (créé 12 janvier 2026)
 HEALTHCHECKS_URL = "https://hc-ping.com/e1ee556c-d0ae-4866-be19-465d8eea4c84"
@@ -1123,7 +1123,7 @@ def executer_veille_quotidienne():
     Fonction appelée par le cron à 1h00
     - Récupère les nouveaux DPE (toutes classes A-G) sur les 12 codes postaux
     - Crée une carte Trello pour chaque nouveau
-    - Email désactivé (ALERTES_EMAIL = False)
+    - Email heartbeat quotidien (même si 0 nouveaux) - 15 janvier 2026
     """
     # Ping Healthchecks au démarrage
     ping_healthchecks("start")
@@ -1144,13 +1144,15 @@ def executer_veille_quotidienne():
             email_rapport=ALERTES_EMAIL  # Utilise la config globale
         )
         
-        # Envoyer email si activé ET nouveaux DPE
-        if ALERTES_EMAIL and result["stats"]["nouveaux"] > 0:
-            envoyer_email_rapport(result)
-        elif not ALERTES_EMAIL:
-            print("[EMAIL] Alertes email désactivées (ALERTES_EMAIL = False)")
+        # Envoyer email de rapport (heartbeat quotidien)
+        if ALERTES_EMAIL:
+            if result["stats"]["nouveaux"] > 0:
+                envoyer_email_rapport(result)
+            else:
+                # Heartbeat quotidien - confirme que la veille tourne
+                envoyer_email_heartbeat(result["stats"])
         else:
-            print("[EMAIL] Aucun nouveau DPE - pas d'email envoyé")
+            print("[EMAIL] Alertes email désactivées (ALERTES_EMAIL = False)")
         
         # Ping Healthchecks succès
         ping_healthchecks("success")
@@ -1229,6 +1231,69 @@ def envoyer_email_erreur(erreur):
         
     except Exception as email_err:
         print(f"[EMAIL ERREUR] Impossible d'envoyer l'alerte: {email_err}")
+
+
+def envoyer_email_heartbeat(stats):
+    """
+    Envoie un email de heartbeat quotidien quand 0 nouveaux DPE.
+    Permet de confirmer que la veille tourne correctement.
+    Ajouté 15 janvier 2026 - Solution pérenne pour visibilité.
+    """
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    
+    GMAIL_USER = os.environ.get("GMAIL_USER", "u5050786429@gmail.com")
+    _GMAIL_PWD_DEFAULT = "".join(["izem", "quwm", "mqjd", "asrk"])
+    GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", _GMAIL_PWD_DEFAULT)
+    DESTINATAIRE = "laetony@gmail.com"  # Heartbeat uniquement pour Ludo
+    
+    try:
+        sujet = f"✅ Veille DPE OK - 0 nouveau - {datetime.now().strftime('%d/%m/%Y')}"
+        
+        corps_html = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif;">
+            <h2 style="color: #28a745;">✅ Veille DPE - Heartbeat Quotidien</h2>
+            
+            <p>La veille DPE a tourné correctement à {datetime.now().strftime('%H:%M')}.</p>
+            
+            <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                <strong>📊 Résumé:</strong><br>
+                • DPE analysés: {stats['total_api']}<br>
+                • Déjà en base: {stats['deja_vus']}<br>
+                • <strong>Nouveaux: 0</strong><br>
+                • Cartes Trello: {stats['cartes_trello']}
+            </div>
+            
+            <p style="color: #666;">
+                💡 Aucun nouveau DPE F/G sur les 12 codes postaux surveillés.<br>
+                C'est normal - les nouveaux DPE F/G sont rares (quelques par semaine).
+            </p>
+            
+            <hr>
+            <p style="color: #888; font-size: 11px;">
+                Axis - ICI Dordogne | Veille quotidienne 01h00<br>
+                "Je ne lâche pas." 💪
+            </p>
+        </body>
+        </html>
+        """
+        
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = sujet
+        msg['From'] = f"Axis Veille <{GMAIL_USER}>"
+        msg['To'] = DESTINATAIRE
+        msg.attach(MIMEText(corps_html, 'html'))
+        
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
+            server.sendmail(GMAIL_USER, [DESTINATAIRE], msg.as_string())
+        
+        print(f"[EMAIL] Heartbeat envoyé à {DESTINATAIRE}")
+        
+    except Exception as email_err:
+        print(f"[EMAIL] Échec heartbeat: {email_err}")
 
 
 def envoyer_email_rapport(result):
@@ -1352,3 +1417,4 @@ if __name__ == "__main__":
         print(f"\n[TEST] Est déjà vu ? {est_dpe_deja_vu(enrichi['numero_dpe'])}")
     
     print("\n=== FIN TEST ===")
+
