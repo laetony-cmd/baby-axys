@@ -248,9 +248,26 @@ class AxiV19:
         
         # =================================================================
         # VEILLES QUOTIDIENNES - Ajouté le 5 janvier 2026
+        # Solution pérenne APScheduler - 16 janvier 2026
         # =================================================================
         if VEILLE_OK:
-            from .modules.veille import run_veille_concurrence  # run_veille_dpe supprimé
+            from .modules.veille import run_veille_concurrence
+            from .modules.veille_enrichie import executer_veille_quotidienne
+            
+            # ================================================================
+            # VEILLE DPE ENRICHIE - 01h00 Paris
+            # Migré de railway.toml vers APScheduler (16 janvier 2026)
+            # Plus fiable: ne dépend plus des crons Railway
+            # ================================================================
+            self._scheduler.add_job(
+                executer_veille_quotidienne,
+                'cron',
+                hour=1,
+                minute=0,
+                id='veille_dpe_enrichie_1h',
+                name='Veille DPE Enrichie 1h Paris'
+            )
+            logger.info("📡 Job Veille DPE Enrichie programmé: 01h00 Paris")
             
             # Veille Concurrence à 7h00 Paris
             self._scheduler.add_job(
@@ -262,9 +279,7 @@ class AxiV19:
                 name='Veille Concurrence 7h Paris'
             )
             logger.info("📡 Job Veille Concurrence programmé: 7h00 Paris")
-            
-            # SUPPRIMÉ: Veille DPE 8h00 - remplacée par cron Railway /veille/dpe/enrichie à 01h00
-            # Modification du 12 janvier 2026
+        
         
         # Email Watcher - Poll toutes les 5 minutes
         try:
